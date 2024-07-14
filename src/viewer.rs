@@ -18,7 +18,7 @@ use std::panic;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::app::{App, DeviceData};
+use crate::app::{App, AppState, DeviceData};
 use crate::heart_rate::HeartRateData;
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
@@ -67,62 +67,70 @@ pub async fn viewer<B: Backend>(
                 .get(app.table_state.selected().unwrap_or(0))
                 .unwrap_or(device_binding);
 
-            // Draw the device table
-            let device_table = device_table(app.table_state.selected(), &app.discovered_devices);
-            f.render_stateful_widget(device_table, chunks[0], &mut app.table_state);
+            if app.app_state != AppState::HeartRateView {
+                // Draw the device table
+                let device_table =
+                    device_table(app.table_state.selected(), &app.discovered_devices);
+                f.render_stateful_widget(device_table, chunks[0], &mut app.table_state);
 
-            // Draw the detail table
-            let detail_table = detail_table(selected_device);
-            f.render_widget(detail_table, chunks[1]);
+                // Draw the detail table
+                let detail_table = detail_table(selected_device);
+                f.render_widget(detail_table, chunks[1]);
 
-            // Draw the info table
-            app.frame_count += 1;
-            let info_table: ratatui::widgets::Table<'_> = info_table(
-                app.ble_scan_paused.load(Ordering::SeqCst),
-                &app.is_loading_characteristics,
-                &app.frame_count,
-            );
-            f.render_widget(info_table, chunks[2]);
-
-            // Draw the inspect overlay
-            if app.inspect_view {
-                let area = centered_rect(60, 60, f.size());
-                let inspect_overlay = inspect_overlay(
-                    &app.selected_characteristics,
-                    app.inspect_overlay_scroll,
-                    area.height,
+                // Draw the info table
+                app.frame_count += 1;
+                let info_table: ratatui::widgets::Table<'_> = info_table(
+                    app.ble_scan_paused.load(Ordering::SeqCst),
+                    app.app_state == AppState::ConnectingForCharacteristics,
+                    &app.frame_count,
                 );
-                f.render_widget(Clear, area);
-                f.render_widget(inspect_overlay, area);
-            }
+                f.render_widget(info_table, chunks[2]);
 
-            // Draw the heart rate overlay
-            if app.heart_rate_display {
-                let area = centered_rect(80, 80, f.size());
+                // Draw the inspect overlay
+                if app.app_state == AppState::CharacteristicView {
+                    let area = centered_rect(60, 60, f.size());
+                    let inspect_overlay = inspect_overlay(
+                        &app.selected_characteristics,
+                        app.characteristic_scroll,
+                        area.height,
+                    );
+                    f.render_widget(Clear, area);
+                    f.render_widget(inspect_overlay, area);
+                }
+
+                // TODO Ask to save device?
+            } else {
+                // Draw the heart rate overlay
+                let area = centered_rect(100, 100, f.size());
                 let heart_rate_overlay = heart_rate_display(&app.heart_rate_status);
-                f.render_widget(Clear, area);
+                //f.render_widget(Clear, area);
                 f.render_widget(heart_rate_overlay, area);
             }
-
-            // TODO Ask to save device?
-
-            // // Draw the connecting overlay
-            // if app.error_view {
-            //     let connecting_device_info = app.error_message.clone();
-            //     let area = centered_rect(60, 50, f.size());
-            //     let error_block = Paragraph::new(Span::from(connecting_device_info))
-            //         .alignment(Alignment::Center)
-            //         .block(Block::default().borders(Borders::ALL).title("Notification"));
-            //     f.render_widget(Clear, area);
-            //     f.render_widget(error_block, area);
-            // }
-
+            // Draw the connecting overlay
+            if app.app_state == AppState::ConnectingForHeartRate
+                || (app.app_state == AppState::HeartRateView
+                    && app.heart_rate_status.heart_rate_bpm == 0)
+            {
+                let area = centered_rect(60, 30, f.size());
+                let connecting_block = Paragraph::new(Span::from(format!(
+                    "Connecting to {}...",
+                    selected_device.name
+                )))
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL));
+                f.render_widget(Clear, area);
+                f.render_widget(connecting_block, area);
+            }
             // Draw the error overlay if the string is not empty
             if let Some(error_message_clone) = app.error_message.clone() {
                 let area = centered_rect(60, 50, f.size());
                 let error_block = Paragraph::new(Span::from(error_message_clone))
                     .alignment(Alignment::Center)
-                    .block(Block::default().borders(Borders::ALL).title("Notification"));
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("! Notification !"),
+                    );
                 f.render_widget(Clear, area);
                 f.render_widget(error_block, area);
             }
@@ -131,18 +139,17 @@ pub async fn viewer<B: Backend>(
         // Event handling
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                let idle_on_main_menu = app.error_message.is_none()
-                    && !app.inspect_view
-                    && !app.is_loading_characteristics
-                    && !app.heart_rate_display
-                    && !app.is_connecting;
+                let idle_on_main_menu =
+                    app.error_message.is_none() && app.app_state == AppState::MainMenu;
 
                 match key.code {
                     KeyCode::Char('e') => {
                         app.error_message = Some("This is a test error message".to_string());
                     }
                     KeyCode::Char('q') => {
+                        // if app.app_state == AppState::MainMenu {
                         break;
+                        // }
                         // TODO Gracefully disconnect bluetooth?
                     }
                     KeyCode::Char('c') | KeyCode::Char('C') => {
@@ -151,7 +158,7 @@ pub async fn viewer<B: Backend>(
                             // TODO Gracefully disconnect bluetooth?
                         } else {
                             if idle_on_main_menu {
-                                app.is_loading_characteristics = true;
+                                app.app_state = AppState::ConnectingForCharacteristics;
                                 app.connect_for_characteristics().await;
                             }
                         }
@@ -165,15 +172,16 @@ pub async fn viewer<B: Backend>(
                     KeyCode::Enter => {
                         if app.error_message.is_some() {
                             app.error_message = None;
-                        } else if app.inspect_view {
-                            app.inspect_view = false;
+                        } else if app.app_state == AppState::CharacteristicView {
+                            app.app_state = AppState::MainMenu;
                         } else if idle_on_main_menu {
+                            app.app_state = AppState::ConnectingForHeartRate;
                             app.connect_for_hr().await;
                         }
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        if app.inspect_view {
-                            app.inspect_overlay_scroll += 1;
+                        if app.app_state == AppState::CharacteristicView {
+                            app.characteristic_scroll += 1;
                         } else if !app.discovered_devices.is_empty() {
                             let next = match app.table_state.selected() {
                                 Some(selected) => {
@@ -189,9 +197,8 @@ pub async fn viewer<B: Backend>(
                         }
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
-                        if app.inspect_view {
-                            app.inspect_overlay_scroll =
-                                app.inspect_overlay_scroll.saturating_sub(1);
+                        if app.app_state == AppState::CharacteristicView {
+                            app.characteristic_scroll = app.characteristic_scroll.saturating_sub(1);
                         } else {
                             let previous = match app.table_state.selected() {
                                 Some(selected) => {
@@ -227,12 +234,11 @@ pub async fn viewer<B: Backend>(
                 }
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
-                    app.inspect_view = true;
-                    app.is_loading_characteristics = false;
+                    app.app_state = AppState::CharacteristicView
                 }
                 DeviceData::Error(error) => {
                     app.error_message = Some(error);
-                    app.is_loading_characteristics = false;
+                    //app.is_loading_characteristics = false;
                 }
             }
 
@@ -250,15 +256,18 @@ pub async fn viewer<B: Backend>(
                 }
                 HeartRateData::Error(error) => {
                     app.error_message = Some(error);
-                    app.is_loading_characteristics = false;
+                    //app.is_loading_characteristics = false;
                 }
                 HeartRateData::Connected => {
-                    app.is_loading_characteristics = false;
+                    //app.is_loading_characteristics = false;
                     app.heart_rate_display = true;
+                    app.app_state = AppState::HeartRateView;
                 }
                 HeartRateData::Disconnected => {
-                    app.is_loading_characteristics = false;
-                    app.heart_rate_display = false;
+                    //app.is_loading_characteristics = false;
+                    //app.heart_rate_display = false;
+
+                    // TODO Reconnect?
                 }
             }
         }

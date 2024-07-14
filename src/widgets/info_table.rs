@@ -9,7 +9,7 @@ pub const SPINNER: [char; 4] = ['|', '/', '-', '\\'];
 /// Creates a table with information about the application and the user input.
 pub fn info_table(
     scan_paused: bool,
-    is_loading_characteristics: &bool,
+    is_loading_characteristics: bool,
     frame_count: &usize,
 ) -> Table<'static> {
     //let spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -24,7 +24,7 @@ pub fn info_table(
         } else {
             format!("[s → stop scan {}]", SPINNER[index_slow])
         },
-        if *is_loading_characteristics {
+        if is_loading_characteristics {
             format!("[c → loading... {}]", SPINNER[index])
         } else {
             "[c → load characteristics]".to_string()
