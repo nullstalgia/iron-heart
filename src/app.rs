@@ -7,6 +7,7 @@ use ratatui::widgets::TableState;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use crate::{
+    heart_rate::{subscribe_to_heart_rate, HeartRateData, HeartRateStatus},
     scan::{bluetooth_scan, get_characteristics},
     structs::{Characteristic, DeviceInfo},
 };
@@ -19,8 +20,10 @@ pub enum DeviceData {
 }
 
 pub struct App {
-    pub rx: UnboundedReceiver<DeviceData>,
-    pub tx: UnboundedSender<DeviceData>,
+    pub app_rx: UnboundedReceiver<DeviceData>,
+    pub app_tx: UnboundedSender<DeviceData>,
+    pub hr_rx: UnboundedReceiver<HeartRateData>,
+    pub hr_tx: UnboundedSender<HeartRateData>,
     pub loading_status: Arc<AtomicBool>,
     pub pause_status: Arc<AtomicBool>,
     pub table_state: TableState,
@@ -32,17 +35,20 @@ pub struct App {
     pub is_loading: bool,
     pub error_view: bool,
     pub error_message: String,
-    pub heart_rate_bpm: u16,
-    pub heart_rate_rr: Vec<u16>,
-    pub monitor_battery: u8,
+    pub heart_rate_display: bool,
+    pub heart_rate_status: HeartRateStatus,
 }
 
 impl App {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (app_tx, app_rx) = mpsc::unbounded_channel();
+        let (hr_tx, hr_rx) = mpsc::unbounded_channel();
+        //let (osc_tx, osc_rx) = mpsc::unbounded_channel();
         Self {
-            tx,
-            rx,
+            app_tx: app_tx,
+            app_rx: app_rx,
+            hr_tx: hr_tx,
+            hr_rx: hr_rx,
             loading_status: Arc::new(AtomicBool::default()),
             pause_status: Arc::new(AtomicBool::default()),
             table_state: TableState::default(),
@@ -54,13 +60,15 @@ impl App {
             is_loading: false,
             error_view: false,
             error_message: String::new(),
+            heart_rate_display: false,
+            heart_rate_status: HeartRateStatus::default(),
         }
     }
 
     pub async fn scan(&mut self) {
         let pause_signal_clone = Arc::clone(&self.pause_status);
-        let tx_clone = self.tx.clone();
-        tokio::spawn(async move { bluetooth_scan(tx_clone, pause_signal_clone).await });
+        let app_tx_clone = self.app_tx.clone();
+        tokio::spawn(async move { bluetooth_scan(app_tx_clone, pause_signal_clone).await });
     }
 
     pub async fn connect(&mut self) {
@@ -72,8 +80,22 @@ impl App {
         self.pause_status.store(true, Ordering::SeqCst);
 
         let device = Arc::new(selected_device.clone());
-        let tx_clone = self.tx.clone();
+        let app_tx_clone = self.app_tx.clone();
 
-        tokio::spawn(async move { get_characteristics(tx_clone, device).await });
+        tokio::spawn(async move { get_characteristics(app_tx_clone, device).await });
+    }
+
+    pub async fn connect_for_hr(&mut self) {
+        let selected_device = self
+            .devices
+            .get(self.table_state.selected().unwrap_or(0))
+            .unwrap();
+
+        self.pause_status.store(true, Ordering::SeqCst);
+
+        let device = Arc::new(selected_device.clone());
+        let hr_tx_clone = self.hr_tx.clone();
+
+        tokio::spawn(async move { subscribe_to_heart_rate(hr_tx_clone, device).await });
     }
 }

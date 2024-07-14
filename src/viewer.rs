@@ -1,4 +1,5 @@
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use futures::SinkExt;
 use ratatui::backend::Backend;
 use ratatui::layout::Alignment;
 use ratatui::text::Span;
@@ -12,10 +13,12 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::app::{App, DeviceData};
+use crate::heart_rate::HeartRateData;
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
 use crate::widgets::detail_table::detail_table;
 use crate::widgets::device_table::device_table;
+use crate::widgets::heart_rate_display::heart_rate_display;
 use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
 
@@ -80,10 +83,18 @@ pub async fn viewer<B: Backend>(
                 f.render_widget(inspect_overlay, area);
             }
 
+            // Draw the heart rate overlay
+            if app.heart_rate_display {
+                let area = centered_rect(80, 80, f.size());
+                let heart_rate_overlay = heart_rate_display(app.heart_rate_status.clone());
+                f.render_widget(Clear, area);
+                f.render_widget(heart_rate_overlay, area);
+            }
+
             // Draw the error overlay
             if app.error_view {
                 let error_message_clone = app.error_message.clone();
-                let area = centered_rect(60, 10, f.size());
+                let area = centered_rect(60, 50, f.size());
                 let error_block = Paragraph::new(Span::from(error_message_clone))
                     .alignment(Alignment::Center)
                     .block(Block::default().borders(Borders::ALL).title("Notification"));
@@ -96,6 +107,10 @@ pub async fn viewer<B: Backend>(
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 match key.code {
+                    KeyCode::Char('e') => {
+                        app.error_view = true;
+                        app.error_message = "This is a test error message".to_string();
+                    }
                     KeyCode::Char('q') => {
                         break;
                     }
@@ -115,7 +130,8 @@ pub async fn viewer<B: Backend>(
                             app.inspect_view = false;
                         } else {
                             app.is_loading = true;
-                            app.connect().await;
+                            //app.connect().await;
+                            app.connect_for_hr().await;
                         }
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
@@ -143,7 +159,7 @@ pub async fn viewer<B: Backend>(
                             let previous = match app.table_state.selected() {
                                 Some(selected) => {
                                     if selected == 0 {
-                                        app.devices.len().checked_sub(1).unwrap_or_default()
+                                        app.devices.len().checked_sub(1).unwrap_or(0)
                                     } else {
                                         selected - 1
                                     }
@@ -158,9 +174,9 @@ pub async fn viewer<B: Backend>(
             }
         }
 
-        // Check for updates
-        if let Ok(new_device) = app.rx.try_recv() {
-            match new_device {
+        // Check for updates from BLE Discovery
+        if let Ok(new_device_info) = app.app_rx.try_recv() {
+            match new_device_info {
                 DeviceData::DeviceInfo(device) => {
                     if let Some(existing_device) =
                         app.devices.iter_mut().find(|d| d.id == device.id)
@@ -184,6 +200,29 @@ pub async fn viewer<B: Backend>(
 
             if app.table_state.selected().is_none() {
                 app.table_state.select(Some(0));
+            }
+        }
+
+        // HR Notification Updates
+        if let Ok(hr_data) = app.hr_rx.try_recv() {
+            match hr_data {
+                HeartRateData::HeartRateStatus(hr) => {
+                    //app.heart_rate_display = true;
+                    app.heart_rate_status = hr;
+                }
+                HeartRateData::Error(error) => {
+                    app.error_message = error;
+                    app.error_view = true;
+                    app.is_loading = false;
+                }
+                HeartRateData::Connected => {
+                    app.is_loading = false;
+                    app.heart_rate_display = true;
+                }
+                HeartRateData::Disconnected => {
+                    app.is_loading = false;
+                    app.heart_rate_display = false;
+                }
             }
         }
     }

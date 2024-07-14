@@ -68,7 +68,7 @@ pub async fn bluetooth_scan(tx: mpsc::UnboundedSender<DeviceData>, pause_signal:
                     if properties
                         .services
                         .iter()
-                        .all(|service| service.to_u128_le() != HEART_RATE_SERVICE_UUID.to_u128_le())
+                        .all(|service| service.clone() != HEART_RATE_SERVICE_UUID)
                     {
                         continue;
                     }
