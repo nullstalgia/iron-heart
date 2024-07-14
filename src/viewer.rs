@@ -1,4 +1,9 @@
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::{
+    event::DisableMouseCapture,
+    execute,
+    terminal::{disable_raw_mode, LeaveAlternateScreen},
+};
 use futures::SinkExt;
 use ratatui::backend::Backend;
 use ratatui::layout::Alignment;
@@ -9,6 +14,7 @@ use ratatui::{
     Terminal,
 };
 use std::error::Error;
+use std::panic;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -29,6 +35,13 @@ pub async fn viewer<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
 ) -> Result<(), Box<dyn Error>> {
+    // Defining a custom panic hook to reset the terminal properties
+    panic::set_hook(Box::new(|panic_info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        eprintln!("{}", panic_info);
+    }));
+
     app.table_state.select(Some(0));
 
     loop {
