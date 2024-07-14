@@ -11,6 +11,7 @@ use std::{error::Error, io};
 
 mod app;
 mod company_codes;
+mod heart_rate;
 mod scan;
 mod structs;
 mod utils;

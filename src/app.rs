@@ -32,6 +32,9 @@ pub struct App {
     pub is_loading: bool,
     pub error_view: bool,
     pub error_message: String,
+    pub heart_rate_bpm: u16,
+    pub heart_rate_rr: Vec<u16>,
+    pub monitor_battery: u8,
 }
 
 impl App {

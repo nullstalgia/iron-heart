@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::backend::Backend;
 use ratatui::layout::Alignment;
 use ratatui::text::Span;
@@ -38,8 +38,8 @@ pub async fn viewer<B: Backend>(
                 .constraints(
                     [
                         Constraint::Percentage(70),
-                        Constraint::Percentage(20),
-                        Constraint::Percentage(10),
+                        Constraint::Percentage(25),
+                        Constraint::Percentage(5),
                     ]
                     .as_ref(),
                 )
@@ -99,6 +99,11 @@ pub async fn viewer<B: Backend>(
                     KeyCode::Char('q') => {
                         break;
                     }
+                    KeyCode::Char('c') | KeyCode::Char('C') => {
+                        if key.modifiers == KeyModifiers::CONTROL {
+                            break;
+                        }
+                    }
                     KeyCode::Char('s') => {
                         let current_state = app.pause_status.load(Ordering::SeqCst);
                         app.pause_status.store(!current_state, Ordering::SeqCst);
@@ -138,7 +143,7 @@ pub async fn viewer<B: Backend>(
                             let previous = match app.table_state.selected() {
                                 Some(selected) => {
                                     if selected == 0 {
-                                        app.devices.len() - 1
+                                        app.devices.len().checked_sub(1).unwrap_or_default()
                                     } else {
                                         selected - 1
                                     }
@@ -156,7 +161,15 @@ pub async fn viewer<B: Backend>(
         // Check for updates
         if let Ok(new_device) = app.rx.try_recv() {
             match new_device {
-                DeviceData::DeviceInfo(device) => app.devices.push(device),
+                DeviceData::DeviceInfo(device) => {
+                    if let Some(existing_device) =
+                        app.devices.iter_mut().find(|d| d.id == device.id)
+                    {
+                        *existing_device = device;
+                    } else {
+                        app.devices.push(device);
+                    }
+                }
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
                     app.inspect_view = true;
