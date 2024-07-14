@@ -13,7 +13,7 @@ pub struct DeviceInfo {
     pub rssi: String,
     pub manufacturer_data: HashMap<u16, Vec<u8>>,
     pub services: Vec<Uuid>,
-    pub detected_at: String,
+    pub updated_at: String,
     pub service_data: HashMap<Uuid, Vec<u8>>,
     pub device: Option<btleplug::platform::Peripheral>,
 }
@@ -40,7 +40,7 @@ impl DeviceInfo {
             rssi: rssi.map_or_else(|| "n/a".to_string(), |rssi| rssi.to_string()),
             manufacturer_data,
             services,
-            detected_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            updated_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             service_data,
             device: Some(device),
         }

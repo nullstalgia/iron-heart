@@ -19,22 +19,31 @@ pub enum DeviceData {
     Error(String),
 }
 
+pub enum AppState {
+    MainMenu,
+    HeartRateView,
+    CharacteristicView,
+    ConnectingForHeartRate,
+    ConnectingForCharacteristics,
+}
+
 pub struct App {
     pub app_rx: UnboundedReceiver<DeviceData>,
     pub app_tx: UnboundedSender<DeviceData>,
     pub hr_rx: UnboundedReceiver<HeartRateData>,
     pub hr_tx: UnboundedSender<HeartRateData>,
     pub loading_status: Arc<AtomicBool>,
-    pub pause_status: Arc<AtomicBool>,
+    pub ble_scan_paused: Arc<AtomicBool>,
     pub table_state: TableState,
-    pub devices: Vec<DeviceInfo>,
+    pub discovered_devices: Vec<DeviceInfo>,
+    pub selected_device_index: Option<usize>,
     pub inspect_view: bool,
     pub inspect_overlay_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
     pub frame_count: usize,
-    pub is_loading: bool,
-    pub error_view: bool,
-    pub error_message: String,
+    pub is_loading_characteristics: bool,
+    pub is_connecting: bool,
+    pub error_message: Option<String>,
     pub heart_rate_display: bool,
     pub heart_rate_status: HeartRateStatus,
 }
@@ -50,34 +59,36 @@ impl App {
             hr_tx: hr_tx,
             hr_rx: hr_rx,
             loading_status: Arc::new(AtomicBool::default()),
-            pause_status: Arc::new(AtomicBool::default()),
+            ble_scan_paused: Arc::new(AtomicBool::default()),
             table_state: TableState::default(),
-            devices: Vec::new(),
+            discovered_devices: Vec::new(),
+            selected_device_index: None,
             inspect_view: false,
             inspect_overlay_scroll: 0,
             selected_characteristics: Vec::new(),
             frame_count: 0,
-            is_loading: false,
-            error_view: false,
-            error_message: String::new(),
+            is_loading_characteristics: false,
+            is_connecting: false,
+            error_message: None,
             heart_rate_display: false,
             heart_rate_status: HeartRateStatus::default(),
         }
     }
 
     pub async fn scan(&mut self) {
-        let pause_signal_clone = Arc::clone(&self.pause_status);
+        let pause_signal_clone = Arc::clone(&self.ble_scan_paused);
         let app_tx_clone = self.app_tx.clone();
         tokio::spawn(async move { bluetooth_scan(app_tx_clone, pause_signal_clone).await });
     }
 
-    pub async fn connect(&mut self) {
+    pub async fn connect_for_characteristics(&mut self) {
+        self.selected_device_index = self.table_state.selected();
         let selected_device = self
-            .devices
-            .get(self.table_state.selected().unwrap_or(0))
+            .discovered_devices
+            .get(self.selected_device_index.unwrap_or(0))
             .unwrap();
 
-        self.pause_status.store(true, Ordering::SeqCst);
+        self.ble_scan_paused.store(true, Ordering::SeqCst);
 
         let device = Arc::new(selected_device.clone());
         let app_tx_clone = self.app_tx.clone();
@@ -86,12 +97,13 @@ impl App {
     }
 
     pub async fn connect_for_hr(&mut self) {
+        self.selected_device_index = self.table_state.selected();
         let selected_device = self
-            .devices
-            .get(self.table_state.selected().unwrap_or(0))
+            .discovered_devices
+            .get(self.selected_device_index.unwrap_or(0))
             .unwrap();
 
-        self.pause_status.store(true, Ordering::SeqCst);
+        self.ble_scan_paused.store(true, Ordering::SeqCst);
 
         let device = Arc::new(selected_device.clone());
         let hr_tx_clone = self.hr_tx.clone();

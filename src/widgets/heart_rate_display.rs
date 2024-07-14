@@ -9,10 +9,8 @@ use ratatui::{
 use crate::heart_rate::HeartRateStatus;
 
 /// Render just the heart rate, RR, and battery level.
-pub fn heart_rate_display(heart_rate_status: HeartRateStatus) -> Table<'static> {
+pub fn heart_rate_display(heart_rate_status: &HeartRateStatus) -> Table<'static> {
     let mut rows: Vec<Row> = Vec::new();
-
-    let status = heart_rate_status.clone();
 
     rows.push(
         Row::new(vec!["Heart Rate", "RR", "Battery Level"])
@@ -20,9 +18,9 @@ pub fn heart_rate_display(heart_rate_status: HeartRateStatus) -> Table<'static> 
     );
 
     rows.push(Row::new(vec![
-        status.heart_rate_bpm.to_string(),
-        format!("{:?}", status.rr_intervals),
-        status.battery_level.to_string(),
+        heart_rate_status.heart_rate_bpm.to_string(),
+        format!("{:?}", heart_rate_status.rr_intervals),
+        heart_rate_status.battery_level.to_string(),
     ]));
 
     Table::new(

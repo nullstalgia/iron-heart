@@ -53,6 +53,7 @@ pub async fn subscribe_to_heart_rate(
                         let uuid = characteristic.uuid;
                         if uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID {
                             let _ = device.subscribe(&characteristic).await.unwrap();
+                            // TODO Panic if doesn't have????
                         } else if uuid == BATTERY_LEVEL_CHARACTERISTIC_UUID {
                             let value = device.read(&characteristic).await.unwrap();
                             on_connect_battery_level = value[0];

@@ -12,18 +12,19 @@ pub fn detail_table(selected_device: &DeviceInfo) -> Table {
     let table = Table::new(
         vec![
             Row::new(vec![
-                "Detected At:".to_owned(),
-                selected_device.detected_at.clone(),
+                "Last Update At:".to_owned(),
+                selected_device.updated_at.clone(),
             ]),
             Row::new(vec!["Services:".to_owned(), services_binding]),
             Row::new(vec![
                 "Company Code ID:".to_owned(),
                 manufacturer_data.company_code,
             ]),
-            Row::new(vec![
-                "Manufacturer Data:".to_owned(),
-                manufacturer_data.data,
-            ]),
+            // This changes every time DeviceUpdate is called???
+            // Row::new(vec![
+            //     "Manufacturer Data:".to_owned(),
+            //     manufacturer_data.data,
+            // ]),
         ],
         [Constraint::Length(20), Constraint::Length(80)],
     )

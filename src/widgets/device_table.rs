@@ -4,7 +4,7 @@ use ratatui::{
     widgets::{Block, Borders, Row, Table},
 };
 
-use crate::structs::DeviceInfo;
+use crate::{structs::DeviceInfo, utils::extract_manufacturer_data};
 
 /// Creates a table with the detected BTLE devices.
 pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table {
@@ -19,9 +19,9 @@ pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table {
                 Style::default()
             };
             Row::new(vec![
-                device.get_id(),
                 device.name.clone(),
-                device.tx_power.clone(),
+                device.get_id(),
+                extract_manufacturer_data(&device.manufacturer_data).company_code,
                 device.rssi.clone(),
             ])
             .style(style)
@@ -32,13 +32,13 @@ pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table {
         rows,
         [
             Constraint::Length(40),
+            Constraint::Length(20),
             Constraint::Length(30),
-            Constraint::Length(10),
             Constraint::Length(10),
         ],
     )
     .header(
-        Row::new(vec!["Identifier", "Name", "TX Power", "RSSI"])
+        Row::new(vec!["Name", "Identifier", "Manufacturer", "RSSI"])
             .style(Style::default().fg(Color::Yellow)),
     )
     .block(

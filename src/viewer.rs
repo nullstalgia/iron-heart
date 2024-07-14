@@ -63,12 +63,12 @@ pub async fn viewer<B: Backend>(
 
             let device_binding = &DeviceInfo::default();
             let selected_device = app
-                .devices
+                .discovered_devices
                 .get(app.table_state.selected().unwrap_or(0))
                 .unwrap_or(device_binding);
 
             // Draw the device table
-            let device_table = device_table(app.table_state.selected(), &app.devices);
+            let device_table = device_table(app.table_state.selected(), &app.discovered_devices);
             f.render_stateful_widget(device_table, chunks[0], &mut app.table_state);
 
             // Draw the detail table
@@ -78,8 +78,8 @@ pub async fn viewer<B: Backend>(
             // Draw the info table
             app.frame_count += 1;
             let info_table: ratatui::widgets::Table<'_> = info_table(
-                app.pause_status.load(Ordering::SeqCst),
-                &app.is_loading,
+                app.ble_scan_paused.load(Ordering::SeqCst),
+                &app.is_loading_characteristics,
                 &app.frame_count,
             );
             f.render_widget(info_table, chunks[2]);
@@ -99,14 +99,26 @@ pub async fn viewer<B: Backend>(
             // Draw the heart rate overlay
             if app.heart_rate_display {
                 let area = centered_rect(80, 80, f.size());
-                let heart_rate_overlay = heart_rate_display(app.heart_rate_status.clone());
+                let heart_rate_overlay = heart_rate_display(&app.heart_rate_status);
                 f.render_widget(Clear, area);
                 f.render_widget(heart_rate_overlay, area);
             }
 
-            // Draw the error overlay
-            if app.error_view {
-                let error_message_clone = app.error_message.clone();
+            // TODO Ask to save device?
+
+            // // Draw the connecting overlay
+            // if app.error_view {
+            //     let connecting_device_info = app.error_message.clone();
+            //     let area = centered_rect(60, 50, f.size());
+            //     let error_block = Paragraph::new(Span::from(connecting_device_info))
+            //         .alignment(Alignment::Center)
+            //         .block(Block::default().borders(Borders::ALL).title("Notification"));
+            //     f.render_widget(Clear, area);
+            //     f.render_widget(error_block, area);
+            // }
+
+            // Draw the error overlay if the string is not empty
+            if let Some(error_message_clone) = app.error_message.clone() {
                 let area = centered_rect(60, 50, f.size());
                 let error_block = Paragraph::new(Span::from(error_message_clone))
                     .alignment(Alignment::Center)
@@ -119,41 +131,53 @@ pub async fn viewer<B: Backend>(
         // Event handling
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
+                let idle_on_main_menu = app.error_message.is_none()
+                    && !app.inspect_view
+                    && !app.is_loading_characteristics
+                    && !app.heart_rate_display
+                    && !app.is_connecting;
+
                 match key.code {
                     KeyCode::Char('e') => {
-                        app.error_view = true;
-                        app.error_message = "This is a test error message".to_string();
+                        app.error_message = Some("This is a test error message".to_string());
                     }
                     KeyCode::Char('q') => {
                         break;
+                        // TODO Gracefully disconnect bluetooth?
                     }
                     KeyCode::Char('c') | KeyCode::Char('C') => {
                         if key.modifiers == KeyModifiers::CONTROL {
                             break;
+                            // TODO Gracefully disconnect bluetooth?
+                        } else {
+                            if idle_on_main_menu {
+                                app.is_loading_characteristics = true;
+                                app.connect_for_characteristics().await;
+                            }
                         }
                     }
                     KeyCode::Char('s') => {
-                        let current_state = app.pause_status.load(Ordering::SeqCst);
-                        app.pause_status.store(!current_state, Ordering::SeqCst);
+                        if idle_on_main_menu {
+                            let current_state = app.ble_scan_paused.load(Ordering::SeqCst);
+                            app.ble_scan_paused.store(!current_state, Ordering::SeqCst);
+                        }
                     }
                     KeyCode::Enter => {
-                        if app.error_view {
-                            app.error_view = false;
+                        if app.error_message.is_some() {
+                            app.error_message = None;
                         } else if app.inspect_view {
                             app.inspect_view = false;
-                        } else {
-                            app.is_loading = true;
-                            //app.connect().await;
+                        } else if idle_on_main_menu {
                             app.connect_for_hr().await;
                         }
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
                         if app.inspect_view {
                             app.inspect_overlay_scroll += 1;
-                        } else if !app.devices.is_empty() {
+                        } else if !app.discovered_devices.is_empty() {
                             let next = match app.table_state.selected() {
                                 Some(selected) => {
-                                    if selected >= app.devices.len() - 1 {
+                                    if selected >= app.discovered_devices.len() - 1 {
                                         0
                                     } else {
                                         selected + 1
@@ -172,7 +196,7 @@ pub async fn viewer<B: Backend>(
                             let previous = match app.table_state.selected() {
                                 Some(selected) => {
                                     if selected == 0 {
-                                        app.devices.len().checked_sub(1).unwrap_or(0)
+                                        app.discovered_devices.len().checked_sub(1).unwrap_or(0)
                                     } else {
                                         selected - 1
                                     }
@@ -191,23 +215,24 @@ pub async fn viewer<B: Backend>(
         if let Ok(new_device_info) = app.app_rx.try_recv() {
             match new_device_info {
                 DeviceData::DeviceInfo(device) => {
-                    if let Some(existing_device) =
-                        app.devices.iter_mut().find(|d| d.id == device.id)
+                    if let Some(existing_device) = app
+                        .discovered_devices
+                        .iter_mut()
+                        .find(|d| d.id == device.id)
                     {
                         *existing_device = device;
                     } else {
-                        app.devices.push(device);
+                        app.discovered_devices.push(device);
                     }
                 }
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
                     app.inspect_view = true;
-                    app.is_loading = false;
+                    app.is_loading_characteristics = false;
                 }
                 DeviceData::Error(error) => {
-                    app.error_message = error;
-                    app.error_view = true;
-                    app.is_loading = false;
+                    app.error_message = Some(error);
+                    app.is_loading_characteristics = false;
                 }
             }
 
@@ -224,16 +249,15 @@ pub async fn viewer<B: Backend>(
                     app.heart_rate_status = hr;
                 }
                 HeartRateData::Error(error) => {
-                    app.error_message = error;
-                    app.error_view = true;
-                    app.is_loading = false;
+                    app.error_message = Some(error);
+                    app.is_loading_characteristics = false;
                 }
                 HeartRateData::Connected => {
-                    app.is_loading = false;
+                    app.is_loading_characteristics = false;
                     app.heart_rate_display = true;
                 }
                 HeartRateData::Disconnected => {
-                    app.is_loading = false;
+                    app.is_loading_characteristics = false;
                     app.heart_rate_display = false;
                 }
             }
