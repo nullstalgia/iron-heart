@@ -8,6 +8,8 @@ use ratatui::{
 
 use crate::heart_rate::HeartRateStatus;
 
+// TODO Ascii Heart Beat Animation
+
 /// Render just the heart rate, RR, and battery level.
 pub fn heart_rate_display(heart_rate_status: &HeartRateStatus) -> Table<'static> {
     let mut rows: Vec<Row> = Vec::new();

@@ -112,10 +112,10 @@ pub async fn viewer<B: Backend>(
                     && app.heart_rate_status.heart_rate_bpm == 0)
             {
                 let area = centered_rect(60, 30, f.size());
-                let connecting_block = Paragraph::new(Span::from(format!(
-                    "Connecting to {}...",
-                    selected_device.name
-                )))
+                let connecting_block = Paragraph::new(format!(
+                    "Connecting to:\n{}\n({})",
+                    selected_device.name, selected_device.id
+                ))
                 .alignment(Alignment::Center)
                 .block(Block::default().borders(Borders::ALL));
                 f.render_widget(Clear, area);
@@ -176,10 +176,12 @@ pub async fn viewer<B: Backend>(
                             app.app_state = AppState::MainMenu;
                         } else if idle_on_main_menu {
                             app.app_state = AppState::ConnectingForHeartRate;
-                            app.connect_for_hr().await;
+                            app.connect_for_hr(None).await;
                         }
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
+                        // TODO See if you can generalize this + Down, especially for the Save dialog
+                        // Use match on the app_state?
                         if app.app_state == AppState::CharacteristicView {
                             app.characteristic_scroll += 1;
                         } else if !app.discovered_devices.is_empty() {
@@ -220,18 +222,35 @@ pub async fn viewer<B: Backend>(
 
         // Check for updates from BLE Discovery
         if let Ok(new_device_info) = app.app_rx.try_recv() {
+            let idle_on_main_menu =
+                app.error_message.is_none() && app.app_state == AppState::MainMenu;
             match new_device_info {
-                DeviceData::DeviceInfo(device) => {
-                    if let Some(existing_device) = app
-                        .discovered_devices
-                        .iter_mut()
-                        .find(|d| d.id == device.id)
-                    {
-                        *existing_device = device;
-                    } else {
-                        app.discovered_devices.push(device);
+                DeviceData::DeviceInfo(device) => match app.app_state {
+                    AppState::HeartRateView => {
+                        // TODO:
+                        // Check if the device is the one we are connected to
+                        // If it is, save the address and name if we're allowed to
+                        // Save over any changes in MAC or Name! (As long as it's not "Unknown")
                     }
-                }
+                    AppState::MainMenu => {
+                        if let Some(existing_device) = app
+                            .discovered_devices
+                            .iter_mut()
+                            .find(|d| d.id == device.id)
+                        {
+                            *existing_device = device.clone();
+                        } else {
+                            app.discovered_devices.push(device.clone());
+                        }
+                        if device.id == app.settings.ble.saved_address
+                            || device.name == app.settings.ble.saved_name && idle_on_main_menu
+                        {
+                            app.app_state = AppState::ConnectingForHeartRate;
+                            app.connect_for_hr(Some(device)).await;
+                        }
+                    }
+                    _ => {}
+                },
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
                     app.app_state = AppState::CharacteristicView

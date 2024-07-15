@@ -13,6 +13,7 @@ mod app;
 mod company_codes;
 mod heart_rate;
 mod scan;
+mod settings;
 mod structs;
 mod utils;
 mod viewer;
@@ -27,6 +28,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = app::App::new();
+    // Try to create a default config file
+    app.save_settings()?;
     app.scan().await;
     viewer(&mut terminal, &mut app).await?;
 

@@ -9,6 +9,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use crate::{
     heart_rate::{subscribe_to_heart_rate, HeartRateData, HeartRateStatus},
     scan::{bluetooth_scan, get_characteristics},
+    settings::Settings,
     structs::{Characteristic, DeviceInfo},
 };
 
@@ -43,6 +44,7 @@ pub struct App {
     pub selected_characteristics: Vec<Characteristic>,
     pub frame_count: usize,
     pub error_message: Option<String>,
+    pub settings: Settings,
     pub heart_rate_display: bool,
     pub heart_rate_status: HeartRateStatus,
 }
@@ -66,6 +68,7 @@ impl App {
             selected_characteristics: Vec::new(),
             frame_count: 0,
             error_message: None,
+            settings: Settings::new().unwrap(),
             heart_rate_display: false,
             heart_rate_status: HeartRateStatus::default(),
         }
@@ -92,12 +95,18 @@ impl App {
         tokio::spawn(async move { get_characteristics(app_tx_clone, device).await });
     }
 
-    pub async fn connect_for_hr(&mut self) {
-        self.selected_device_index = self.table_state.selected();
-        let selected_device = self
-            .discovered_devices
-            .get(self.selected_device_index.unwrap_or(0))
-            .unwrap();
+    pub async fn connect_for_hr(&mut self, quick_connect_device: Option<DeviceInfo>) {
+        let selected_device = if let Some(device) = quick_connect_device {
+            device
+        } else {
+            // Check if discovered devices is empty first
+            // (not yet fixed as it's a good test crash)
+            self.selected_device_index = self.table_state.selected();
+            self.discovered_devices
+                .get(self.selected_device_index.unwrap_or(0))
+                .unwrap()
+                .clone()
+        };
 
         self.ble_scan_paused.store(true, Ordering::SeqCst);
 
@@ -105,5 +114,9 @@ impl App {
         let hr_tx_clone = self.hr_tx.clone();
 
         tokio::spawn(async move { subscribe_to_heart_rate(hr_tx_clone, device).await });
+    }
+
+    pub fn save_settings(&mut self) -> Result<(), std::io::Error> {
+        self.settings.save()
     }
 }
