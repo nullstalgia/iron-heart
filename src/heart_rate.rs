@@ -28,7 +28,7 @@ pub struct HeartRateStatus {
     pub battery_level: u8,
 }
 
-pub enum HeartRateData {
+pub enum MonitorData {
     Connected,
     Disconnected,
     HeartRateStatus(HeartRateStatus),
@@ -36,7 +36,7 @@ pub enum HeartRateData {
 }
 ///
 pub async fn subscribe_to_heart_rate(
-    hr_tx: mpsc::UnboundedSender<HeartRateData>,
+    hr_tx: mpsc::UnboundedSender<MonitorData>,
     peripheral: Arc<DeviceInfo>,
 ) {
     let duration = Duration::from_secs(10);
@@ -44,7 +44,7 @@ pub async fn subscribe_to_heart_rate(
         Some(device) => match timeout(duration, device.connect()).await {
             Ok(Ok(_)) => {
                 if let Some(device) = &peripheral.device {
-                    let _ = hr_tx.send(HeartRateData::Connected);
+                    let _ = hr_tx.send(MonitorData::Connected);
                     device.discover_services().await.unwrap();
                     let characteristics = device.characteristics();
                     let mut on_connect_battery_level = 0;
@@ -88,25 +88,25 @@ pub async fn subscribe_to_heart_rate(
                                 rr_intervals: Vec::new(),
                                 battery_level: on_connect_battery_level,
                             };
-                            let _ = hr_tx.send(HeartRateData::HeartRateStatus(status));
+                            let _ = hr_tx.send(MonitorData::HeartRateStatus(status));
                         }
                     }
                 }
             }
             Ok(Err(e)) => {
                 hr_tx
-                    .send(HeartRateData::Error(format!("Connection error: {}", e)))
+                    .send(MonitorData::Error(format!("Connection error: {}", e)))
                     .unwrap();
             }
             Err(_) => {
                 hr_tx
-                    .send(HeartRateData::Error("Connection timed out".to_string()))
+                    .send(MonitorData::Error("Connection timed out".to_string()))
                     .unwrap();
             }
         },
         None => {
             hr_tx
-                .send(HeartRateData::Error("Device not found".to_string()))
+                .send(MonitorData::Error("Device not found".to_string()))
                 .unwrap();
         }
     }

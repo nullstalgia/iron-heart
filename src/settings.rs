@@ -7,7 +7,7 @@ use toml;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(unused)]
-pub struct Misc {
+pub struct MiscSettings {
     // TODO log level
     write_bpm_to_file: bool,
     write_bpm_file_path: String,
@@ -17,28 +17,35 @@ pub struct Misc {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(unused)]
-pub struct BLE {
+pub struct BLESettings {
     pub never_ask_to_save: bool,
     pub saved_address: String,
     pub saved_name: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[allow(unused)]
-pub struct OSC {
-    ip: String,
-    port: u16,
-    pulse_length_ms: u16,
-    only_positive_floathr: bool,
-    address_prefix: String,
+pub struct OSCSettings {
+    pub host_ip: String,
+    pub target_ip: String,
+    pub port: u16,
+    pub pulse_length_ms: u16,
+    pub only_positive_floathr: bool,
+    pub address_prefix: String,
+    pub param_hrm_connected: String,
+    pub param_beat_toggle: String,
+    pub param_beat_pulse: String,
+    pub param_bpm_int: String,
+    pub param_bpm_float: String,
+    pub param_latest_rr_int: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(unused)]
 pub struct Settings {
-    osc: OSC,
-    pub ble: BLE,
-    misc: Misc,
+    pub osc: OSCSettings,
+    pub ble: BLESettings,
+    misc: MiscSettings,
 }
 
 const CONFIG_NAME: &str = "null_iron_heart.toml";
@@ -54,7 +61,9 @@ impl Settings {
         let s = Config::builder()
             // Start off by merging in the "default" configuration file
             .add_source(ConfigFile::from(config_path).required(false))
-            .set_default("osc.ip", "127.0.0.1")
+            .set_default("osc.host_ip", "0.0.0.0")
+            .unwrap()
+            .set_default("osc.target_ip", "127.0.0.1")
             .unwrap()
             .set_default("osc.port", 9000)
             .unwrap()
@@ -63,6 +72,18 @@ impl Settings {
             .set_default("osc.only_positive_floathr", false)
             .unwrap()
             .set_default("osc.address_prefix", "/avatar/parameters/")
+            .unwrap()
+            .set_default("osc.param_hrm_connected", "isHRConnected")
+            .unwrap()
+            .set_default("osc.param_beat_toggle", "HeartBeatToggle")
+            .unwrap()
+            .set_default("osc.param_beat_pulse", "isHRBeat")
+            .unwrap()
+            .set_default("osc.param_bpm_int", "HR")
+            .unwrap()
+            .set_default("osc.param_bpm_float", "floatHR")
+            .unwrap()
+            .set_default("osc.param_latest_rr_int", "RRInterval")
             .unwrap()
             .set_default("ble.never_ask_to_save", false)
             .unwrap()

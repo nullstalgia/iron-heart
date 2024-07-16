@@ -12,6 +12,7 @@ use std::{error::Error, io};
 mod app;
 mod company_codes;
 mod heart_rate;
+mod osc;
 mod scan;
 mod settings;
 mod structs;
@@ -28,8 +29,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = app::App::new();
-    // Try to create a default config file
+    // Try to create a default config file if it doesn't exist
     app.save_settings()?;
+    app.start_osc_thread(app.settings.osc.clone()).await;
     app.scan().await;
     viewer(&mut terminal, &mut app).await?;
 

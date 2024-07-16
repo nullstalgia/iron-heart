@@ -4,12 +4,16 @@ use std::sync::{
 };
 
 use ratatui::widgets::TableState;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+    mpsc::{self, UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
 
 use crate::{
-    heart_rate::{subscribe_to_heart_rate, HeartRateData, HeartRateStatus},
+    heart_rate::{subscribe_to_heart_rate, HeartRateStatus, MonitorData},
+    osc::osc_thread,
     scan::{bluetooth_scan, get_characteristics},
-    settings::Settings,
+    settings::{OSCSettings, Settings},
     structs::{Characteristic, DeviceInfo},
 };
 
@@ -33,13 +37,16 @@ pub enum AppState {
 pub struct App {
     pub app_rx: UnboundedReceiver<DeviceData>,
     pub app_tx: UnboundedSender<DeviceData>,
-    pub hr_rx: UnboundedReceiver<HeartRateData>,
-    pub hr_tx: UnboundedSender<HeartRateData>,
+    pub hr_rx: UnboundedReceiver<MonitorData>,
+    pub hr_tx: UnboundedSender<MonitorData>,
+    pub osc_rx: Arc<Mutex<UnboundedReceiver<MonitorData>>>,
+    pub osc_tx: UnboundedSender<MonitorData>,
     pub ble_scan_paused: Arc<AtomicBool>,
     pub app_state: AppState,
     pub table_state: TableState,
     pub discovered_devices: Vec<DeviceInfo>,
     pub selected_device_index: Option<usize>,
+    pub quick_connect_ui: bool,
     pub characteristic_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
     pub frame_count: usize,
@@ -53,22 +60,27 @@ impl App {
     pub fn new() -> Self {
         let (app_tx, app_rx) = mpsc::unbounded_channel();
         let (hr_tx, hr_rx) = mpsc::unbounded_channel();
-        //let (osc_tx, osc_rx) = mpsc::unbounded_channel();
+        let (osc_tx, osc_rx) = mpsc::unbounded_channel();
+        let settings = Settings::new().unwrap();
+
         Self {
             app_tx: app_tx,
             app_rx: app_rx,
             hr_tx: hr_tx,
             hr_rx: hr_rx,
+            osc_tx: osc_tx,
+            osc_rx: Arc::new(Mutex::new(osc_rx)),
             ble_scan_paused: Arc::new(AtomicBool::default()),
             app_state: AppState::MainMenu,
             table_state: TableState::default(),
             discovered_devices: Vec::new(),
             selected_device_index: None,
+            quick_connect_ui: false,
             characteristic_scroll: 0,
             selected_characteristics: Vec::new(),
             frame_count: 0,
             error_message: None,
-            settings: Settings::new().unwrap(),
+            settings,
             heart_rate_display: false,
             heart_rate_status: HeartRateStatus::default(),
         }
@@ -114,6 +126,11 @@ impl App {
         let hr_tx_clone = self.hr_tx.clone();
 
         tokio::spawn(async move { subscribe_to_heart_rate(hr_tx_clone, device).await });
+    }
+
+    pub async fn start_osc_thread(&mut self, osc_settings: OSCSettings) {
+        let osc_rx_clone = Arc::clone(&self.osc_rx);
+        tokio::spawn(async move { osc_thread(osc_rx_clone, osc_settings).await });
     }
 
     pub fn save_settings(&mut self) -> Result<(), std::io::Error> {

@@ -5,8 +5,10 @@ use crossterm::{
     terminal::{disable_raw_mode, LeaveAlternateScreen},
 };
 use futures::SinkExt;
+use human_panic::Metadata;
 use ratatui::backend::Backend;
 use ratatui::layout::Alignment;
+use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::{
@@ -19,7 +21,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::app::{App, AppState, DeviceData};
-use crate::heart_rate::HeartRateData;
+use crate::heart_rate::MonitorData;
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
 use crate::widgets::detail_table::detail_table;
@@ -27,6 +29,51 @@ use crate::widgets::device_table::device_table;
 use crate::widgets::heart_rate_display::heart_rate_display;
 use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
+
+// https://ratatui.rs/recipes/apps/better-panic/
+pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
+    let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
+        .panic_section(format!(
+            "This is a bug. Consider reporting it at {}",
+            //env!("CARGO_PKG_REPOSITORY")
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        ))
+        .display_location_section(true)
+        .display_env_section(true)
+        .into_hooks();
+    eyre_hook.install()?;
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+
+        let msg = format!("{}", panic_hook.panic_report(panic_info));
+        #[cfg(not(debug_assertions))]
+        {
+            eprintln!("{}", msg); // prints color-eyre stack trace to stderr
+            use human_panic::{handle_dump, print_msg, Metadata};
+            let meta = Metadata::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+
+            let file_path = handle_dump(&meta, panic_info);
+            // prints human-panic message
+            print_msg(file_path, &meta)
+                .expect("human-panic: printing error message to console failed");
+        }
+        eprintln!("Error: {}", strip_ansi_escapes::strip_str(msg));
+
+        #[cfg(debug_assertions)]
+        {
+            // Better Panic stacktrace that is only enabled when debugging.
+            better_panic::Settings::auto()
+                .most_recent_first(false)
+                .lineno_suffix(true)
+                .verbosity(better_panic::Verbosity::Full)
+                .create_panic_handler()(panic_info);
+        }
+
+        std::process::exit(libc::EXIT_FAILURE);
+    }));
+    Ok(())
+}
 
 /// Displays the detected Bluetooth devices in a table and handles the user input.
 /// The user can navigate the table, pause the scanning, and quit the application.
@@ -36,11 +83,7 @@ pub async fn viewer<B: Backend>(
     app: &mut App,
 ) -> Result<(), Box<dyn Error>> {
     // Defining a custom panic hook to reset the terminal properties
-    panic::set_hook(Box::new(|panic_info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-        eprintln!("{}", panic_info);
-    }));
+    initialize_panic_handler()?;
 
     app.table_state.select(Some(0));
 
@@ -67,7 +110,9 @@ pub async fn viewer<B: Backend>(
                 .get(app.table_state.selected().unwrap_or(0))
                 .unwrap_or(device_binding);
 
-            if app.app_state != AppState::HeartRateView {
+            if app.app_state != AppState::HeartRateView
+                && app.app_state != AppState::HeartRateViewNoData
+            {
                 // Draw the device table
                 let device_table =
                     device_table(app.table_state.selected(), &app.discovered_devices);
@@ -108,16 +153,29 @@ pub async fn viewer<B: Backend>(
             }
             // Draw the connecting overlay
             if app.app_state == AppState::ConnectingForHeartRate
-                || (app.app_state == AppState::HeartRateView
-                    && app.heart_rate_status.heart_rate_bpm == 0)
+                || app.app_state == AppState::HeartRateViewNoData
             {
                 let area = centered_rect(60, 30, f.size());
+                let mut border_style = Style::default();
+
+                let mut name = selected_device.name.clone();
+                if app.quick_connect_ui {
+                    border_style = Style::default().fg(ratatui::style::Color::Green);
+                    if name == "Unknown" {
+                        name = "Saved Device".into();
+                    }
+                }
+
                 let connecting_block = Paragraph::new(format!(
                     "Connecting to:\n{}\n({})",
-                    selected_device.name, selected_device.id
+                    name, selected_device.id
                 ))
                 .alignment(Alignment::Center)
-                .block(Block::default().borders(Borders::ALL));
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(border_style),
+                );
                 f.render_widget(Clear, area);
                 f.render_widget(connecting_block, area);
             }
@@ -246,6 +304,7 @@ pub async fn viewer<B: Backend>(
                             || device.name == app.settings.ble.saved_name && idle_on_main_menu
                         {
                             app.app_state = AppState::ConnectingForHeartRate;
+                            app.quick_connect_ui = true;
                             app.connect_for_hr(Some(device)).await;
                         }
                     }
@@ -269,20 +328,27 @@ pub async fn viewer<B: Backend>(
         // HR Notification Updates
         if let Ok(hr_data) = app.hr_rx.try_recv() {
             match hr_data {
-                HeartRateData::HeartRateStatus(hr) => {
+                MonitorData::HeartRateStatus(hr) => {
                     //app.heart_rate_display = true;
                     app.heart_rate_status = hr;
+                    // Assume we have proper data now
+                    app.app_state = AppState::HeartRateView;
                 }
-                HeartRateData::Error(error) => {
+                MonitorData::Error(error) => {
                     app.error_message = Some(error);
                     //app.is_loading_characteristics = false;
                 }
-                HeartRateData::Connected => {
+                MonitorData::Connected => {
+                    // TODO Maybe this should reset everything since it's a connect?
                     //app.is_loading_characteristics = false;
                     app.heart_rate_display = true;
-                    app.app_state = AppState::HeartRateView;
+                    app.app_state = if app.heart_rate_status.heart_rate_bpm > 0 {
+                        AppState::HeartRateView
+                    } else {
+                        AppState::HeartRateViewNoData
+                    };
                 }
-                HeartRateData::Disconnected => {
+                MonitorData::Disconnected => {
                     //app.is_loading_characteristics = false;
                     //app.heart_rate_display = false;
 
