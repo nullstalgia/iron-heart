@@ -71,9 +71,9 @@ pub async fn subscribe_to_heart_rate(
                             let rr_interval_present = (flags >> 4) & 1;
 
                             let heart_rate: u16 = if hr_is_u16 == 0 {
-                                u8::from_le_bytes([data.value[1]]) as u16
+                                data.value[1] as u16
                             } else {
-                                u16::from_be_bytes([data.value[1], data.value[2]])
+                                u16::from_le_bytes([data.value[1], data.value[2]])
                             };
 
                             //status.heart_rate_bpm = heart_rate;
