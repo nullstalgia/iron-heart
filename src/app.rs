@@ -12,7 +12,7 @@ use tokio::sync::{
 use crate::{
     heart_rate::{subscribe_to_heart_rate, HeartRateStatus, MonitorData},
     osc::osc_thread,
-    scan::{bluetooth_scan, get_characteristics},
+    scan::{bluetooth_event_thread, get_characteristics},
     settings::{OSCSettings, Settings},
     structs::{Characteristic, DeviceInfo},
 };
@@ -35,6 +35,12 @@ pub enum AppState {
     HeartRateViewNoData,
 }
 
+pub enum DeviceSelection {
+    Hover(usize),
+    Selected(usize),
+    None,
+}
+
 pub struct App {
     pub app_rx: UnboundedReceiver<DeviceData>,
     pub app_tx: UnboundedSender<DeviceData>,
@@ -46,7 +52,7 @@ pub struct App {
     pub app_state: AppState,
     pub table_state: TableState,
     pub discovered_devices: Vec<DeviceInfo>,
-    pub selected_device: Option<usize>,
+    pub selected_device: DeviceSelection,
     pub quick_connect_ui: bool,
     pub characteristic_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
@@ -75,7 +81,7 @@ impl App {
             app_state: AppState::MainMenu,
             table_state: TableState::default(),
             discovered_devices: Vec::new(),
-            selected_device_index: None,
+            selected_device: DeviceSelection::None,
             quick_connect_ui: false,
             characteristic_scroll: 0,
             selected_characteristics: Vec::new(),
@@ -87,17 +93,18 @@ impl App {
         }
     }
 
-    pub async fn scan(&mut self) {
+    pub async fn start_bluetooth_event_thread(&mut self) {
         let pause_signal_clone = Arc::clone(&self.ble_scan_paused);
         let app_tx_clone = self.app_tx.clone();
-        tokio::spawn(async move { bluetooth_scan(app_tx_clone, pause_signal_clone).await });
+        tokio::spawn(async move { bluetooth_event_thread(app_tx_clone, pause_signal_clone).await });
     }
 
     pub async fn connect_for_characteristics(&mut self) {
-        self.selected_device_index = self.table_state.selected();
+        self.selected_device = DeviceSelection::Selected(self.table_state.selected().unwrap());
+
         let selected_device = self
             .discovered_devices
-            .get(self.selected_device_index.unwrap_or(0))
+            .get(self.table_state.selected().unwrap())
             .unwrap();
 
         self.ble_scan_paused.store(true, Ordering::SeqCst);
@@ -130,8 +137,9 @@ impl App {
         tokio::spawn(async move { subscribe_to_heart_rate(hr_tx_clone, device).await });
     }
 
-    pub async fn start_osc_thread(&mut self, osc_settings: OSCSettings) {
+    pub async fn start_osc_thread(&mut self) {
         let osc_rx_clone = Arc::clone(&self.osc_rx);
+        let osc_settings = self.settings.osc.clone();
         tokio::spawn(async move { osc_thread(osc_rx_clone, osc_settings).await });
     }
 

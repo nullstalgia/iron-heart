@@ -6,29 +6,16 @@ use ratatui::{
 
 use crate::{structs::DeviceInfo, utils::extract_manufacturer_data};
 
-/// Creates a table with the detected BTLE devices.
-pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table {
+/// Creates a pop-up asking if the user wants to save the device for faster connection in the future.
+pub fn save_prompt(selected: Option<usize>, selected_device: &DeviceInfo) -> Table {
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let rows: Vec<Row> = devices
-        .iter()
-        .enumerate()
-        .map(|(i, device)| {
-            let style = if selected == Some(i) {
-                selected_style
-            } else {
-                Style::default()
-            };
-            Row::new(vec![
-                device.name.clone(),
-                device.get_id(),
-                extract_manufacturer_data(&device.manufacturer_data).company_code,
-                device.rssi.clone(),
-            ])
-            .style(style)
-        })
-        .collect();
 
-    let table = Table::new(
+
+
+    // Options: Yes, No, Never
+    let rows: Vec<Row>
+
+    let option_table = Table::new(
         rows,
         [
             Constraint::Length(40),
@@ -37,15 +24,7 @@ pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table {
             Constraint::Length(10),
         ],
     )
-    .header(
-        Row::new(vec!["Name", "Identifier", "Manufacturer", "RSSI"])
-            .style(Style::default().fg(Color::Yellow)),
-    )
-    .block(
-        Block::default()
-            .title("Detected Devices")
-            .borders(Borders::ALL),
-    )
+    .block(Block::default().title("Save device?").borders(Borders::ALL))
     .highlight_style(selected_style);
 
     table

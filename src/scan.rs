@@ -17,7 +17,10 @@ use tokio::time::timeout;
 
 /// Scans for Bluetooth devices and sends the information to the provided `mpsc::Sender`.
 /// The scan can be paused by setting the `pause_signal` to `true`.
-pub async fn bluetooth_scan(tx: mpsc::UnboundedSender<DeviceData>, pause_signal: Arc<AtomicBool>) {
+pub async fn bluetooth_event_thread(
+    tx: mpsc::UnboundedSender<DeviceData>,
+    pause_signal: Arc<AtomicBool>,
+) {
     let manager = Manager::new().await.unwrap();
     let adapters = manager.adapters().await.unwrap();
     let central = adapters.into_iter().next().expect("No adapters found");

@@ -91,6 +91,7 @@ pub async fn subscribe_to_heart_rate(
                             let _ = hr_tx.send(MonitorData::HeartRateStatus(status));
                         }
                     }
+                    device.disconnect().await.unwrap();
                 }
             }
             Ok(Err(e)) => {

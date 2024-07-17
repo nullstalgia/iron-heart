@@ -31,8 +31,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut app = app::App::new();
     // Try to create a default config file if it doesn't exist
     app.save_settings()?;
-    app.start_osc_thread(app.settings.osc.clone()).await;
-    app.scan().await;
+    app.start_osc_thread().await;
+    app.start_bluetooth_event_thread().await;
     viewer(&mut terminal, &mut app).await?;
 
     disable_raw_mode()?;

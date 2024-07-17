@@ -93,7 +93,7 @@ pub async fn viewer<B: Backend>(
             app.frame_count = f.count();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .margin(1)
+                .vertical_margin(1)
                 .constraints(
                     [
                         Constraint::Percentage(70),
@@ -362,6 +362,7 @@ pub async fn viewer<B: Backend>(
                     //app.heart_rate_display = false;
 
                     // TODO Reconnect?
+                    app.error_message = Some("Disconnected from device!".to_string());
                 }
             }
         }

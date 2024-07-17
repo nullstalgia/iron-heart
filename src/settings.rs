@@ -31,6 +31,8 @@ pub struct OSCSettings {
     pub port: u16,
     pub pulse_length_ms: u16,
     pub only_positive_floathr: bool,
+    // Pre is in case I change it after sending to initial "clients"
+    pub dont_show_disconnections_pre: bool,
     pub address_prefix: String,
     pub param_hrm_connected: String,
     pub param_beat_toggle: String,
@@ -70,6 +72,9 @@ impl Settings {
             .set_default("osc.pulse_length_ms", 100)
             .unwrap()
             .set_default("osc.only_positive_floathr", false)
+            .unwrap()
+            // TODO ask if people want this by default?
+            .set_default("osc.dont_show_disconnections", true)
             .unwrap()
             .set_default("osc.address_prefix", "/avatar/parameters/")
             .unwrap()
