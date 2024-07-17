@@ -159,6 +159,7 @@ pub async fn viewer<B: Backend>(
                 let mut border_style = Style::default();
 
                 let mut name = selected_device.name.clone();
+                // Set border to green if we're quick-connecting.
                 if app.quick_connect_ui {
                     border_style = Style::default().fg(ratatui::style::Color::Green);
                     if name == "Unknown" {
@@ -168,7 +169,8 @@ pub async fn viewer<B: Backend>(
 
                 let connecting_block = Paragraph::new(format!(
                     "Connecting to:\n{}\n({})",
-                    name, selected_device.id
+                    name,
+                    selected_device.get_id()
                 ))
                 .alignment(Alignment::Center)
                 .block(
@@ -233,7 +235,7 @@ pub async fn viewer<B: Backend>(
                         } else if app.app_state == AppState::CharacteristicView {
                             app.app_state = AppState::MainMenu;
                         } else if idle_on_main_menu {
-                            app.app_state = AppState::ConnectingForHeartRate;
+                            // app_state changed by method
                             app.connect_for_hr(None).await;
                         }
                     }
@@ -291,20 +293,27 @@ pub async fn viewer<B: Backend>(
                         // Save over any changes in MAC or Name! (As long as it's not "Unknown")
                     }
                     AppState::MainMenu => {
-                        if let Some(existing_device) = app
+                        if let Some(existing_device_index) = app
                             .discovered_devices
                             .iter_mut()
-                            .find(|d| d.id == device.id)
+                            .position(|d| d.id == device.id)
                         {
-                            *existing_device = device.clone();
+                            //*existing_device = device.clone();
+                            app.discovered_devices[existing_device_index] = device.clone();
                         } else {
                             app.discovered_devices.push(device.clone());
                         }
                         if device.id == app.settings.ble.saved_address
                             || device.name == app.settings.ble.saved_name && idle_on_main_menu
                         {
-                            app.app_state = AppState::ConnectingForHeartRate;
                             app.quick_connect_ui = true;
+                            app.selected_device_index = Some(
+                                app.discovered_devices
+                                    .iter()
+                                    .position(|&d| d == device)
+                                    .unwrap(),
+                            );
+                            // app_state changed by method
                             app.connect_for_hr(Some(device)).await;
                         }
                     }

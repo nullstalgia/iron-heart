@@ -28,6 +28,7 @@ pub enum DeviceData {
 pub enum AppState {
     MainMenu,
     CharacteristicView,
+    SaveDevicePrompt,
     ConnectingForHeartRate,
     ConnectingForCharacteristics,
     HeartRateView,
@@ -45,7 +46,7 @@ pub struct App {
     pub app_state: AppState,
     pub table_state: TableState,
     pub discovered_devices: Vec<DeviceInfo>,
-    pub selected_device_index: Option<usize>,
+    pub selected_device: Option<usize>,
     pub quick_connect_ui: bool,
     pub characteristic_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
@@ -109,10 +110,11 @@ impl App {
 
     pub async fn connect_for_hr(&mut self, quick_connect_device: Option<DeviceInfo>) {
         let selected_device = if let Some(device) = quick_connect_device {
+            self.app_state = AppState::ConnectingForHeartRate;
             device
         } else {
-            // Check if discovered devices is empty first
-            // (not yet fixed as it's a good test crash)
+            // Need to check if discovered devices is empty first
+            // (not yet fixed as it's a good test crash for the panic handler)
             self.selected_device_index = self.table_state.selected();
             self.discovered_devices
                 .get(self.selected_device_index.unwrap_or(0))
