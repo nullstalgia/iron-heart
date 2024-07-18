@@ -25,13 +25,10 @@ pub async fn bluetooth_event_thread(
     let adapters = manager.adapters().await.unwrap();
     let central = adapters.into_iter().next().expect("No adapters found");
 
-    // let hr_scan_filter = ScanFilter {
-    //     services: vec![HEART_RATE_SERVICE_UUID],
-    // };
+    // TODO See if we need to handle this failing at all? Or if it just works when things recover.
 
     central
         .start_scan(ScanFilter::default())
-        //.start_scan(hr_scan_filter)
         .await
         .expect("Scanning failure");
     let mut events = central.events().await.unwrap();
@@ -39,7 +36,7 @@ pub async fn bluetooth_event_thread(
 
     while let Some(event) = events.next().await {
         // Check the pause signal before processing the event
-        while pause_signal.load(Ordering::SeqCst) {
+        if pause_signal.load(Ordering::SeqCst) {
             if scanning {
                 central.stop_scan().await.unwrap();
                 scanning = false;
@@ -65,14 +62,6 @@ pub async fn bluetooth_event_thread(
                     // (device name stays Unknown forever),
                     // we should filter the devices here
                     if properties.services.is_empty() {
-                        continue;
-                    }
-
-                    if properties
-                        .services
-                        .iter()
-                        .all(|service| service.clone() != HEART_RATE_SERVICE_UUID)
-                    {
                         continue;
                     }
 

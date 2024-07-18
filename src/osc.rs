@@ -118,6 +118,10 @@ pub async fn osc_thread(
 
     let mut locked_receiver = osc_rx_arc.lock().await;
 
+    // TODO:
+    // with hide disconnects, make it semi-natural by randomizing the value -+3
+    // dont forget to do HRTwitchUp and Down
+
     loop {
         tokio::select! {
             hr_data = locked_receiver.recv() => {

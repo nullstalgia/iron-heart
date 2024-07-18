@@ -6,6 +6,7 @@ use uuid::Uuid;
 /// A struct to hold the information of a Bluetooth device.
 #[derive(Clone, Default)]
 pub struct DeviceInfo {
+    // TODO id vs address
     pub id: String,
     pub name: String,
     pub tx_power: String,

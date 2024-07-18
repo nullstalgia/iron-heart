@@ -35,24 +35,24 @@ pub enum AppState {
     HeartRateViewNoData,
 }
 
-pub enum DeviceSelection {
-    Hover(usize),
-    Selected(usize),
-    None,
-}
-
 pub struct App {
-    pub app_rx: UnboundedReceiver<DeviceData>,
-    pub app_tx: UnboundedSender<DeviceData>,
+    // Devices as found by the BLE thread
+    pub ble_rx: UnboundedReceiver<DeviceData>,
+    pub ble_tx: UnboundedSender<DeviceData>,
+    // BLE Notifications from the heart rate monitor
     pub hr_rx: UnboundedReceiver<MonitorData>,
     pub hr_tx: UnboundedSender<MonitorData>,
+    // Sending data to the OSC thread
     pub osc_rx: Arc<Mutex<UnboundedReceiver<MonitorData>>>,
     pub osc_tx: UnboundedSender<MonitorData>,
     pub ble_scan_paused: Arc<AtomicBool>,
     pub app_state: AppState,
     pub table_state: TableState,
+    pub save_prompt_state: TableState,
+    pub allow_saving: bool,
+    // devices with the heart rate service
+    // UI references this using table_state as the index
     pub discovered_devices: Vec<DeviceInfo>,
-    pub selected_device: DeviceSelection,
     pub quick_connect_ui: bool,
     pub characteristic_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
@@ -69,10 +69,9 @@ impl App {
         let (hr_tx, hr_rx) = mpsc::unbounded_channel();
         let (osc_tx, osc_rx) = mpsc::unbounded_channel();
         let settings = Settings::new().unwrap();
-
         Self {
-            app_tx: app_tx,
-            app_rx: app_rx,
+            ble_tx: app_tx,
+            ble_rx: app_rx,
             hr_tx: hr_tx,
             hr_rx: hr_rx,
             osc_tx: osc_tx,
@@ -80,8 +79,9 @@ impl App {
             ble_scan_paused: Arc::new(AtomicBool::default()),
             app_state: AppState::MainMenu,
             table_state: TableState::default(),
+            save_prompt_state: TableState::default(),
+            allow_saving: false,
             discovered_devices: Vec::new(),
-            selected_device: DeviceSelection::None,
             quick_connect_ui: false,
             characteristic_scroll: 0,
             selected_characteristics: Vec::new(),
@@ -95,38 +95,41 @@ impl App {
 
     pub async fn start_bluetooth_event_thread(&mut self) {
         let pause_signal_clone = Arc::clone(&self.ble_scan_paused);
-        let app_tx_clone = self.app_tx.clone();
+        let app_tx_clone = self.ble_tx.clone();
         tokio::spawn(async move { bluetooth_event_thread(app_tx_clone, pause_signal_clone).await });
     }
 
     pub async fn connect_for_characteristics(&mut self) {
-        self.selected_device = DeviceSelection::Selected(self.table_state.selected().unwrap());
-
         let selected_device = self
-            .discovered_devices
-            .get(self.table_state.selected().unwrap())
-            .unwrap();
+            .get_selected_device()
+            .expect("This crash is expected if discovered_devices is empty");
 
         self.ble_scan_paused.store(true, Ordering::SeqCst);
 
         let device = Arc::new(selected_device.clone());
-        let app_tx_clone = self.app_tx.clone();
+        let app_tx_clone = self.ble_tx.clone();
 
         tokio::spawn(async move { get_characteristics(app_tx_clone, device).await });
     }
 
-    pub async fn connect_for_hr(&mut self, quick_connect_device: Option<DeviceInfo>) {
+    pub async fn connect_for_hr(&mut self, quick_connect_device: Option<&DeviceInfo>) {
         let selected_device = if let Some(device) = quick_connect_device {
             self.app_state = AppState::ConnectingForHeartRate;
             device
         } else {
+            // Let's check if we're okay asking to saving this device
+            if !self.settings.ble.never_ask_to_save && self.app_state != AppState::SaveDevicePrompt
+            {
+                self.app_state = AppState::SaveDevicePrompt;
+                return;
+            }
+
+            self.app_state = AppState::ConnectingForHeartRate;
+
             // Need to check if discovered devices is empty first
             // (not yet fixed as it's a good test crash for the panic handler)
-            self.selected_device_index = self.table_state.selected();
-            self.discovered_devices
-                .get(self.selected_device_index.unwrap_or(0))
-                .unwrap()
-                .clone()
+            self.get_selected_device()
+                .expect("This crash is expected if discovered_devices is empty")
         };
 
         self.ble_scan_paused.store(true, Ordering::SeqCst);
@@ -134,6 +137,7 @@ impl App {
         let device = Arc::new(selected_device.clone());
         let hr_tx_clone = self.hr_tx.clone();
 
+        // TODO handle here if shit panics
         tokio::spawn(async move { subscribe_to_heart_rate(hr_tx_clone, device).await });
     }
 
@@ -145,5 +149,10 @@ impl App {
 
     pub fn save_settings(&mut self) -> Result<(), std::io::Error> {
         self.settings.save()
+    }
+
+    pub fn get_selected_device(&self) -> Option<&DeviceInfo> {
+        self.discovered_devices
+            .get(self.table_state.selected().unwrap_or(0))
     }
 }

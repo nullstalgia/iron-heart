@@ -78,6 +78,8 @@ impl Settings {
             .unwrap()
             .set_default("osc.address_prefix", "/avatar/parameters/")
             .unwrap()
+            .set_default("osc.dont_show_disconnections_pre", true)
+            .unwrap()
             .set_default("osc.param_hrm_connected", "isHRConnected")
             .unwrap()
             .set_default("osc.param_beat_toggle", "HeartBeatToggle")
