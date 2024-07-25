@@ -6,6 +6,8 @@ use crossterm::{
 
 use std::error::Error;
 
+use log::*;
+
 // https://ratatui.rs/recipes/apps/better-panic/
 pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
@@ -45,6 +47,8 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
                 .verbosity(better_panic::Verbosity::Full)
                 .create_panic_handler()(panic_info);
         }
+
+        log::logger().flush();
 
         std::process::exit(libc::EXIT_FAILURE);
     }));

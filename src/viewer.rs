@@ -1,5 +1,6 @@
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
+use log::*;
 use ratatui::backend::Backend;
 use ratatui::layout::Alignment;
 use ratatui::style::Style;
@@ -173,12 +174,10 @@ pub async fn viewer<B: Backend>(
         // Event handling
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                let idle_on_main_menu =
-                    app.error_message.is_none() && app.state == AppState::MainMenu;
-
                 match key.code {
                     KeyCode::Char('e') => {
                         app.error_message = Some("This is a test error message".to_string());
+                        error!("This is a test error message");
                     }
                     KeyCode::Char('q') => {
                         // if app.app_state == AppState::MainMenu {
@@ -191,16 +190,17 @@ pub async fn viewer<B: Backend>(
                             break;
                             // TODO Gracefully disconnect bluetooth?
                         } else {
-                            if idle_on_main_menu {
+                            if app.is_idle_on_main_menu() {
                                 app.state = AppState::ConnectingForCharacteristics;
                                 app.connect_for_characteristics().await;
                             }
                         }
                     }
                     KeyCode::Char('s') => {
-                        if idle_on_main_menu {
+                        if app.is_idle_on_main_menu() {
                             let current_state = app.ble_scan_paused.load(Ordering::SeqCst);
                             app.ble_scan_paused.store(!current_state, Ordering::SeqCst);
+                            debug!("(S) Pausing BLE scan");
                         }
                     }
                     // Enter!
@@ -224,9 +224,14 @@ pub async fn viewer<B: Backend>(
                                 }
                                 _ => {}
                             }
+                            debug!(
+                                "Connecting from save prompt | Chosen option: {}",
+                                chosen_option
+                            );
                             app.connect_for_hr(None).await;
-                        } else if idle_on_main_menu {
+                        } else if app.is_idle_on_main_menu() {
                             // app_state changed by method
+                            debug!("Connecting from main menu");
                             app.connect_for_hr(None).await;
                         }
                     }
@@ -301,7 +306,6 @@ pub async fn viewer<B: Backend>(
 
         // Check for updates from BLE Thread
         if let Ok(new_device_info) = app.ble_rx.try_recv() {
-            let idle_on_main_menu = app.error_message.is_none() && app.state == AppState::MainMenu;
             match new_device_info {
                 DeviceData::DeviceInfo(device) => {
                     // If the device is already in the list, update it
@@ -329,8 +333,9 @@ pub async fn viewer<B: Backend>(
                     }
 
                     // If the device is saved, connect to it
-                    if device.id == app.settings.ble.saved_address
-                        || device.name == app.settings.ble.saved_name && idle_on_main_menu
+                    if (device.id == app.settings.ble.saved_address
+                        || device.name == app.settings.ble.saved_name)
+                        && app.is_idle_on_main_menu()
                     {
                         app.quick_connect_ui = true;
                         // I'm going to assume that if we find a set saved device,
@@ -347,34 +352,18 @@ pub async fn viewer<B: Backend>(
                                 .position(|d| d.id == device.id),
                         );
                         // app_state changed by method
+                        debug!("Connecting to saved device, AppState: {:?}", app.state);
                         app.connect_for_hr(Some(&device)).await;
                     }
 
-                    if app.allow_saving && app.get_selected_device().unwrap().id == device.id {
-                        let new_id = device.get_id();
-                        let new_name = device.name.clone();
-                        let mut damaged = false;
-                        if app.settings.ble.saved_address != new_id {
-                            app.settings.ble.saved_address = new_id;
-                            damaged = true;
-                        }
-                        // TODO See if I can find a way to get "Unknown" programatically,
-                        // not a fan of hardcoding it (and it's "" in the ::default())
-                        // Maybe do a .new() and supply a None?
-                        if app.settings.ble.saved_name != new_name && new_name != "Unknown" {
-                            app.settings.ble.saved_name = new_name;
-                            damaged = true;
-                        }
-                        if damaged {
-                            app.save_settings().expect("Failed to save settings");
-                        }
-                    }
+                    app.try_save_device(Some(&device));
                 }
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
                     app.state = AppState::CharacteristicView
                 }
                 DeviceData::Error(error) => {
+                    error!("BLE Thread Error: {:?}", error.clone());
                     app.error_message = Some(error);
                     //app.is_loading_characteristics = false;
                 }
@@ -391,6 +380,17 @@ pub async fn viewer<B: Backend>(
                             AppState::HeartRateViewNoData
                         };
                     }
+
+                    if app.state == AppState::HeartRateView
+                        || app.state == AppState::HeartRateViewNoData
+                        || app.state == AppState::ConnectingForHeartRate
+                    {
+                        if id == app.get_selected_device().unwrap().id {
+                            debug!("Connected to device {:?}, stopping BLE scan", id);
+                            app.ble_scan_paused.store(true, Ordering::SeqCst);
+                        }
+                        app.try_save_device(None);
+                    }
                 }
                 DeviceData::DisconnectedEvent(id) => {
                     //app.is_loading_characteristics = false;
@@ -398,6 +398,15 @@ pub async fn viewer<B: Backend>(
 
                     // TODO Reconnect?
                     app.error_message = Some("Disconnected from device!".to_string());
+                    if app.state == AppState::HeartRateView
+                        || app.state == AppState::HeartRateViewNoData
+                        || app.state == AppState::MainMenu
+                    {
+                        if id == app.get_selected_device().unwrap().id {
+                            debug!("Disconnected from device {:?}, resuming BLE scan", id);
+                            app.ble_scan_paused.store(false, Ordering::SeqCst);
+                        }
+                    }
                 }
                 DeviceData::HeartRateStatus(_) => {}
             }

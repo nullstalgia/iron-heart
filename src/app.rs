@@ -1,8 +1,12 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    f32::consts::PI,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
+use log::*;
 use ratatui::widgets::TableState;
 use tokio::sync::{
     mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -90,9 +94,9 @@ impl App {
         Self {
             ble_tx: app_tx,
             ble_rx: app_rx,
-            hr_tx: hr_tx,
-            hr_rx: hr_rx,
-            osc_tx: osc_tx,
+            hr_tx,
+            hr_rx,
+            osc_tx,
             osc_rx: Arc::new(Mutex::new(osc_rx)),
             ble_scan_paused: Arc::new(AtomicBool::default()),
             state: AppState::MainMenu,
@@ -114,6 +118,7 @@ impl App {
     pub async fn start_bluetooth_event_thread(&mut self) {
         let pause_signal_clone = Arc::clone(&self.ble_scan_paused);
         let app_tx_clone = self.ble_tx.clone();
+        debug!("Spawning Bluetooth CentralEvent thread");
         tokio::spawn(async move { bluetooth_event_thread(app_tx_clone, pause_signal_clone).await });
     }
 
@@ -122,11 +127,13 @@ impl App {
             .get_selected_device()
             .expect("This crash is expected if discovered_devices is empty");
 
+        debug!("(C) Pausing BLE scan");
         self.ble_scan_paused.store(true, Ordering::SeqCst);
 
         let device = Arc::new(selected_device.clone());
         let app_tx_clone = self.ble_tx.clone();
 
+        debug!("Spawning characteristics thread");
         tokio::spawn(async move { get_characteristics(app_tx_clone, device).await });
     }
 
@@ -135,32 +142,34 @@ impl App {
             self.state = AppState::ConnectingForHeartRate;
             device
         } else {
+            if self.discovered_devices.is_empty() {
+                return;
+            }
             // Let's check if we're okay asking to saving this device
             if !self.settings.ble.never_ask_to_save && self.state != AppState::SaveDevicePrompt {
+                debug!("Asking to save device");
                 self.state = AppState::SaveDevicePrompt;
                 return;
             }
 
             self.state = AppState::ConnectingForHeartRate;
-
-            // Need to check if discovered devices is empty first
-            // (not yet fixed as it's a good test crash for the panic handler)
-            self.get_selected_device()
-                .expect("This crash is expected if discovered_devices is empty")
+            self.get_selected_device().unwrap()
         };
 
+        debug!("(HR) Pausing BLE scan");
         self.ble_scan_paused.store(true, Ordering::SeqCst);
 
         let device = Arc::new(selected_device.clone());
         let hr_tx_clone = self.hr_tx.clone();
 
-        // TODO handle here if shit panics
+        debug!("Spawning notification thread, AppState: {:?}", self.state);
         tokio::spawn(async move { start_notification_thread(hr_tx_clone, device).await });
     }
 
     pub async fn start_osc_thread(&mut self) {
         let osc_rx_clone = Arc::clone(&self.osc_rx);
         let osc_settings = self.settings.osc.clone();
+        debug!("Spawning OSC thread");
         tokio::spawn(async move { osc_thread(osc_rx_clone, osc_settings).await });
     }
 
@@ -168,8 +177,36 @@ impl App {
         self.settings.save()
     }
 
+    pub fn try_save_device(&mut self, given_device: Option<&DeviceInfo>) {
+        if self.allow_saving {
+            let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
+
+            let new_id = device.get_id();
+            let new_name = device.name.clone();
+            let mut damaged = false;
+            if self.settings.ble.saved_address != new_id {
+                self.settings.ble.saved_address = new_id;
+                damaged = true;
+            }
+            // TODO See if I can find a way to get "Unknown" programatically,
+            // not a fan of hardcoding it (and it's "" in the ::default())
+            // Maybe do a .new() and supply a None?
+            if self.settings.ble.saved_name != new_name && new_name != "Unknown" {
+                self.settings.ble.saved_name = new_name;
+                damaged = true;
+            }
+            if damaged {
+                self.save_settings().expect("Failed to save settings");
+            }
+        }
+    }
+
     pub fn get_selected_device(&self) -> Option<&DeviceInfo> {
         self.discovered_devices
             .get(self.table_state.selected().unwrap_or(0))
+    }
+
+    pub fn is_idle_on_main_menu(&self) -> bool {
+        self.error_message.is_none() && self.state == AppState::MainMenu
     }
 }

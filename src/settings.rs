@@ -1,6 +1,6 @@
 use config::{Config, ConfigError, File as ConfigFile};
+use log::LevelFilter;
 use serde_derive::{Deserialize, Serialize};
-use simplelog::LevelFilter;
 use std::env;
 use std::fs::File;
 use std::io::Write;

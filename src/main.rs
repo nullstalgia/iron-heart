@@ -7,8 +7,9 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
-use simplelog::*;
 use std::{error::Error, io};
+
+use log::*;
 
 mod app;
 mod company_codes;
@@ -35,22 +36,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let log_path = std::env::current_exe()
         .expect("Failed to get executable path")
         .with_extension("log");
-    let log_file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
-        .expect(format!("Failed to open log file: {:?}", log_path).as_str());
-    WriteLogger::init(app.settings.get_log_level(), Config::default(), log_file)
-        .expect("Failed to initialize log writer");
+    let log_str = log_path
+        .to_str()
+        .expect("Failed to convert log path to string");
+    let log_level = app.settings.get_log_level();
+    let log_format = if log_level <= LevelFilter::Info {
+        // Default format
+        fast_log::FastLogFormat::new()
+    } else {
+        // Show line number
+        fast_log::FastLogFormat::new().set_display_line_level(LevelFilter::Trace)
+    };
+    fast_log::init(
+        fast_log::Config::new()
+            .file(log_str)
+            .level(log_level)
+            .format(log_format)
+            .chan_len(Some(1000000)),
+    )
+    .expect("Failed to initialize log writer");
+
+    info!("Starting app...");
 
     // Try to create a default config file if it doesn't exist
     app.save_settings()?;
 
     app.start_osc_thread().await;
     app.start_bluetooth_event_thread().await;
+    debug!("Started OSC and Bluetooth CentralEvent threads");
     // Main app loop
     viewer(&mut terminal, &mut app).await?;
 
+    // Shutting down gracefully
+    log::logger().flush();
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),

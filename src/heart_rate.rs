@@ -6,6 +6,7 @@ use btleplug::api::{
 };
 use btleplug::platform::Manager;
 use futures::StreamExt;
+use log::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +24,7 @@ pub const BATTERY_LEVEL_CHARACTERISTIC_UUID: Uuid =
     Uuid::from_u128(0x00002a19_0000_1000_8000_00805f9b34fb);
 pub const BATTERY_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb);
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BatteryLevel {
     #[default]
     Unknown,
@@ -50,28 +51,25 @@ pub async fn start_notification_thread(
     hr_tx: mpsc::UnboundedSender<DeviceData>,
     peripheral: Arc<DeviceInfo>,
 ) {
-    let duration = Duration::from_secs(10);
+    let duration = Duration::from_secs(30);
     match &peripheral.device {
         Some(device) => {
             loop {
-                // Dunno if this is necessary,
-                // if device
-                //     .is_connected()
-                //     .await
-                //     .expect("Failed to get connection status?")
-                // {
-                //     device.disconnect().await.expect("Failed to disconnect?");
-                // }
+                info!(
+                    "Connecting to Heart Rate Monitor! Name: {:?} | Address: {:?}",
+                    peripheral.name, peripheral.address
+                );
                 match timeout(duration, device.connect()).await {
                     Ok(Ok(_)) => {
                         if let Some(device) = &peripheral.device {
-                            device
-                                .discover_services()
-                                .await
-                                .expect("Couldn't read services from connected device!");
+                            if let Err(e) = device.discover_services().await {
+                                error!("Couldn't read services from connected device: {}", e);
+                                continue;
+                            }
                             let characteristics = device.characteristics();
                             let mut on_connect_battery_level = BatteryLevel::NotReported;
                             let len = characteristics.len();
+                            debug!("Found {} characteristics", len);
                             if let Some(characteristic) = characteristics
                                 .iter()
                                 .find(|c| c.uuid == BATTERY_LEVEL_CHARACTERISTIC_UUID)
@@ -81,20 +79,36 @@ pub async fn start_notification_thread(
                                         |_| BatteryLevel::Unknown,
                                         |v| BatteryLevel::Level(v[0]),
                                     );
+                                if on_connect_battery_level == BatteryLevel::Unknown {
+                                    warn!("Failed to read battery level");
+                                }
                             }
 
                             if let Some(characteristic) = characteristics
                                 .iter()
                                 .find(|c| c.uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID)
                             {
-                                device.subscribe(characteristic).await.unwrap();
+                                if device.subscribe(characteristic).await.is_err() {
+                                    error!("Failed to subscribe to HR service!");
+                                    continue;
+                                }
                             } else {
-                                panic!("Device is missing HR service, had {a}", a = len);
+                                error!("Didn't find HR service during notification setup!");
+                                continue;
                             }
 
-                            let mut notification_stream = device.notifications().await.unwrap();
+                            let mut notification_stream = match device.notifications().await {
+                                Ok(stream) => stream,
+                                Err(e) => {
+                                    error!("Failed to get HR BLE notification stream: {}", e);
+                                    continue;
+                                }
+                            };
+
                             // Process while the BLE connection is not broken or stopped.
-                            while let Some(data) = notification_stream.next().await {
+                            while let Ok(Some(data)) =
+                                timeout(duration, notification_stream.next()).await
+                            {
                                 if data.uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID {
                                     let flags = data.value[0];
                                     let hr_is_u16 = (flags >> 0) & 1;
@@ -124,6 +138,7 @@ pub async fn start_notification_thread(
                                     let _ = hr_tx.send(DeviceData::HeartRateStatus(status));
                                 }
                             }
+                            info!("Heart Rate Monitor disconnected (notif thread)!");
                             device.disconnect().await.expect("Failed to disconnect?");
                         }
                     }
@@ -152,6 +167,7 @@ pub async fn start_notification_thread(
                             .expect("Failed to send error message");
                     }
                 }
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         }
         None => {
