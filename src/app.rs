@@ -10,7 +10,7 @@ use tokio::sync::{
 };
 
 use crate::{
-    heart_rate::{subscribe_to_heart_rate, HeartRateStatus, MonitorData},
+    heart_rate::{start_notification_thread, HeartRateStatus},
     osc::osc_thread,
     scan::{bluetooth_event_thread, get_characteristics},
     settings::{OSCSettings, Settings},
@@ -18,9 +18,11 @@ use crate::{
 };
 
 pub enum DeviceData {
+    ConnectedEvent(String),
+    DisconnectedEvent(String),
     DeviceInfo(DeviceInfo),
-    #[allow(dead_code)]
     Characteristics(Vec<Characteristic>),
+    HeartRateStatus(HeartRateStatus),
     Error(String),
 }
 
@@ -35,18 +37,34 @@ pub enum AppState {
     HeartRateViewNoData,
 }
 
+// #[derive(Debug, Clone)]
+// pub enum ErrorMessage {
+//     None,
+//     Recoverable(String),
+//     Fatal(String),
+// }
+
+// impl ErrorMessage {
+//     pub fn is_none(&self) -> bool {
+//         match self {
+//             ErrorMessage::None => true,
+//             _ => false,
+//         }
+//     }
+// }
+
 pub struct App {
     // Devices as found by the BLE thread
     pub ble_rx: UnboundedReceiver<DeviceData>,
     pub ble_tx: UnboundedSender<DeviceData>,
     // BLE Notifications from the heart rate monitor
-    pub hr_rx: UnboundedReceiver<MonitorData>,
-    pub hr_tx: UnboundedSender<MonitorData>,
+    pub hr_rx: UnboundedReceiver<DeviceData>,
+    pub hr_tx: UnboundedSender<DeviceData>,
     // Sending data to the OSC thread
-    pub osc_rx: Arc<Mutex<UnboundedReceiver<MonitorData>>>,
-    pub osc_tx: UnboundedSender<MonitorData>,
+    pub osc_rx: Arc<Mutex<UnboundedReceiver<DeviceData>>>,
+    pub osc_tx: UnboundedSender<DeviceData>,
     pub ble_scan_paused: Arc<AtomicBool>,
-    pub app_state: AppState,
+    pub state: AppState,
     pub table_state: TableState,
     pub save_prompt_state: TableState,
     pub allow_saving: bool,
@@ -77,7 +95,7 @@ impl App {
             osc_tx: osc_tx,
             osc_rx: Arc::new(Mutex::new(osc_rx)),
             ble_scan_paused: Arc::new(AtomicBool::default()),
-            app_state: AppState::MainMenu,
+            state: AppState::MainMenu,
             table_state: TableState::default(),
             save_prompt_state: TableState::default(),
             allow_saving: false,
@@ -114,17 +132,16 @@ impl App {
 
     pub async fn connect_for_hr(&mut self, quick_connect_device: Option<&DeviceInfo>) {
         let selected_device = if let Some(device) = quick_connect_device {
-            self.app_state = AppState::ConnectingForHeartRate;
+            self.state = AppState::ConnectingForHeartRate;
             device
         } else {
             // Let's check if we're okay asking to saving this device
-            if !self.settings.ble.never_ask_to_save && self.app_state != AppState::SaveDevicePrompt
-            {
-                self.app_state = AppState::SaveDevicePrompt;
+            if !self.settings.ble.never_ask_to_save && self.state != AppState::SaveDevicePrompt {
+                self.state = AppState::SaveDevicePrompt;
                 return;
             }
 
-            self.app_state = AppState::ConnectingForHeartRate;
+            self.state = AppState::ConnectingForHeartRate;
 
             // Need to check if discovered devices is empty first
             // (not yet fixed as it's a good test crash for the panic handler)
@@ -138,7 +155,7 @@ impl App {
         let hr_tx_clone = self.hr_tx.clone();
 
         // TODO handle here if shit panics
-        tokio::spawn(async move { subscribe_to_heart_rate(hr_tx_clone, device).await });
+        tokio::spawn(async move { start_notification_thread(hr_tx_clone, device).await });
     }
 
     pub async fn start_osc_thread(&mut self) {

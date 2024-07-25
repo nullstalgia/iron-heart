@@ -17,6 +17,18 @@ pub fn inspect_overlay(
     let mut rows: Vec<Row> = Vec::new();
     let mut services: HashMap<String, Vec<&Characteristic>> = HashMap::new();
 
+    if characteristics.is_empty() {
+        rows.push(Row::new(vec!["Loading..."]));
+        return Table::new(rows, [Constraint::Percentage(100)])
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Characteristics")
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+    }
+
     for characteristic in characteristics.iter() {
         let service_uuid = characteristic.service.to_string();
         services

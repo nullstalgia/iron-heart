@@ -1,5 +1,6 @@
 use config::{Config, ConfigError, File as ConfigFile};
 use serde_derive::{Deserialize, Serialize};
+use simplelog::LevelFilter;
 use std::env;
 use std::fs::File;
 use std::io::Write;
@@ -8,7 +9,7 @@ use toml;
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(unused)]
 pub struct MiscSettings {
-    // TODO log level
+    log_level: String,
     write_bpm_to_file: bool,
     write_bpm_file_path: String,
     log_sessions_to_csv: bool,
@@ -50,15 +51,10 @@ pub struct Settings {
     misc: MiscSettings,
 }
 
-const CONFIG_NAME: &str = "null_iron_heart.toml";
-
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
         let exe_path = env::current_exe().expect("Failed to get executable path");
-        let config_path = exe_path
-            .parent()
-            .expect("Executable has no parent directory")
-            .join(CONFIG_NAME);
+        let config_path = exe_path.with_extension("toml");
 
         let s = Config::builder()
             // Start off by merging in the "default" configuration file
@@ -73,11 +69,9 @@ impl Settings {
             .unwrap()
             .set_default("osc.only_positive_floathr", false)
             .unwrap()
-            // TODO ask if people want this by default?
-            .set_default("osc.dont_show_disconnections", true)
-            .unwrap()
             .set_default("osc.address_prefix", "/avatar/parameters/")
             .unwrap()
+            // TODO ask if people want this by default?
             .set_default("osc.dont_show_disconnections_pre", true)
             .unwrap()
             .set_default("osc.param_hrm_connected", "isHRConnected")
@@ -98,6 +92,8 @@ impl Settings {
             .unwrap()
             .set_default("ble.saved_name", "")
             .unwrap()
+            .set_default("misc.log_level", "info")
+            .unwrap()
             .set_default("misc.write_bpm_to_file", false)
             .unwrap()
             .set_default("misc.write_bpm_file_path", "bpm.txt")
@@ -117,10 +113,7 @@ impl Settings {
     }
     pub fn save(&self) -> Result<(), std::io::Error> {
         let exe_path = env::current_exe().expect("Failed to get executable path");
-        let config_path = exe_path
-            .parent()
-            .expect("Executable has no parent directory")
-            .join(CONFIG_NAME);
+        let config_path = exe_path.with_extension("toml");
 
         let toml_string = toml::to_string(self).expect("Failed to serialize config");
 
@@ -129,5 +122,16 @@ impl Settings {
             .expect("Failed to write to config file");
 
         Ok(())
+    }
+    pub fn get_log_level(&self) -> LevelFilter {
+        match self.misc.log_level.to_lowercase().as_str() {
+            "off" => LevelFilter::Off,
+            "error" => LevelFilter::Error,
+            "warn" => LevelFilter::Warn,
+            "info" => LevelFilter::Info,
+            "debug" => LevelFilter::Debug,
+            "trace" => LevelFilter::Trace,
+            _ => LevelFilter::Info,
+        }
     }
 }

@@ -25,7 +25,7 @@ pub fn info_table(
             format!("[s → stop scan {}]", SPINNER[index_slow])
         },
         if is_loading_characteristics {
-            format!("[c → loading... {}]", SPINNER[index])
+            format!("[c → connecting... {}]", SPINNER[index])
         } else {
             "[c → load characteristics]".to_string()
         },

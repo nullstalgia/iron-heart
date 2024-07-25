@@ -30,8 +30,11 @@ pub async fn bluetooth_event_thread(
     central
         .start_scan(ScanFilter::default())
         .await
-        .expect("Scanning failure");
-    let mut events = central.events().await.unwrap();
+        .expect("Scanning failure - Make sure Bluetooth adapter is enabled and try again.");
+    let mut events = central
+        .events()
+        .await
+        .expect("BLE failure - Make sure Bluetooth adapter is enabled and try again.");
     let mut scanning = true;
 
     while let Some(event) = events.next().await {
@@ -41,7 +44,6 @@ pub async fn bluetooth_event_thread(
                 central.stop_scan().await.unwrap();
                 scanning = false;
             }
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
 
         if !scanning {
@@ -58,9 +60,6 @@ pub async fn bluetooth_event_thread(
                         .unwrap()
                         .unwrap_or(PeripheralProperties::default());
 
-                    // Since the scan filter doesn't as expected
-                    // (device name stays Unknown forever),
-                    // we should filter the devices here
                     if properties.services.is_empty() {
                         continue;
                     }
@@ -81,6 +80,12 @@ pub async fn bluetooth_event_thread(
                     // Send a clone of the accumulated device information so far
                     let _ = tx.send(DeviceData::DeviceInfo(device));
                 }
+            }
+            CentralEvent::DeviceDisconnected(id) => {
+                let _ = tx.send(DeviceData::DisconnectedEvent(id.to_string()));
+            }
+            CentralEvent::DeviceConnected(id) => {
+                let _ = tx.send(DeviceData::ConnectedEvent(id.to_string()));
             }
             _ => {}
         }

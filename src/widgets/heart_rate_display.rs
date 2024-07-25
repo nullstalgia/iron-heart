@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Row, Table},
 };
 
-use crate::heart_rate::HeartRateStatus;
+use crate::heart_rate::{BatteryLevel, HeartRateStatus};
 
 // TODO Ascii Heart Beat Animation
 
@@ -19,10 +19,16 @@ pub fn heart_rate_display(heart_rate_status: &HeartRateStatus) -> Table<'static>
             .style(Style::default().add_modifier(Modifier::BOLD)),
     );
 
+    let battery_string: String = match heart_rate_status.battery_level {
+        BatteryLevel::Unknown => "?".into(),
+        BatteryLevel::NotReported => "N/A".into(),
+        BatteryLevel::Level(level) => level.to_string(),
+    };
+
     rows.push(Row::new(vec![
         heart_rate_status.heart_rate_bpm.to_string(),
         format!("{:?}", heart_rate_status.rr_intervals),
-        heart_rate_status.battery_level.to_string(),
+        battery_string,
     ]));
 
     Table::new(

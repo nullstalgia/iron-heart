@@ -1,11 +1,5 @@
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use crossterm::{
-    event::DisableMouseCapture,
-    execute,
-    terminal::{disable_raw_mode, LeaveAlternateScreen},
-};
-use futures::SinkExt;
-use human_panic::Metadata;
+
 use ratatui::backend::Backend;
 use ratatui::layout::Alignment;
 use ratatui::style::Style;
@@ -16,12 +10,12 @@ use ratatui::{
     Terminal,
 };
 use std::error::Error;
-use std::panic;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::app::{App, AppState, DeviceData};
-use crate::heart_rate::{MonitorData, HEART_RATE_SERVICE_UUID};
+use crate::heart_rate::HEART_RATE_SERVICE_UUID;
+use crate::panic_handler::initialize_panic_handler;
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
 use crate::widgets::detail_table::detail_table;
@@ -30,51 +24,6 @@ use crate::widgets::heart_rate_display::heart_rate_display;
 use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
 use crate::widgets::save_prompt::save_prompt;
-
-// https://ratatui.rs/recipes/apps/better-panic/
-pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
-    let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
-        .panic_section(format!(
-            "This is a bug. Consider reporting it at {}",
-            //env!("CARGO_PKG_REPOSITORY")
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        ))
-        .display_location_section(true)
-        .display_env_section(true)
-        .into_hooks();
-    eyre_hook.install()?;
-    std::panic::set_hook(Box::new(move |panic_info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-
-        let msg = format!("{}", panic_hook.panic_report(panic_info));
-        #[cfg(not(debug_assertions))]
-        {
-            eprintln!("{}", msg); // prints color-eyre stack trace to stderr
-            use human_panic::{handle_dump, print_msg, Metadata};
-            let meta = Metadata::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-
-            let file_path = handle_dump(&meta, panic_info);
-            // prints human-panic message
-            print_msg(file_path, &meta)
-                .expect("human-panic: printing error message to console failed");
-        }
-        eprintln!("Error: {}", strip_ansi_escapes::strip_str(msg));
-
-        #[cfg(debug_assertions)]
-        {
-            // Better Panic stacktrace that is only enabled when debugging.
-            better_panic::Settings::auto()
-                .most_recent_first(false)
-                .lineno_suffix(true)
-                .verbosity(better_panic::Verbosity::Full)
-                .create_panic_handler()(panic_info);
-        }
-
-        std::process::exit(libc::EXIT_FAILURE);
-    }));
-    Ok(())
-}
 
 /// Displays the detected Bluetooth devices in a table and handles the user input.
 /// The user can navigate the table, pause the scanning, and quit the application.
@@ -118,7 +67,7 @@ pub async fn viewer<B: Backend>(
                 .get(app.table_state.selected().unwrap_or(0))
                 .unwrap_or(device_binding);
 
-            match app.app_state {
+            match app.state {
                 AppState::MainMenu
                 | AppState::CharacteristicView
                 | AppState::ConnectingForCharacteristics
@@ -137,13 +86,13 @@ pub async fn viewer<B: Backend>(
                     app.frame_count += 1;
                     let info_table: ratatui::widgets::Table<'_> = info_table(
                         app.ble_scan_paused.load(Ordering::SeqCst),
-                        app.app_state == AppState::ConnectingForCharacteristics,
+                        app.state == AppState::ConnectingForCharacteristics,
                         &app.frame_count,
                     );
                     f.render_widget(info_table, chunks[2]);
 
                     // Draw the inspect overlay
-                    if app.app_state == AppState::CharacteristicView {
+                    if app.state == AppState::CharacteristicView {
                         let area = centered_rect(60, 60, f.size());
                         let inspect_overlay = inspect_overlay(
                             &app.selected_characteristics,
@@ -152,7 +101,7 @@ pub async fn viewer<B: Backend>(
                         );
                         f.render_widget(Clear, area);
                         f.render_widget(inspect_overlay, area);
-                    } else if app.app_state == AppState::SaveDevicePrompt {
+                    } else if app.state == AppState::SaveDevicePrompt {
                         let area = centered_rect(30, 30, f.size());
                         let save_device_prompt =
                             save_prompt(app.save_prompt_state.selected(), selected_device);
@@ -172,8 +121,8 @@ pub async fn viewer<B: Backend>(
                 }
             }
 
-            if app.app_state == AppState::ConnectingForHeartRate
-                || app.app_state == AppState::HeartRateViewNoData
+            if app.state == AppState::ConnectingForHeartRate
+                || app.state == AppState::HeartRateViewNoData
             {
                 let area = centered_rect(50, 50, f.size());
                 let mut border_style = Style::default();
@@ -225,7 +174,7 @@ pub async fn viewer<B: Backend>(
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 let idle_on_main_menu =
-                    app.error_message.is_none() && app.app_state == AppState::MainMenu;
+                    app.error_message.is_none() && app.state == AppState::MainMenu;
 
                 match key.code {
                     KeyCode::Char('e') => {
@@ -243,7 +192,7 @@ pub async fn viewer<B: Backend>(
                             // TODO Gracefully disconnect bluetooth?
                         } else {
                             if idle_on_main_menu {
-                                app.app_state = AppState::ConnectingForCharacteristics;
+                                app.state = AppState::ConnectingForCharacteristics;
                                 app.connect_for_characteristics().await;
                             }
                         }
@@ -258,9 +207,9 @@ pub async fn viewer<B: Backend>(
                     KeyCode::Enter => {
                         if app.error_message.is_some() {
                             app.error_message = None;
-                        } else if app.app_state == AppState::CharacteristicView {
-                            app.app_state = AppState::MainMenu;
-                        } else if app.app_state == AppState::SaveDevicePrompt {
+                        } else if app.state == AppState::CharacteristicView {
+                            app.state = AppState::MainMenu;
+                        } else if app.state == AppState::SaveDevicePrompt {
                             let chosen_option = app.save_prompt_state.selected().unwrap_or(0);
                             // TODO Make this not weirdly hard-coded numbers?
                             match chosen_option {
@@ -285,9 +234,9 @@ pub async fn viewer<B: Backend>(
                         // Ugly, fix.
                         // TODO See if you can generalize this + Down, especially for the Save dialog
                         // Use match on the app_state?
-                        if app.app_state == AppState::CharacteristicView {
+                        if app.state == AppState::CharacteristicView {
                             app.characteristic_scroll += 1;
-                        } else if app.app_state == AppState::MainMenu
+                        } else if app.state == AppState::MainMenu
                             && !app.discovered_devices.is_empty()
                         {
                             let next = match app.table_state.selected() {
@@ -301,7 +250,7 @@ pub async fn viewer<B: Backend>(
                                 None => 0,
                             };
                             app.table_state.select(Some(next));
-                        } else if app.app_state == AppState::SaveDevicePrompt {
+                        } else if app.state == AppState::SaveDevicePrompt {
                             let next = match app.save_prompt_state.selected() {
                                 Some(selected) => {
                                     if selected >= 3 - 1 {
@@ -317,9 +266,9 @@ pub async fn viewer<B: Backend>(
                     }
                     // Ditto.
                     KeyCode::Up | KeyCode::Char('k') => {
-                        if app.app_state == AppState::CharacteristicView {
+                        if app.state == AppState::CharacteristicView {
                             app.characteristic_scroll = app.characteristic_scroll.saturating_sub(1);
-                        } else if app.app_state == AppState::MainMenu {
+                        } else if app.state == AppState::MainMenu {
                             let previous = match app.table_state.selected() {
                                 Some(selected) => {
                                     if selected == 0 {
@@ -331,7 +280,7 @@ pub async fn viewer<B: Backend>(
                                 None => 0,
                             };
                             app.table_state.select(Some(previous));
-                        } else if app.app_state == AppState::SaveDevicePrompt {
+                        } else if app.state == AppState::SaveDevicePrompt {
                             let previous = match app.save_prompt_state.selected() {
                                 Some(selected) => {
                                     if selected == 0 {
@@ -352,8 +301,7 @@ pub async fn viewer<B: Backend>(
 
         // Check for updates from BLE Thread
         if let Ok(new_device_info) = app.ble_rx.try_recv() {
-            let idle_on_main_menu =
-                app.error_message.is_none() && app.app_state == AppState::MainMenu;
+            let idle_on_main_menu = app.error_message.is_none() && app.state == AppState::MainMenu;
             match new_device_info {
                 DeviceData::DeviceInfo(device) => {
                     // If the device is already in the list, update it
@@ -367,6 +315,8 @@ pub async fn viewer<B: Backend>(
                     } else {
                         // If the device is not in the list, add it
                         // but only if it has the heart rate service
+                        // (We don't use the ScanFilter from btleplug to allow quicker connection to saved devices,
+                        // and since it reports only "Unknown" names for some reason)
                         if device
                             .services
                             .iter()
@@ -387,6 +337,10 @@ pub async fn viewer<B: Backend>(
                         // they're always going to want to update the value in case Name/MAC changes,
                         // even if they're weird and have set `never_ask_to_save` to true
                         app.allow_saving = true;
+                        // Add the device to the list if it's not already there
+                        if !app.discovered_devices.iter().any(|d| d.id == device.id) {
+                            app.discovered_devices.push(device.clone());
+                        }
                         app.table_state.select(
                             app.discovered_devices
                                 .iter()
@@ -418,12 +372,34 @@ pub async fn viewer<B: Backend>(
                 }
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
-                    app.app_state = AppState::CharacteristicView
+                    app.state = AppState::CharacteristicView
                 }
                 DeviceData::Error(error) => {
                     app.error_message = Some(error);
                     //app.is_loading_characteristics = false;
                 }
+                DeviceData::ConnectedEvent(id) => {
+                    if app.state == AppState::ConnectingForCharacteristics {
+                        app.state = AppState::CharacteristicView;
+                    } else {
+                        // TODO Maybe this should reset everything since it's a connect?
+                        //app.is_loading_characteristics = false;
+                        app.heart_rate_display = true;
+                        app.state = if app.heart_rate_status.heart_rate_bpm > 0 {
+                            AppState::HeartRateView
+                        } else {
+                            AppState::HeartRateViewNoData
+                        };
+                    }
+                }
+                DeviceData::DisconnectedEvent(id) => {
+                    //app.is_loading_characteristics = false;
+                    //app.heart_rate_display = false;
+
+                    // TODO Reconnect?
+                    app.error_message = Some("Disconnected from device!".to_string());
+                }
+                DeviceData::HeartRateStatus(_) => {}
             }
 
             if app.table_state.selected().is_none() {
@@ -434,33 +410,18 @@ pub async fn viewer<B: Backend>(
         // HR Notification Updates
         if let Ok(hr_data) = app.hr_rx.try_recv() {
             match hr_data {
-                MonitorData::HeartRateStatus(hr) => {
+                DeviceData::HeartRateStatus(hr) => {
                     //app.heart_rate_display = true;
                     app.heart_rate_status = hr;
                     // Assume we have proper data now
-                    app.app_state = AppState::HeartRateView;
+                    app.state = AppState::HeartRateView;
+                    app.error_message = None;
                 }
-                MonitorData::Error(error) => {
+                DeviceData::Error(error) => {
                     app.error_message = Some(error);
                     //app.is_loading_characteristics = false;
                 }
-                MonitorData::Connected => {
-                    // TODO Maybe this should reset everything since it's a connect?
-                    //app.is_loading_characteristics = false;
-                    app.heart_rate_display = true;
-                    app.app_state = if app.heart_rate_status.heart_rate_bpm > 0 {
-                        AppState::HeartRateView
-                    } else {
-                        AppState::HeartRateViewNoData
-                    };
-                }
-                MonitorData::Disconnected => {
-                    //app.is_loading_characteristics = false;
-                    //app.heart_rate_display = false;
-
-                    // TODO Reconnect?
-                    app.error_message = Some("Disconnected from device!".to_string());
-                }
+                _ => {}
             }
             //app.hr_tx.send(hr_data.clone()).unwrap();
         }

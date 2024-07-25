@@ -8,7 +8,8 @@ use std::{env, f32, thread};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{self, sleep, Duration, Instant};
 
-use crate::heart_rate::{HeartRateStatus, MonitorData};
+use crate::app::DeviceData;
+use crate::heart_rate::HeartRateStatus;
 use crate::settings::OSCSettings;
 
 const OSC_NOW: OscTime = OscTime {
@@ -78,7 +79,7 @@ fn send_beat_param(beat: bool, address: String, sock: &UdpSocket, target_addr: S
 }
 
 pub async fn osc_thread(
-    osc_rx_arc: Arc<Mutex<mpsc::UnboundedReceiver<MonitorData>>>,
+    osc_rx_arc: Arc<Mutex<mpsc::UnboundedReceiver<DeviceData>>>,
     osc_settings: OSCSettings,
 ) {
     // let host_addr =
@@ -128,13 +129,14 @@ pub async fn osc_thread(
                 match hr_data {
                     Some(data) => {
                         match data {
-                            MonitorData::HeartRateStatus(status) => {
+                            DeviceData::HeartRateStatus(status) => {
                                 hr_status = status;
                                 let bundle = form_bpm_bundle(hr_status.clone(), osc_settings.clone());
                                 let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
                                 socket.send_to(&msg_buf, target_addr).unwrap();
                             }
-                            MonitorData::Connected => {
+                            // ID is ignored as it's filtered out in the main thread
+                            DeviceData::ConnectedEvent(_) => {
                                 let bundle = form_bpm_bundle(hr_status.clone(), osc_settings.clone());
                                 let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
                                 socket.send_to(&msg_buf, target_addr).unwrap();
@@ -154,6 +156,7 @@ pub async fn osc_thread(
                 send_beat_param(toggle_beat, param_beat_toggle.clone(), &socket, target_addr);
                 send_beat_param(true, param_beat_pulse.clone(), &socket, target_addr);
                 sleep(Duration::from_millis(osc_settings.pulse_length_ms as u64)).await;
+                send_beat_param(false, param_beat_pulse.clone(), &socket, target_addr);
                 toggle_beat = !toggle_beat;
             }
         }
