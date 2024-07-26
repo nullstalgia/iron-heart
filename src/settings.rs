@@ -33,7 +33,7 @@ pub struct OSCSettings {
     pub pulse_length_ms: u16,
     pub only_positive_floathr: bool,
     // Pre is in case I change it after sending to initial "clients"
-    pub dont_show_disconnections_pre: bool,
+    pub hide_disconnections_pre: bool,
     pub address_prefix: String,
     pub param_hrm_connected: String,
     pub param_beat_toggle: String,
@@ -73,7 +73,7 @@ impl Settings {
             .set_default("osc.address_prefix", "/avatar/parameters/")
             .unwrap()
             // TODO ask if people want this by default?
-            .set_default("osc.dont_show_disconnections_pre", true)
+            .set_default("osc.hide_disconnections_pre", true)
             .unwrap()
             .set_default("osc.param_hrm_connected", "isHRConnected")
             .unwrap()

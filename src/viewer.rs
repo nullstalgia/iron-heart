@@ -15,7 +15,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::app::{App, AppState, DeviceData, ErrorPopup};
-use crate::heart_rate::HEART_RATE_SERVICE_UUID;
+use crate::heart_rate::{HeartRateStatus, HEART_RATE_SERVICE_UUID};
 use crate::panic_handler::initialize_panic_handler;
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
@@ -44,6 +44,12 @@ pub async fn viewer<B: Backend>(
 
     // TODO Make this shit smaller
     loop {
+        // In case another task called for a shutdown
+        if app.shutdown_requested.is_cancelled() {
+            warn!("Viewer recieved shutdown signal!");
+            break;
+        }
+
         // Draw UI
         terminal.draw(|f| {
             app.frame_count = f.count();
@@ -364,7 +370,8 @@ pub async fn viewer<B: Backend>(
                         // they're always going to want to update the value in case Name/MAC changes,
                         // even if they're weird and have set `never_ask_to_save` to true
                         app.allow_saving = true;
-                        // Add the device to the UI list if it's not already there
+                        // Adding device to UI list so other parts of the app that check the selected device
+                        // get the expected result
                         if !app.discovered_devices.iter().any(|d| d.id == device.id) {
                             app.discovered_devices.push(device.clone());
                         }
@@ -373,12 +380,13 @@ pub async fn viewer<B: Backend>(
                                 .iter()
                                 .position(|d| d.id == device.id),
                         );
-                        // app_state changed by method
                         app.try_save_device(Some(&device));
                         debug!("Connecting to saved device, AppState: {:?}", app.state);
+                        // app_state changed by method
                         app.connect_for_hr(Some(&device)).await;
+                    } else {
+                        app.try_save_device(None);
                     }
-                    app.try_save_device(None);
                 }
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
@@ -395,6 +403,12 @@ pub async fn viewer<B: Backend>(
                         if !matches!(app.error_message, Some(ErrorPopup::Fatal(_))) {
                             app.error_message = Some(error);
                         }
+                    }
+                    if app.state == AppState::HeartRateView
+                        || app.state == AppState::HeartRateViewNoData
+                        || app.state == AppState::ConnectingForHeartRate
+                    {
+                        app.osc_tx.send(HeartRateStatus::default()).unwrap();
                     }
                     //app.is_loading_characteristics = false;
                 }
@@ -437,6 +451,7 @@ pub async fn viewer<B: Backend>(
                         }
                     }
                 }
+                // Not possible to receive this here
                 DeviceData::HeartRateStatus(_) => {}
             }
 
@@ -463,6 +478,7 @@ pub async fn viewer<B: Backend>(
                     if !matches!(app.error_message, Some(ErrorPopup::Fatal(_))) {
                         app.error_message = Some(error);
                     }
+                    app.osc_tx.send(HeartRateStatus::default()).unwrap();
                     //app.is_loading_characteristics = false;
                 }
                 _ => {}

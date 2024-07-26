@@ -68,8 +68,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     // Main app loop
     viewer(&mut terminal, &mut app).await?;
+    app.join_threads().await;
 
-    // Shutting down gracefully
+    info!("Shutting down gracefully...");
     log::logger().flush();
     disable_raw_mode()?;
     execute!(

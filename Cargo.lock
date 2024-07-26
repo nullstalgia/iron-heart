@@ -257,6 +257,7 @@ dependencies = [
  "strip-ansi-escapes",
  "thiserror",
  "tokio",
+ "tokio-util",
  "toml",
  "uuid",
 ]

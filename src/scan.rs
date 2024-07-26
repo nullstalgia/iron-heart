@@ -15,20 +15,26 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
 
 /// Scans for Bluetooth devices and sends the information to the provided `mpsc::Sender`.
 /// The scan can be paused by setting the `pause_signal` to `true`.
 pub async fn bluetooth_event_thread(
     tx: mpsc::UnboundedSender<DeviceData>,
     pause_signal: Arc<AtomicBool>,
+    shutdown_token: CancellationToken,
 ) {
     // If no event is heard in this period,
     // the manager and adapter will be recreated
     // if we're not paused
     let duration = Duration::from_secs(30);
 
-    loop {
-        info!("Bluetooth event thread started!");
+    'adapter: loop {
+        info!("Bluetooth CentralEvent thread started!");
+        if shutdown_token.is_cancelled() {
+            info!("Shutting down Bluetooth CentralEvent thread!");
+            break 'adapter;
+        }
         let manager = match Manager::new().await {
             Ok(manager) => manager,
             Err(e) => {
@@ -38,7 +44,7 @@ pub async fn bluetooth_event_thread(
                     e
                 ))));
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                continue;
+                continue 'adapter;
             }
         };
         let central = match manager.adapters().await.and_then(|adapters| {
@@ -55,7 +61,7 @@ pub async fn bluetooth_event_thread(
                         .to_string(),
                 )));
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                continue;
+                continue 'adapter;
             }
         };
 
@@ -66,7 +72,7 @@ pub async fn bluetooth_event_thread(
                 e
             ))));
             tokio::time::sleep(Duration::from_secs(1)).await;
-            continue;
+            continue 'adapter;
         }
         let mut events = match central.events().await {
             Ok(e) => e,
@@ -77,13 +83,13 @@ pub async fn bluetooth_event_thread(
                     e
                 ))));
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                continue;
+                continue 'adapter;
             }
         };
         debug!("Inital scanning started!");
         let mut scanning = true;
 
-        loop {
+        'events: loop {
             if pause_signal.load(Ordering::SeqCst) {
                 if scanning {
                     info!("Pausing scan");
@@ -99,7 +105,7 @@ pub async fn bluetooth_event_thread(
                         e
                     ))));
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
+                    continue 'events;
                 }
                 scanning = true;
             }
@@ -115,7 +121,7 @@ pub async fn bluetooth_event_thread(
                                     .unwrap_or(PeripheralProperties::default());
 
                                 if properties.services.is_empty() {
-                                    continue;
+                                    continue 'events;
                                 }
 
                                 // Add the device's information to the accumulated list
@@ -146,11 +152,15 @@ pub async fn bluetooth_event_thread(
                         _ => {}
                     }
                 }
+                _ = shutdown_token.cancelled() => {
+                    info!("Shutting down Bluetooth CentralEvent thread!");
+                    break 'adapter;
+                }
                 _ = tokio::time::sleep(duration) => {
                     debug!("CentralEvent timeout");
                     if !pause_signal.load(Ordering::SeqCst) {
                         warn!("Restarting manager and adapter!");
-                        break;
+                        break 'events;
                     }
                 }
             }

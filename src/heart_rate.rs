@@ -8,12 +8,12 @@ use btleplug::api::{
 use btleplug::platform::Manager;
 use futures::StreamExt;
 use log::*;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 pub const HEART_RATE_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180d_0000_1000_8000_00805f9b34fb);
@@ -51,16 +51,20 @@ pub struct HeartRateStatus {
 pub async fn start_notification_thread(
     hr_tx: mpsc::UnboundedSender<DeviceData>,
     peripheral: Arc<DeviceInfo>,
+    shutdown_token: CancellationToken,
 ) {
     let duration = Duration::from_secs(30);
 
     match &peripheral.device {
         Some(device) => {
-            loop {
+            'connection: loop {
                 info!(
                     "Connecting to Heart Rate Monitor! Name: {:?} | Address: {:?}",
                     peripheral.name, peripheral.address
                 );
+                if shutdown_token.is_cancelled() {
+                    break 'connection;
+                }
                 let mut battery_checking_interval =
                     tokio::time::interval(Duration::from_secs(60 * 5));
                 battery_checking_interval.reset();
@@ -69,7 +73,7 @@ pub async fn start_notification_thread(
                         if let Some(device) = &peripheral.device {
                             if let Err(e) = device.discover_services().await {
                                 error!("Couldn't read services from connected device: {}", e);
-                                continue;
+                                continue 'connection;
                             }
                             let characteristics = device.characteristics();
                             let mut battery_level = BatteryLevel::NotReported;
@@ -95,24 +99,24 @@ pub async fn start_notification_thread(
                                 if device.subscribe(characteristic).await.is_err() {
                                     error!("Failed to subscribe to HR service!");
                                     device.disconnect().await.expect("Failed to disconnect?");
-                                    continue;
+                                    continue 'connection;
                                 }
                             } else {
                                 error!("Didn't find HR service during notification setup!");
                                 device.disconnect().await.expect("Failed to disconnect?");
-                                continue;
+                                continue 'connection;
                             }
 
                             let mut notification_stream = match device.notifications().await {
                                 Ok(stream) => stream,
                                 Err(e) => {
                                     error!("Failed to get HR BLE notification stream: {}", e);
-                                    continue;
+                                    continue 'connection;
                                 }
                             };
 
                             // Assume we have a good connection if we keep getting updates
-                            loop {
+                            'updates: loop {
                                 tokio::select! {
                                     // HR update received
                                     Some(data) = notification_stream.next() => {
@@ -141,10 +145,17 @@ pub async fn start_notification_thread(
                                             );
                                         }
                                     }
+                                    _ = shutdown_token.cancelled() => {
+                                        info!("Shutting down HR Notification thread!");
+                                        if device.is_connected().await.unwrap_or(false) {
+                                            device.disconnect().await.expect("Failed to disconnect?");
+                                        }
+                                        break 'connection;
+                                    }
                                     // Timeout
                                     _ = tokio::time::sleep(duration) => {
                                         error!("No HR data received in {} seconds!", duration.as_secs());
-                                        break;
+                                        break 'updates;
                                     }
                                 }
                             }

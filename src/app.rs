@@ -12,6 +12,7 @@ use tokio::sync::{
     mpsc::{self, UnboundedReceiver, UnboundedSender},
     Mutex,
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     heart_rate::{start_notification_thread, HeartRateStatus},
@@ -74,6 +75,10 @@ pub struct App {
     pub settings: Settings,
     pub heart_rate_display: bool,
     pub heart_rate_status: HeartRateStatus,
+    pub shutdown_requested: CancellationToken,
+    pub ble_thread_handle: Option<tokio::task::JoinHandle<()>>,
+    pub hr_thread_handle: Option<tokio::task::JoinHandle<()>>,
+    pub osc_thread_handle: Option<tokio::task::JoinHandle<()>>,
     // Used for the graphs in the heart rate view
     pub heart_rate_history: Vec<u16>,
     pub rr_history: Vec<u16>,
@@ -115,14 +120,21 @@ impl App {
             heart_rate_status: HeartRateStatus::default(),
             heart_rate_history: Vec::with_capacity(50),
             rr_history: Vec::with_capacity(50),
+            shutdown_requested: CancellationToken::new(),
+            ble_thread_handle: None,
+            hr_thread_handle: None,
+            osc_thread_handle: None,
         }
     }
 
     pub async fn start_bluetooth_event_thread(&mut self) {
         let pause_signal_clone = Arc::clone(&self.ble_scan_paused);
         let app_tx_clone = self.ble_tx.clone();
+        let shutdown_requested_clone = self.shutdown_requested.clone();
         debug!("Spawning Bluetooth CentralEvent thread");
-        tokio::spawn(async move { bluetooth_event_thread(app_tx_clone, pause_signal_clone).await });
+        self.ble_thread_handle = Some(tokio::spawn(async move {
+            bluetooth_event_thread(app_tx_clone, pause_signal_clone, shutdown_requested_clone).await
+        }));
     }
 
     pub async fn connect_for_characteristics(&mut self) {
@@ -164,16 +176,51 @@ impl App {
 
         let device = Arc::new(selected_device.clone());
         let hr_tx_clone = self.hr_tx.clone();
+        let shutdown_requested_clone = self.shutdown_requested.clone();
 
         debug!("Spawning notification thread, AppState: {:?}", self.state);
-        tokio::spawn(async move { start_notification_thread(hr_tx_clone, device).await });
+        self.hr_thread_handle = Some(tokio::spawn(async move {
+            start_notification_thread(hr_tx_clone, device, shutdown_requested_clone).await
+        }));
     }
 
     pub async fn start_osc_thread(&mut self) {
         let osc_rx_clone = Arc::clone(&self.osc_rx);
         let osc_settings = self.settings.osc.clone();
+        let shutdown_requested_clone = self.shutdown_requested.clone();
+
         debug!("Spawning OSC thread");
-        tokio::spawn(async move { osc_thread(osc_rx_clone, osc_settings).await });
+        self.osc_thread_handle = Some(tokio::spawn(async move {
+            osc_thread(osc_rx_clone, osc_settings, shutdown_requested_clone).await
+        }));
+    }
+
+    pub async fn join_threads(&mut self) {
+        use tokio::time::{timeout, Duration};
+        let duration = Duration::from_secs(3);
+        info!("Sending shutdown signal to threads!");
+        self.shutdown_requested.cancel();
+
+        if let Some(handle) = self.ble_thread_handle.take() {
+            debug!("Joining BLE thread");
+            if let Err(err) = timeout(duration, handle).await {
+                error!("Failed to join BLE thread: {:?}", err);
+            }
+        }
+
+        if let Some(handle) = self.hr_thread_handle.take() {
+            debug!("Joining HR thread");
+            if let Err(err) = timeout(duration, handle).await {
+                error!("Failed to join HR thread: {:?}", err);
+            }
+        }
+
+        if let Some(handle) = self.osc_thread_handle.take() {
+            debug!("Joining OSC thread");
+            if let Err(err) = timeout(duration, handle).await {
+                error!("Failed to join OSC thread: {:?}", err);
+            }
+        }
     }
 
     pub fn save_settings(&mut self) -> Result<(), std::io::Error> {
