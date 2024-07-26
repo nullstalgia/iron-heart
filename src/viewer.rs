@@ -447,6 +447,7 @@ pub async fn viewer<B: Backend>(
                     {
                         if id == app.get_selected_device().unwrap().id {
                             debug!("Disconnected from device {:?}, resuming BLE scan", id);
+                            app.osc_tx.send(HeartRateStatus::default()).unwrap();
                             app.ble_scan_paused.store(false, Ordering::SeqCst);
                         }
                     }

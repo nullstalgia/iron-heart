@@ -1,3 +1,5 @@
+use log::*;
+use rand::Rng;
 use rosc::{address, encoder};
 use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
 use std::net::{SocketAddrV4, UdpSocket};
@@ -6,12 +8,9 @@ use std::sync::Arc;
 use std::{env, f32, thread};
 use tokio_util::sync::CancellationToken;
 
-use log::*;
-
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{self, sleep, Duration, Instant};
 
-use crate::app::DeviceData;
 use crate::heart_rate::HeartRateStatus;
 use crate::settings::OSCSettings;
 
@@ -43,7 +42,13 @@ fn form_bpm_bundle(hr_status: &HeartRateStatus, osc_addresses: &OSCAddresses) ->
         args: vec![OscType::Bool(hr_status.heart_rate_bpm > 0)],
     };
 
-    if let Some(&latest_rr) = hr_status.rr_intervals.last() {
+    if hr_status.heart_rate_bpm == 0 {
+        let rr_msg = OscMessage {
+            addr: osc_addresses.latest_rr.clone(),
+            args: vec![OscType::Int(0)],
+        };
+        bundle.content.push(OscPacket::Message(rr_msg));
+    } else if let Some(&latest_rr) = hr_status.rr_intervals.last() {
         let rr_msg = OscMessage {
             addr: osc_addresses.latest_rr.clone(),
             args: vec![OscType::Int((latest_rr * 1000.0) as i32)],
@@ -112,6 +117,24 @@ impl OSCAddresses {
     }
 }
 
+// Only used as a backup if the HRM doesn't support
+// sending RR intervals
+// (Or when mimicking)
+fn rr_from_bpm(bpm: u16) -> Duration {
+    Duration::from_secs_f32(60.0 / bpm as f32)
+}
+
+fn mimic_hr_activity(hr_status: &HeartRateStatus) -> HeartRateStatus {
+    let mut mimic = HeartRateStatus::default();
+    // This does work, but is disabled to make
+    // more obvious it's active during the inital testing phase
+    // TODO: Enable this before release
+    //let jitter = rand::thread_rng().gen_range(-3..3);
+    let jitter = 0;
+    mimic.heart_rate_bpm = mimic.heart_rate_bpm.saturating_add_signed(jitter);
+    mimic
+}
+
 pub async fn osc_thread(
     osc_rx_arc: Arc<Mutex<mpsc::UnboundedReceiver<HeartRateStatus>>>,
     osc_settings: OSCSettings,
@@ -123,36 +146,36 @@ pub async fn osc_thread(
     // TODO Add error handling
     let socket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to UDP socket!");
 
-    // switch view
-    // let msg_buf = encoder::encode(&OscPacket::Message(OscMessage {
-    //     addr: "/avatar/parameters/test".to_string(),
-    //     args: vec![OscType::Int(1)],
-    // }))
-    // .unwrap();
+    let osc_addresses = OSCAddresses::new(&osc_settings);
 
-    // socket.send_to(&msg_buf, target_addr).unwrap();
+    // Initalize
+    send_bpm_bundle(
+        &HeartRateStatus::default(),
+        &osc_addresses,
+        &socket,
+        target_addr,
+    );
+    send_beat_param(false, &osc_addresses.beat_toggle, &socket, target_addr);
+    send_beat_param(false, &osc_addresses.beat_pulse, &socket, target_addr);
 
     let mut hr_status = HeartRateStatus::default();
     let mut toggle_beat: bool = true;
 
-    let mut heart_beat_interval = time::interval(Duration::from_secs(1));
+    let mut use_real_rr = false;
+    let mut latest_rr = Duration::from_secs(1);
+    let mut heart_beat_interval = time::interval(latest_rr);
+    let beat_pulse_duration = Duration::from_millis(osc_settings.pulse_length_ms as u64);
 
     // Used when BLE connection is lost, but we don't want to
     // hide the BPM display in VRChat, we'll just bounce around
     // the last known actual value.
-    let mut mimic_ble_connection = false;
-
-    let osc_addresses = OSCAddresses::new(&osc_settings);
-
-    // let bundle = form_bpm_bundle(hr_status.clone(), osc_settings.clone());
-    // let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
-    // socket.send_to(&msg_buf, target_addr).unwrap();
+    let mut mimic_ble_activity = false;
+    let mut mimic_update_interval = time::interval(Duration::from_secs(7));
 
     let mut locked_receiver = osc_rx_arc.lock().await;
 
     // TODO:
-    // with hide disconnects, make it semi-natural by randomizing the value -+3
-    // dont forget to do HRTwitchUp and Down
+    // with hide disconnects, dont forget to do HRTwitchUp and Down
 
     loop {
         tokio::select! {
@@ -161,11 +184,18 @@ pub async fn osc_thread(
                     Some(data) => {
                         if data.heart_rate_bpm > 0 {
                             hr_status = data;
-                            mimic_ble_connection = false;
+                            if let Some(new_rr) = hr_status.rr_intervals.last() {
+                                latest_rr = Duration::from_secs_f32(*new_rr);
+                                // Mark that we know we'll get real RR intervals
+                                use_real_rr = true;
+                            } else if !use_real_rr {
+                                latest_rr = rr_from_bpm(hr_status.heart_rate_bpm);
+                            }
+                            mimic_ble_activity = false;
                             send_bpm_bundle(&hr_status, &osc_addresses, &socket, target_addr);
                         } else {
                             if osc_settings.hide_disconnections_pre {
-                                mimic_ble_connection = true;
+                                mimic_ble_activity = true;
                             } else {
                                 hr_status = data;
                                 send_bpm_bundle(&hr_status, &osc_addresses, &socket, target_addr);
@@ -183,11 +213,22 @@ pub async fn osc_thread(
                 break;
             }
             _ = heart_beat_interval.tick() => {
-                send_beat_param(toggle_beat, &osc_addresses.beat_toggle, &socket, target_addr);
-                send_beat_param(true, &osc_addresses.beat_pulse, &socket, target_addr);
-                sleep(Duration::from_millis(osc_settings.pulse_length_ms as u64)).await;
-                send_beat_param(false, &osc_addresses.beat_pulse, &socket, target_addr);
-                toggle_beat = !toggle_beat;
+                if hr_status.heart_rate_bpm > 0 {
+                    send_beat_param(toggle_beat, &osc_addresses.beat_toggle, &socket, target_addr);
+                    send_beat_param(true, &osc_addresses.beat_pulse, &socket, target_addr);
+                    sleep(beat_pulse_duration).await;
+                    send_beat_param(false, &osc_addresses.beat_pulse, &socket, target_addr);
+                    toggle_beat = !toggle_beat;
+                    let new_interval = latest_rr.saturating_sub(beat_pulse_duration);
+                    heart_beat_interval = time::interval(new_interval);
+                    heart_beat_interval.reset();
+                }
+            }
+            _ = mimic_update_interval.tick() => {
+                if mimic_ble_activity && hr_status.heart_rate_bpm > 0 {
+                    let mimic = mimic_hr_activity(&hr_status);
+                    send_bpm_bundle(&mimic, &osc_addresses, &socket, target_addr);
+                }
             }
         }
     }
@@ -199,11 +240,4 @@ pub async fn osc_thread(
     );
     send_beat_param(false, &osc_addresses.beat_toggle, &socket, target_addr);
     send_beat_param(false, &osc_addresses.beat_pulse, &socket, target_addr);
-    // let mut msg_buf = encoder::encode(&OscPacket::Message(OscMessage {
-    //     addr: format!("")
-    //     args: vec![OscType::Float(x), OscType::Float(y)],
-    // }))
-    // .unwrap();
-
-    // sock.send_to(&msg_buf, to_addr).unwrap();
 }

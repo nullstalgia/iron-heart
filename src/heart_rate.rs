@@ -159,9 +159,13 @@ pub async fn start_notification_thread(
                                     }
                                 }
                             }
-
                             info!("Heart Rate Monitor disconnected (notif thread)!");
                             device.disconnect().await.expect("Failed to disconnect?");
+                            hr_tx
+                                .send(DeviceData::Error(ErrorPopup::Intermittent(
+                                    "Connection timed out".to_string(),
+                                )))
+                                .expect("Failed to send error message");
                         }
                     }
                     Ok(Err(e)) => {
