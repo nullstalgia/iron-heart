@@ -27,7 +27,7 @@ pub enum DeviceData {
     DeviceInfo(DeviceInfo),
     Characteristics(Vec<Characteristic>),
     HeartRateStatus(HeartRateStatus),
-    Error(String),
+    Error(ErrorPopup),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -41,21 +41,12 @@ pub enum AppState {
     HeartRateViewNoData,
 }
 
-// #[derive(Debug, Clone)]
-// pub enum ErrorMessage {
-//     None,
-//     Recoverable(String),
-//     Fatal(String),
-// }
-
-// impl ErrorMessage {
-//     pub fn is_none(&self) -> bool {
-//         match self {
-//             ErrorMessage::None => true,
-//             _ => false,
-//         }
-//     }
-// }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ErrorPopup {
+    Intermittent(String),
+    UserMustDismiss(String),
+    Fatal(String),
+}
 
 pub struct App {
     // Devices as found by the BLE thread
@@ -65,8 +56,8 @@ pub struct App {
     pub hr_rx: UnboundedReceiver<DeviceData>,
     pub hr_tx: UnboundedSender<DeviceData>,
     // Sending data to the OSC thread
-    pub osc_rx: Arc<Mutex<UnboundedReceiver<DeviceData>>>,
-    pub osc_tx: UnboundedSender<DeviceData>,
+    pub osc_rx: Arc<Mutex<UnboundedReceiver<HeartRateStatus>>>,
+    pub osc_tx: UnboundedSender<HeartRateStatus>,
     pub ble_scan_paused: Arc<AtomicBool>,
     pub state: AppState,
     pub table_state: TableState,
@@ -79,10 +70,13 @@ pub struct App {
     pub characteristic_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
     pub frame_count: usize,
-    pub error_message: Option<String>,
+    pub error_message: Option<ErrorPopup>,
     pub settings: Settings,
     pub heart_rate_display: bool,
     pub heart_rate_status: HeartRateStatus,
+    // Used for the graphs in the heart rate view
+    pub heart_rate_history: Vec<u16>,
+    pub rr_history: Vec<u16>,
 }
 
 impl App {
@@ -90,7 +84,14 @@ impl App {
         let (app_tx, app_rx) = mpsc::unbounded_channel();
         let (hr_tx, hr_rx) = mpsc::unbounded_channel();
         let (osc_tx, osc_rx) = mpsc::unbounded_channel();
-        let settings = Settings::new().unwrap();
+        let mut error_message = None;
+        let settings = Settings::new().unwrap_or_else(|err| {
+            warn!("Failed to load settings: {}", err);
+            error_message = Some(ErrorPopup::Fatal(
+                "Failed to load settings! Please fix file or delete to regenerate.".to_string(),
+            ));
+            Settings::default()
+        });
         Self {
             ble_tx: app_tx,
             ble_rx: app_rx,
@@ -108,10 +109,12 @@ impl App {
             characteristic_scroll: 0,
             selected_characteristics: Vec::new(),
             frame_count: 0,
-            error_message: None,
+            error_message,
             settings,
             heart_rate_display: false,
             heart_rate_status: HeartRateStatus::default(),
+            heart_rate_history: Vec::with_capacity(50),
+            rr_history: Vec::with_capacity(50),
         }
     }
 

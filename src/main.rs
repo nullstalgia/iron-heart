@@ -14,6 +14,7 @@ use log::*;
 mod app;
 mod company_codes;
 mod heart_rate;
+mod heart_rate_measurement;
 mod osc;
 mod panic_handler;
 mod scan;
@@ -32,7 +33,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = app::App::new();
-
+    let had_error = app.error_message.is_some();
     let log_path = std::env::current_exe()
         .expect("Failed to get executable path")
         .with_extension("log");
@@ -40,7 +41,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .to_str()
         .expect("Failed to convert log path to string");
     let log_level = app.settings.get_log_level();
-    let log_format = if log_level <= LevelFilter::Info {
+    let log_format = if log_level <= LevelFilter::Info || had_error {
         // Default format
         fast_log::FastLogFormat::new()
     } else {
@@ -58,12 +59,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("Starting app...");
 
-    // Try to create a default config file if it doesn't exist
-    app.save_settings()?;
-
-    app.start_osc_thread().await;
-    app.start_bluetooth_event_thread().await;
-    debug!("Started OSC and Bluetooth CentralEvent threads");
+    if !had_error {
+        // Try to create a default config file if it doesn't exist
+        app.save_settings()?;
+        app.start_osc_thread().await;
+        app.start_bluetooth_event_thread().await;
+        debug!("Started OSC and Bluetooth CentralEvent threads");
+    }
     // Main app loop
     viewer(&mut terminal, &mut app).await?;
 

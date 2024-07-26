@@ -5,6 +5,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, f32, thread};
 
+use log::*;
+
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{self, sleep, Duration, Instant};
 
@@ -36,19 +38,9 @@ fn form_bpm_bundle(hr_status: HeartRateStatus, osc_settings: OSCSettings) -> Osc
             "{}/{}",
             osc_settings.address_prefix, osc_settings.param_bpm_float
         ),
-        args: vec![OscType::Float(hr_status.heart_rate_bpm as f32)],
-    };
-
-    let rr_msg = OscMessage {
-        addr: format!(
-            "{}/{}",
-            osc_settings.address_prefix, osc_settings.param_latest_rr_int
-        ),
-        args: vec![OscType::Int(if hr_status.rr_intervals.len() > 0 {
-            hr_status.rr_intervals[0] as i32
-        } else {
-            0
-        })],
+        args: vec![OscType::Float(
+            (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0,
+        )],
     };
 
     let connected_msg = OscMessage {
@@ -59,9 +51,19 @@ fn form_bpm_bundle(hr_status: HeartRateStatus, osc_settings: OSCSettings) -> Osc
         args: vec![OscType::Bool(hr_status.heart_rate_bpm > 0)],
     };
 
+    if let Some(&latest_rr) = hr_status.rr_intervals.last() {
+        let rr_msg = OscMessage {
+            addr: format!(
+                "{}/{}",
+                osc_settings.address_prefix, osc_settings.param_latest_rr_int
+            ),
+            args: vec![OscType::Int((latest_rr * 1000.0) as i32)],
+        };
+        bundle.content.push(OscPacket::Message(rr_msg));
+    }
+
     bundle.content.push(OscPacket::Message(int_hr_msg));
     bundle.content.push(OscPacket::Message(float_hr_msg));
-    bundle.content.push(OscPacket::Message(rr_msg));
     bundle.content.push(OscPacket::Message(connected_msg));
     //bundle.content.push(OscPacket::Message(battery_msg));
 
@@ -79,7 +81,7 @@ fn send_beat_param(beat: bool, address: String, sock: &UdpSocket, target_addr: S
 }
 
 pub async fn osc_thread(
-    osc_rx_arc: Arc<Mutex<mpsc::UnboundedReceiver<DeviceData>>>,
+    osc_rx_arc: Arc<Mutex<mpsc::UnboundedReceiver<HeartRateStatus>>>,
     osc_settings: OSCSettings,
 ) {
     // let host_addr =
@@ -102,7 +104,7 @@ pub async fn osc_thread(
     let mut hr_status = HeartRateStatus::default();
     let mut toggle_beat: bool = true;
 
-    let mut rr_interval = time::interval(Duration::from_secs(1));
+    let mut heart_beat_interval = time::interval(Duration::from_secs(1));
 
     let param_beat_toggle = format!(
         "{}/{}",
@@ -128,31 +130,29 @@ pub async fn osc_thread(
             hr_data = locked_receiver.recv() => {
                 match hr_data {
                     Some(data) => {
-                        match data {
-                            DeviceData::HeartRateStatus(status) => {
-                                hr_status = status;
-                                let bundle = form_bpm_bundle(hr_status.clone(), osc_settings.clone());
-                                let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
-                                socket.send_to(&msg_buf, target_addr).unwrap();
-                            }
-                            // ID is ignored as it's filtered out in the main thread
-                            DeviceData::ConnectedEvent(_) => {
-                                let bundle = form_bpm_bundle(hr_status.clone(), osc_settings.clone());
-                                let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
-                                socket.send_to(&msg_buf, target_addr).unwrap();
-                            }
-                            _ => {
-                                hr_status = HeartRateStatus::default();
+                        if (data.heart_rate_bpm > 0) {
+                            hr_status = data;
+                            let bundle = form_bpm_bundle(hr_status.clone(), osc_settings.clone());
+                            let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
+                            socket.send_to(&msg_buf, target_addr).unwrap();
+                        } else {
+                            if osc_settings.dont_show_disconnections_pre {
+                                hr_status.heart_rate_bpm = 0;
+                                hr_status.rr_intervals = vec![];
+                            } else {
                                 let bundle = form_bpm_bundle(hr_status.clone(), osc_settings.clone());
                                 let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
                                 socket.send_to(&msg_buf, target_addr).unwrap();
                             }
                         }
                     },
-                    None => break,
+                    None => {
+                        error!("OSC: Channel closed");
+                        break;
+                    },
                 }
             }
-            _ = rr_interval.tick() => {
+            _ = heart_beat_interval.tick() => {
                 send_beat_param(toggle_beat, param_beat_toggle.clone(), &socket, target_addr);
                 send_beat_param(true, param_beat_pulse.clone(), &socket, target_addr);
                 sleep(Duration::from_millis(osc_settings.pulse_length_ms as u64)).await;

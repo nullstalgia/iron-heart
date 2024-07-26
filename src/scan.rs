@@ -1,4 +1,4 @@
-use crate::app::DeviceData;
+use crate::app::{DeviceData, ErrorPopup};
 use crate::heart_rate::{
     BATTERY_LEVEL_CHARACTERISTIC_UUID, BATTERY_SERVICE_UUID,
     HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID, HEART_RATE_SERVICE_UUID,
@@ -33,10 +33,10 @@ pub async fn bluetooth_event_thread(
             Ok(manager) => manager,
             Err(e) => {
                 error!("Failed to create manager: {}", e);
-                let _ = tx.send(DeviceData::Error(format!(
+                let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
                     "Failed to create manager: {}",
                     e
-                )));
+                ))));
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
@@ -50,10 +50,10 @@ pub async fn bluetooth_event_thread(
             Ok(central) => central,
             Err(_) => {
                 error!("No Bluetooth adapters found!");
-                let _ = tx.send(DeviceData::Error(
+                let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(
                     "No Bluetooth adapters found! Make sure it's plugged in and enabled."
                         .to_string(),
-                ));
+                )));
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
@@ -61,7 +61,10 @@ pub async fn bluetooth_event_thread(
 
         if let Err(e) = central.start_scan(ScanFilter::default()).await {
             error!("Scanning failure: {}", e);
-            let _ = tx.send(DeviceData::Error(format!("Scanning failure: {}", e)));
+            let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
+                "Scanning failure: {}",
+                e
+            ))));
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
@@ -69,7 +72,10 @@ pub async fn bluetooth_event_thread(
             Ok(e) => e,
             Err(e) => {
                 error!("BLE failure: {}", e);
-                let _ = tx.send(DeviceData::Error(format!("BLE failure: {}", e)));
+                let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
+                    "BLE failure: {}",
+                    e
+                ))));
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
@@ -88,10 +94,10 @@ pub async fn bluetooth_event_thread(
                 info!("Resuming scan");
                 if let Err(e) = central.start_scan(ScanFilter::default()).await {
                     error!("Failed to resume scanning: {}", e);
-                    let _ = tx.send(DeviceData::Error(format!(
+                    let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
                         "Failed to resume scanning: {}",
                         e
-                    )));
+                    ))));
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     continue;
                 }
@@ -183,19 +189,26 @@ pub async fn get_characteristics(
             }
             Ok(Err(e)) => {
                 error!("Characteristics: connection error: {}", e);
-                tx.send(DeviceData::Error(format!("Connection error: {}", e)))
-                    .expect("Failed to send error message");
+                tx.send(DeviceData::Error(ErrorPopup::Intermittent(format!(
+                    "Connection error: {}",
+                    e
+                ))))
+                .expect("Failed to send error message");
             }
             Err(_) => {
                 error!("Characteristics: connection timed out");
-                tx.send(DeviceData::Error("Connection timed out".to_string()))
-                    .expect("Failed to send error message");
+                tx.send(DeviceData::Error(ErrorPopup::Intermittent(
+                    "Connection timed out".to_string(),
+                )))
+                .expect("Failed to send error message");
             }
         },
         None => {
             error!("Characteristics: device not found");
-            tx.send(DeviceData::Error("Device not found".to_string()))
-                .expect("Failed to send error message");
+            tx.send(DeviceData::Error(ErrorPopup::Fatal(
+                "Device not found".to_string(),
+            )))
+            .expect("Failed to send error message");
         }
     }
 }

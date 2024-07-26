@@ -20,7 +20,7 @@ pub fn heart_rate_display(heart_rate_status: &HeartRateStatus) -> Table<'static>
     );
 
     let battery_string: String = match heart_rate_status.battery_level {
-        BatteryLevel::Unknown => "?".into(),
+        BatteryLevel::Unknown => "???".into(),
         BatteryLevel::NotReported => "N/A".into(),
         BatteryLevel::Level(level) => level.to_string(),
     };

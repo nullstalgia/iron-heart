@@ -1,4 +1,5 @@
-use crate::app::DeviceData;
+use crate::app::{DeviceData, ErrorPopup};
+use crate::heart_rate_measurement::{parse_hrm, HeartRateMeasurement};
 use crate::structs::{Characteristic, DeviceInfo};
 // TODO See if this weird manager shadowing is normal
 use btleplug::api::{
@@ -35,7 +36,7 @@ pub enum BatteryLevel {
 #[derive(Debug, Clone, Default)]
 pub struct HeartRateStatus {
     pub heart_rate_bpm: u16,
-    pub rr_intervals: Vec<u16>,
+    pub rr_intervals: Vec<f32>,
     pub battery_level: BatteryLevel,
 }
 
@@ -52,6 +53,7 @@ pub async fn start_notification_thread(
     peripheral: Arc<DeviceInfo>,
 ) {
     let duration = Duration::from_secs(30);
+
     match &peripheral.device {
         Some(device) => {
             loop {
@@ -59,6 +61,9 @@ pub async fn start_notification_thread(
                     "Connecting to Heart Rate Monitor! Name: {:?} | Address: {:?}",
                     peripheral.name, peripheral.address
                 );
+                let mut battery_checking_interval =
+                    tokio::time::interval(Duration::from_secs(60 * 5));
+                battery_checking_interval.reset();
                 match timeout(duration, device.connect()).await {
                     Ok(Ok(_)) => {
                         if let Some(device) = &peripheral.device {
@@ -67,21 +72,20 @@ pub async fn start_notification_thread(
                                 continue;
                             }
                             let characteristics = device.characteristics();
-                            let mut on_connect_battery_level = BatteryLevel::NotReported;
+                            let mut battery_level = BatteryLevel::NotReported;
                             let len = characteristics.len();
                             debug!("Found {} characteristics", len);
                             if let Some(characteristic) = characteristics
                                 .iter()
                                 .find(|c| c.uuid == BATTERY_LEVEL_CHARACTERISTIC_UUID)
                             {
-                                on_connect_battery_level =
-                                    device.read(characteristic).await.map_or_else(
-                                        |_| BatteryLevel::Unknown,
-                                        |v| BatteryLevel::Level(v[0]),
-                                    );
-                                if on_connect_battery_level == BatteryLevel::Unknown {
-                                    warn!("Failed to read battery level");
-                                }
+                                battery_level = device.read(characteristic).await.map_or_else(
+                                    |_| {
+                                        warn!("Failed to read battery level");
+                                        BatteryLevel::Unknown
+                                    },
+                                    |v| BatteryLevel::Level(v[0]),
+                                );
                             }
 
                             if let Some(characteristic) = characteristics
@@ -90,10 +94,12 @@ pub async fn start_notification_thread(
                             {
                                 if device.subscribe(characteristic).await.is_err() {
                                     error!("Failed to subscribe to HR service!");
+                                    device.disconnect().await.expect("Failed to disconnect?");
                                     continue;
                                 }
                             } else {
                                 error!("Didn't find HR service during notification setup!");
+                                device.disconnect().await.expect("Failed to disconnect?");
                                 continue;
                             }
 
@@ -105,65 +111,63 @@ pub async fn start_notification_thread(
                                 }
                             };
 
-                            // Process while the BLE connection is not broken or stopped.
-                            while let Ok(Some(data)) =
-                                timeout(duration, notification_stream.next()).await
-                            {
-                                if data.uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID {
-                                    let flags = data.value[0];
-                                    let hr_is_u16 = (flags >> 0) & 1;
-                                    //let sensor_contacting = (flags >> 1) & 1;
-                                    //let sensor_contact_support = (flags >> 2) & 1;
-                                    //let energy_expended_support = (flags >> 3) & 1;
-                                    let rr_interval_present = (flags >> 4) & 1;
-
-                                    let heart_rate: u16 = if hr_is_u16 == 0 {
-                                        data.value[1] as u16
-                                    } else {
-                                        u16::from_le_bytes([data.value[1], data.value[2]])
-                                    };
-
-                                    //status.heart_rate_bpm = heart_rate;
-
-                                    // if rr_interval == 1 {
-                                    //     let rr_interval =
-                                    //         u16::from_le_bytes([data.value[3], data.value[4]]);
-                                    //     status.rr_intervals.push(rr_interval);
-                                    // }
-                                    let status = HeartRateStatus {
-                                        heart_rate_bpm: heart_rate,
-                                        rr_intervals: Vec::new(),
-                                        battery_level: on_connect_battery_level,
-                                    };
-                                    let _ = hr_tx.send(DeviceData::HeartRateStatus(status));
+                            // Assume we have a good connection if we keep getting updates
+                            loop {
+                                tokio::select! {
+                                    // HR update received
+                                    Some(data) = notification_stream.next() => {
+                                        if data.uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID {
+                                            let measurement = parse_hrm(&data.value);
+                                            let status = HeartRateStatus {
+                                                heart_rate_bpm: measurement.bpm,
+                                                rr_intervals: measurement.rr_intervals,
+                                                battery_level: battery_level,
+                                            };
+                                            hr_tx.send(DeviceData::HeartRateStatus(status)).expect("Failed to send HR data!");
+                                        }
+                                    }
+                                    // Checking for a new battery level
+                                    _ = battery_checking_interval.tick() => {
+                                        if let Some(characteristic) = characteristics
+                                            .iter()
+                                            .find(|c| c.uuid == BATTERY_LEVEL_CHARACTERISTIC_UUID)
+                                        {
+                                            battery_level = device.read(characteristic).await.map_or_else(
+                                                |_| {
+                                                    warn!("Failed to refresh battery level, keeping old");
+                                                    battery_level
+                                                },
+                                                |v| BatteryLevel::Level(v[0]),
+                                            );
+                                        }
+                                    }
+                                    // Timeout
+                                    _ = tokio::time::sleep(duration) => {
+                                        error!("No HR data received in {} seconds!", duration.as_secs());
+                                        break;
+                                    }
                                 }
                             }
+
                             info!("Heart Rate Monitor disconnected (notif thread)!");
                             device.disconnect().await.expect("Failed to disconnect?");
                         }
                     }
-                    // TODO Make these semi ephemeral
-                    // And also trigger a reconnect
                     Ok(Err(e)) => {
-                        let status = HeartRateStatus {
-                            heart_rate_bpm: 3,
-                            rr_intervals: Vec::new(),
-                            battery_level: BatteryLevel::Level(1),
-                        };
-                        let _ = hr_tx.send(DeviceData::HeartRateStatus(status));
+                        error!("Connection error: {}", e);
                         hr_tx
-                            .send(DeviceData::Error(format!("Connection error: {}", e)))
+                            .send(DeviceData::Error(ErrorPopup::Intermittent(format!(
+                                "Connection error: {}",
+                                e
+                            ))))
                             .expect("Failed to send error message");
                     }
                     Err(_) => {
-                        let status = HeartRateStatus {
-                            heart_rate_bpm: 4,
-                            rr_intervals: Vec::new(),
-                            battery_level: BatteryLevel::Level(2),
-                        };
-                        let _ = hr_tx.send(DeviceData::HeartRateStatus(status));
+                        error!("Connection timed out");
                         hr_tx
-                            .send(DeviceData::Error("Connection timed out".to_string()))
+                            .send(DeviceData::Error(ErrorPopup::Intermittent(
+                                "Connection timed out".to_string(),
+                            )))
                             .expect("Failed to send error message");
                     }
                 }
@@ -171,8 +175,11 @@ pub async fn start_notification_thread(
             }
         }
         None => {
+            error!("Device not found");
             hr_tx
-                .send(DeviceData::Error("Device not found".to_string()))
+                .send(DeviceData::Error(ErrorPopup::Fatal(
+                    "Device not found".to_string(),
+                )))
                 .expect("Failed to send error message");
         }
     }

@@ -14,7 +14,7 @@ use std::error::Error;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::app::{App, AppState, DeviceData};
+use crate::app::{App, AppState, DeviceData, ErrorPopup};
 use crate::heart_rate::HEART_RATE_SERVICE_UUID;
 use crate::panic_handler::initialize_panic_handler;
 use crate::structs::DeviceInfo;
@@ -158,13 +158,26 @@ pub async fn viewer<B: Backend>(
 
             // Draw the error overlay if the string is not empty
             if let Some(error_message_clone) = app.error_message.clone() {
+                let (style, message) = match error_message_clone.clone() {
+                    ErrorPopup::Fatal(msg) => {
+                        (Style::default().fg(ratatui::style::Color::Red), msg)
+                    }
+                    ErrorPopup::Intermittent(msg) => {
+                        (Style::default().fg(ratatui::style::Color::Yellow), msg)
+                    }
+                    ErrorPopup::UserMustDismiss(msg) => {
+                        (Style::default().fg(ratatui::style::Color::Blue), msg)
+                    }
+                };
+
                 let area = centered_rect(60, 50, f.size());
-                let error_block = Paragraph::new(Span::from(error_message_clone))
+                let error_block = Paragraph::new(Span::from(message))
                     .alignment(Alignment::Center)
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
-                            .title("! Notification !"),
+                            .title("! Notification !")
+                            .style(style),
                     );
                 f.render_widget(Clear, area);
                 f.render_widget(error_block, area);
@@ -176,7 +189,9 @@ pub async fn viewer<B: Backend>(
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('e') => {
-                        app.error_message = Some("This is a test error message".to_string());
+                        app.error_message = Some(ErrorPopup::UserMustDismiss(
+                            "This is a test error message".to_string(),
+                        ));
                         error!("This is a test error message");
                     }
                     KeyCode::Char('q') => {
@@ -206,7 +221,14 @@ pub async fn viewer<B: Backend>(
                     // Enter!
                     KeyCode::Enter => {
                         if app.error_message.is_some() {
-                            app.error_message = None;
+                            match app.error_message.as_ref().unwrap() {
+                                ErrorPopup::UserMustDismiss(_) | ErrorPopup::Intermittent(_) => {
+                                    app.error_message = None;
+                                }
+                                ErrorPopup::Fatal(_) => {
+                                    break;
+                                }
+                            }
                         } else if app.state == AppState::CharacteristicView {
                             app.state = AppState::MainMenu;
                         } else if app.state == AppState::SaveDevicePrompt {
@@ -342,7 +364,7 @@ pub async fn viewer<B: Backend>(
                         // they're always going to want to update the value in case Name/MAC changes,
                         // even if they're weird and have set `never_ask_to_save` to true
                         app.allow_saving = true;
-                        // Add the device to the list if it's not already there
+                        // Add the device to the UI list if it's not already there
                         if !app.discovered_devices.iter().any(|d| d.id == device.id) {
                             app.discovered_devices.push(device.clone());
                         }
@@ -352,11 +374,11 @@ pub async fn viewer<B: Backend>(
                                 .position(|d| d.id == device.id),
                         );
                         // app_state changed by method
+                        app.try_save_device(Some(&device));
                         debug!("Connecting to saved device, AppState: {:?}", app.state);
                         app.connect_for_hr(Some(&device)).await;
                     }
-
-                    app.try_save_device(Some(&device));
+                    app.try_save_device(None);
                 }
                 DeviceData::Characteristics(characteristics) => {
                     app.selected_characteristics = characteristics;
@@ -364,7 +386,16 @@ pub async fn viewer<B: Backend>(
                 }
                 DeviceData::Error(error) => {
                     error!("BLE Thread Error: {:?}", error.clone());
-                    app.error_message = Some(error);
+                    if app.state == AppState::HeartRateViewNoData
+                        && matches!(error, ErrorPopup::Intermittent(_))
+                    {
+                        // Ignoring the intermittent ones when we're in the inbetween state
+                    } else {
+                        // Don't override a fatal error
+                        if !matches!(app.error_message, Some(ErrorPopup::Fatal(_))) {
+                            app.error_message = Some(error);
+                        }
+                    }
                     //app.is_loading_characteristics = false;
                 }
                 DeviceData::ConnectedEvent(id) => {
@@ -393,11 +424,9 @@ pub async fn viewer<B: Backend>(
                     }
                 }
                 DeviceData::DisconnectedEvent(id) => {
-                    //app.is_loading_characteristics = false;
-                    //app.heart_rate_display = false;
-
-                    // TODO Reconnect?
-                    app.error_message = Some("Disconnected from device!".to_string());
+                    app.error_message = Some(ErrorPopup::Intermittent(
+                        "Disconnected from device!".to_string(),
+                    ));
                     if app.state == AppState::HeartRateView
                         || app.state == AppState::HeartRateViewNoData
                         || app.state == AppState::MainMenu
@@ -421,18 +450,23 @@ pub async fn viewer<B: Backend>(
             match hr_data {
                 DeviceData::HeartRateStatus(hr) => {
                     //app.heart_rate_display = true;
-                    app.heart_rate_status = hr;
+                    app.heart_rate_status = hr.clone();
                     // Assume we have proper data now
                     app.state = AppState::HeartRateView;
-                    app.error_message = None;
+                    if matches!(app.error_message, Some(ErrorPopup::Intermittent(_))) {
+                        app.error_message = None;
+                    }
+                    app.osc_tx.send(hr).unwrap();
                 }
                 DeviceData::Error(error) => {
-                    app.error_message = Some(error);
+                    // Don't override a fatal error
+                    if !matches!(app.error_message, Some(ErrorPopup::Fatal(_))) {
+                        app.error_message = Some(error);
+                    }
                     //app.is_loading_characteristics = false;
                 }
                 _ => {}
             }
-            //app.hr_tx.send(hr_data.clone()).unwrap();
         }
     }
     Ok(())

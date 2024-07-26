@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::Write;
 use toml;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 #[allow(unused)]
 pub struct MiscSettings {
     log_level: String,
@@ -16,15 +16,15 @@ pub struct MiscSettings {
     log_sessions_csv_path: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 #[allow(unused)]
 pub struct BLESettings {
     pub never_ask_to_save: bool,
-    pub saved_address: String,
     pub saved_name: String,
+    pub saved_address: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[allow(unused)]
 pub struct OSCSettings {
     pub host_ip: String,
@@ -41,9 +41,10 @@ pub struct OSCSettings {
     pub param_bpm_int: String,
     pub param_bpm_float: String,
     pub param_latest_rr_int: String,
+    // RR Twitch Params
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 #[allow(unused)]
 pub struct Settings {
     pub osc: OSCSettings,
@@ -92,7 +93,8 @@ impl Settings {
             .unwrap()
             .set_default("ble.saved_name", "")
             .unwrap()
-            .set_default("misc.log_level", "info")
+            // TODO set back to info before release
+            .set_default("misc.log_level", "debug")
             .unwrap()
             .set_default("misc.write_bpm_to_file", false)
             .unwrap()
