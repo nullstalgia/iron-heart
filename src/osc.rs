@@ -56,10 +56,22 @@ fn form_bpm_bundle(hr_status: &HeartRateStatus, osc_addresses: &OSCAddresses) ->
         bundle.content.push(OscPacket::Message(rr_msg));
     }
 
+    let twitch_up_msg = OscMessage {
+        addr: osc_addresses.rr_twitch_up.clone(),
+        args: vec![OscType::Bool(hr_status.twitch_up)],
+    };
+
+    let twitch_down_msg = OscMessage {
+        addr: osc_addresses.rr_twitch_down.clone(),
+        args: vec![OscType::Bool(hr_status.twitch_down)],
+    };
+
     bundle.content.push(OscPacket::Message(int_hr_msg));
     bundle.content.push(OscPacket::Message(float_hr_msg));
     bundle.content.push(OscPacket::Message(connected_msg));
     //bundle.content.push(OscPacket::Message(battery_msg));
+    bundle.content.push(OscPacket::Message(twitch_up_msg));
+    bundle.content.push(OscPacket::Message(twitch_down_msg));
 
     bundle
 }
@@ -92,8 +104,9 @@ struct OSCAddresses {
     float_hr: String,
     connected: String,
     latest_rr: String,
-    // rr_twitch_up: String,
-    // rr_twitch_down: String,
+    // battery: String,
+    rr_twitch_up: String,
+    rr_twitch_down: String,
 }
 
 fn format_address(osc_settings: &OSCSettings, param: &str) -> String {
@@ -113,6 +126,9 @@ impl OSCAddresses {
             float_hr: format_address(&osc_settings, &osc_settings.param_bpm_float),
             connected: format_address(&osc_settings, &osc_settings.param_hrm_connected),
             latest_rr: format_address(&osc_settings, &osc_settings.param_latest_rr_int),
+            //battery: format_address(&osc_settings, &osc_settings.param_battery_float),
+            rr_twitch_up: format_address(&osc_settings, &osc_settings.param_rr_twitch_up),
+            rr_twitch_down: format_address(&osc_settings, &osc_settings.param_rr_twitch_down),
         }
     }
 }
@@ -131,7 +147,11 @@ fn mimic_hr_activity(hr_status: &HeartRateStatus) -> HeartRateStatus {
     // TODO: Enable this before release
     //let jitter = rand::thread_rng().gen_range(-3..3);
     let jitter = 0;
-    mimic.heart_rate_bpm = mimic.heart_rate_bpm.saturating_add_signed(jitter);
+    mimic.heart_rate_bpm = hr_status.heart_rate_bpm.saturating_add_signed(jitter);
+    mimic.battery_level = hr_status.battery_level;
+    // Add chance to fake a twitch
+    mimic.twitch_up = (rand::thread_rng().gen_range(0..5)) == 0;
+    mimic.twitch_down = (rand::thread_rng().gen_range(0..5)) == 0;
     mimic
 }
 
@@ -165,6 +185,7 @@ pub async fn osc_thread(
     let mut latest_rr = Duration::from_secs(1);
     let mut heart_beat_interval = time::interval(latest_rr);
     let beat_pulse_duration = Duration::from_millis(osc_settings.pulse_length_ms as u64);
+    let mut pulse_edge = false;
 
     // Used when BLE connection is lost, but we don't want to
     // hide the BPM display in VRChat, we'll just bounce around
@@ -177,6 +198,11 @@ pub async fn osc_thread(
     // TODO:
     // with hide disconnects, dont forget to do HRTwitchUp and Down
 
+    // TODO:
+    // Don't allow showing 0 on the display, just hide it until we've put in a real value
+
+    // Maybe option for twitches to be a toggle and/or pulse?
+    // Current implementation is a weird mix of both, but is simple to implement
     loop {
         tokio::select! {
             hr_data = locked_receiver.recv() => {
@@ -212,16 +238,26 @@ pub async fn osc_thread(
                 info!("Shutting down OSC thread!");
                 break;
             }
+            // This interval flip/flops between the RR duration and the pulse duration
+            // to allow sending a pulse without a blocking sleep() call
             _ = heart_beat_interval.tick() => {
                 if hr_status.heart_rate_bpm > 0 {
-                    send_beat_param(toggle_beat, &osc_addresses.beat_toggle, &socket, target_addr);
-                    send_beat_param(true, &osc_addresses.beat_pulse, &socket, target_addr);
-                    sleep(beat_pulse_duration).await;
-                    send_beat_param(false, &osc_addresses.beat_pulse, &socket, target_addr);
-                    toggle_beat = !toggle_beat;
-                    let new_interval = latest_rr.saturating_sub(beat_pulse_duration);
-                    heart_beat_interval = time::interval(new_interval);
-                    heart_beat_interval.reset();
+                    // Rising edge
+                    if !pulse_edge {
+                        pulse_edge = true;
+                        send_beat_param(toggle_beat, &osc_addresses.beat_toggle, &socket, target_addr);
+                        send_beat_param(pulse_edge, &osc_addresses.beat_pulse, &socket, target_addr);
+                        toggle_beat = !toggle_beat;
+                        heart_beat_interval = time::interval(beat_pulse_duration);
+                        heart_beat_interval.reset();
+                    } else {
+                        // Falling edge
+                        pulse_edge = false;
+                        send_beat_param(pulse_edge, &osc_addresses.beat_pulse, &socket, target_addr);
+                        let new_interval = latest_rr.saturating_sub(beat_pulse_duration);
+                        heart_beat_interval = time::interval(new_interval);
+                        heart_beat_interval.reset();
+                    }
                 }
             }
             _ = mimic_update_interval.tick() => {

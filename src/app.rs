@@ -4,6 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Duration,
 };
 
 use log::*;
@@ -177,10 +178,17 @@ impl App {
         let device = Arc::new(selected_device.clone());
         let hr_tx_clone = self.hr_tx.clone();
         let shutdown_requested_clone = self.shutdown_requested.clone();
-
+        let rr_twitch_threshold =
+            Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
         debug!("Spawning notification thread, AppState: {:?}", self.state);
         self.hr_thread_handle = Some(tokio::spawn(async move {
-            start_notification_thread(hr_tx_clone, device, shutdown_requested_clone).await
+            start_notification_thread(
+                hr_tx_clone,
+                device,
+                rr_twitch_threshold,
+                shutdown_requested_clone,
+            )
+            .await
         }));
     }
 

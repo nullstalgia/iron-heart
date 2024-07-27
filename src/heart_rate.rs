@@ -38,6 +38,10 @@ pub struct HeartRateStatus {
     pub heart_rate_bpm: u16,
     pub rr_intervals: Vec<f32>,
     pub battery_level: BatteryLevel,
+    // Twitches are calculated in this file so that
+    // all listeners see twitches at the same time
+    pub twitch_up: bool,
+    pub twitch_down: bool,
 }
 
 // #[derive(Error, Debug)]
@@ -51,6 +55,7 @@ pub struct HeartRateStatus {
 pub async fn start_notification_thread(
     hr_tx: mpsc::UnboundedSender<DeviceData>,
     peripheral: Arc<DeviceInfo>,
+    twitch_threshold: f32,
     shutdown_token: CancellationToken,
 ) {
     let duration = Duration::from_secs(30);
@@ -77,6 +82,7 @@ pub async fn start_notification_thread(
                             }
                             let characteristics = device.characteristics();
                             let mut battery_level = BatteryLevel::NotReported;
+                            let mut latest_rr: f32 = 1.0;
                             let len = characteristics.len();
                             debug!("Found {} characteristics", len);
                             if let Some(characteristic) = characteristics
@@ -122,10 +128,24 @@ pub async fn start_notification_thread(
                                     Some(data) = notification_stream.next() => {
                                         if data.uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID {
                                             let measurement = parse_hrm(&data.value);
+                                            let mut twitch_up = false;
+                                            let mut twitch_down = false;
+                                            for new_rr in measurement.rr_intervals.iter() {
+                                                if (new_rr - latest_rr).abs() > twitch_threshold {
+                                                    if new_rr > &latest_rr {
+                                                        twitch_up = true;
+                                                    } else {
+                                                        twitch_down = true;
+                                                    }
+                                                }
+                                                latest_rr = *new_rr;
+                                            }
                                             let status = HeartRateStatus {
                                                 heart_rate_bpm: measurement.bpm,
                                                 rr_intervals: measurement.rr_intervals,
-                                                battery_level: battery_level,
+                                                battery_level,
+                                                twitch_up,
+                                                twitch_down,
                                             };
                                             hr_tx.send(DeviceData::HeartRateStatus(status)).expect("Failed to send HR data!");
                                         }

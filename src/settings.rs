@@ -42,6 +42,9 @@ pub struct OSCSettings {
     pub param_bpm_float: String,
     pub param_latest_rr_int: String,
     // RR Twitch Params
+    pub twitch_rr_threshold_ms: u16,
+    pub param_rr_twitch_up: String,
+    pub param_rr_twitch_down: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -86,6 +89,12 @@ impl Settings {
             .set_default("osc.param_bpm_float", "floatHR")
             .unwrap()
             .set_default("osc.param_latest_rr_int", "RRInterval")
+            .unwrap()
+            .set_default("osc.twitch_rr_threshold_ms", 50)
+            .unwrap()
+            .set_default("osc.param_rr_twitch_up", "HRTwitchUp")
+            .unwrap()
+            .set_default("osc.param_rr_twitch_down", "HRTwitchDown")
             .unwrap()
             .set_default("ble.never_ask_to_save", false)
             .unwrap()
