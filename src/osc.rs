@@ -51,7 +51,7 @@ fn form_bpm_bundle(hr_status: &HeartRateStatus, osc_addresses: &OSCAddresses) ->
     } else if let Some(&latest_rr) = hr_status.rr_intervals.last() {
         let rr_msg = OscMessage {
             addr: osc_addresses.latest_rr.clone(),
-            args: vec![OscType::Int((latest_rr * 1000.0) as i32)],
+            args: vec![OscType::Int((latest_rr.as_secs_f32() * 1000.0) as i32)],
         };
         bundle.content.push(OscPacket::Message(rr_msg));
     }
@@ -229,7 +229,7 @@ pub async fn osc_thread(
                         if data.heart_rate_bpm > 0 {
                             hr_status = data;
                             if let Some(new_rr) = hr_status.rr_intervals.last() {
-                                latest_rr = Duration::from_secs_f32(*new_rr);
+                                latest_rr = *new_rr;
                                 // Mark that we know we'll get real RR intervals
                                 use_real_rr = true;
                             } else if !use_real_rr {

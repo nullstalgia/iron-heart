@@ -178,6 +178,7 @@ impl App {
         let device = Arc::new(selected_device.clone());
         let hr_tx_clone = self.hr_tx.clone();
         let shutdown_requested_clone = self.shutdown_requested.clone();
+        // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
         debug!("Spawning notification thread, AppState: {:?}", self.state);

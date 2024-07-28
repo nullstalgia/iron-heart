@@ -36,7 +36,7 @@ pub enum BatteryLevel {
 #[derive(Debug, Clone, Default)]
 pub struct HeartRateStatus {
     pub heart_rate_bpm: u16,
-    pub rr_intervals: Vec<f32>,
+    pub rr_intervals: Vec<Duration>,
     pub battery_level: BatteryLevel,
     // Twitches are calculated in this file so that
     // all listeners see twitches at the same time
@@ -82,7 +82,7 @@ pub async fn start_notification_thread(
                             }
                             let characteristics = device.characteristics();
                             let mut battery_level = BatteryLevel::NotReported;
-                            let mut latest_rr: f32 = 1.0;
+                            let mut latest_rr: Duration = Duration::from_secs(1);
                             let len = characteristics.len();
                             debug!("Found {} characteristics", len);
                             if let Some(characteristic) = characteristics
@@ -131,7 +131,8 @@ pub async fn start_notification_thread(
                                             let mut twitch_up = false;
                                             let mut twitch_down = false;
                                             for new_rr in measurement.rr_intervals.iter() {
-                                                if (new_rr - latest_rr).abs() > twitch_threshold {
+                                                // Duration.abs_diff() is nightly only for now, agh
+                                                if (new_rr.as_secs_f32() - latest_rr.as_secs_f32()).abs() > twitch_threshold {
                                                     if new_rr > &latest_rr {
                                                         twitch_up = true;
                                                     } else {

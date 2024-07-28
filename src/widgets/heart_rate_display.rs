@@ -15,7 +15,7 @@ pub fn heart_rate_display(heart_rate_status: &HeartRateStatus) -> Table<'static>
     let mut rows: Vec<Row> = Vec::new();
 
     rows.push(
-        Row::new(vec!["Heart Rate", "RR", "Battery Level"])
+        Row::new(vec!["Heart Rate", "RR (sec)", "Battery Level"])
             .style(Style::default().add_modifier(Modifier::BOLD)),
     );
 
@@ -27,7 +27,14 @@ pub fn heart_rate_display(heart_rate_status: &HeartRateStatus) -> Table<'static>
 
     rows.push(Row::new(vec![
         heart_rate_status.heart_rate_bpm.to_string(),
-        format!("{:?}", heart_rate_status.rr_intervals),
+        format!(
+            "{:?}",
+            heart_rate_status
+                .rr_intervals
+                .iter()
+                .map(|rr| rr.as_secs_f32())
+                .collect::<Vec<f32>>()
+        ),
         battery_string,
     ]));
 

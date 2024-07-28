@@ -1,5 +1,8 @@
 // Originally by Nathan Fairhurst
+// Edited by nullstalgia
 // https://github.com/IamfromSpace/rust-cycle
+
+use std::time::Duration;
 
 // A Struct that does not care about bit compression
 #[derive(Debug, PartialEq, Clone)]
@@ -22,7 +25,7 @@ pub struct HeartRateMeasurement {
     // than the frequency of notifications, there's no way to distinguish
     // between zero detections and this feature not being supported on the
     // device, which is why this is not an Option.
-    pub rr_intervals: Vec<f32>,
+    pub rr_intervals: Vec<Duration>,
 }
 
 // Notably, this function always assumes a valid input
@@ -60,7 +63,7 @@ pub fn parse_hrm(data: &Vec<u8>) -> HeartRateMeasurement {
                     data[rr_interval_index + 2 * i],
                     data[rr_interval_index + 2 * i + 1],
                 ]);
-                vec.push(as_u16 as f32 / 1024.0);
+                vec.push(Duration::from_secs_f32(as_u16 as f32 / 1024.0));
             }
             vec
         },
@@ -71,6 +74,7 @@ pub fn parse_hrm(data: &Vec<u8>) -> HeartRateMeasurement {
 mod tests {
     use super::parse_hrm;
     use super::HeartRateMeasurement;
+    use std::time::Duration;
 
     #[test]
     fn parse_hrm_16_bit_energy_expended_and_one_rr_intervals() {
@@ -79,7 +83,7 @@ mod tests {
                 bpm: 70,
                 is_sensor_contact_detected: None,
                 energy_expended: Some(523),
-                rr_intervals: vec!(266.0 / 1024.0)
+                rr_intervals: vec!(Duration::from_secs_f32(266.0 / 1024.0))
             },
             parse_hrm(&vec!(0b11001, 70, 0, 11, 2, 10, 1))
         );
@@ -92,7 +96,7 @@ mod tests {
                 bpm: 70,
                 is_sensor_contact_detected: None,
                 energy_expended: None,
-                rr_intervals: vec!(266.0 / 1024.0)
+                rr_intervals: vec!(Duration::from_secs_f32(266.0 / 1024.0))
             },
             parse_hrm(&vec!(0b10001, 70, 0, 10, 1))
         );
@@ -105,7 +109,11 @@ mod tests {
                 bpm: 70,
                 is_sensor_contact_detected: None,
                 energy_expended: None,
-                rr_intervals: vec!(266.0 / 1024.0, 523.0 / 1024.0, 780.0 / 1024.0)
+                rr_intervals: vec!(
+                    Duration::from_secs_f32(266.0 / 1024.0),
+                    Duration::from_secs_f32(523.0 / 1024.0),
+                    Duration::from_secs_f32(780.0 / 1024.0)
+                )
             },
             parse_hrm(&vec!(0b10000, 70, 10, 1, 11, 2, 12, 3))
         );
@@ -118,7 +126,7 @@ mod tests {
                 bpm: 70,
                 is_sensor_contact_detected: None,
                 energy_expended: None,
-                rr_intervals: vec!(266.0 / 1024.0)
+                rr_intervals: vec!(Duration::from_secs_f32(266.0 / 1024.0))
             },
             parse_hrm(&vec!(0b10000, 70, 10, 1))
         );
