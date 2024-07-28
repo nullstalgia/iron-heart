@@ -87,13 +87,32 @@ fn send_bpm_bundle(
     socket.send_to(&msg_buf, target_addr).unwrap();
 }
 
-fn send_beat_param(beat: bool, address: &String, socket: &UdpSocket, target_addr: SocketAddrV4) {
-    let msg = OscMessage {
-        addr: address.to_owned(),
-        args: vec![OscType::Bool(beat)],
+fn send_beat_params(
+    pulse_edge: bool,
+    toggle_beat: bool,
+    osc_addresses: &OSCAddresses,
+    socket: &UdpSocket,
+    target_addr: SocketAddrV4,
+) {
+    let mut bundle = OscBundle {
+        timetag: OSC_NOW,
+        content: vec![],
     };
 
-    let msg_buf = encoder::encode(&OscPacket::Message(msg)).unwrap();
+    let pulse_msg = OscMessage {
+        addr: osc_addresses.beat_pulse.clone(),
+        args: vec![OscType::Bool(pulse_edge)],
+    };
+
+    let toggle_msg = OscMessage {
+        addr: osc_addresses.beat_toggle.clone(),
+        args: vec![OscType::Bool(toggle_beat)],
+    };
+
+    bundle.content.push(OscPacket::Message(pulse_msg));
+    bundle.content.push(OscPacket::Message(toggle_msg));
+
+    let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
     socket.send_to(&msg_buf, target_addr).unwrap();
 }
 
@@ -175,8 +194,7 @@ pub async fn osc_thread(
         &socket,
         target_addr,
     );
-    send_beat_param(false, &osc_addresses.beat_toggle, &socket, target_addr);
-    send_beat_param(false, &osc_addresses.beat_pulse, &socket, target_addr);
+    send_beat_params(false, false, &osc_addresses, &socket, target_addr);
 
     let mut hr_status = HeartRateStatus::default();
     let mut toggle_beat: bool = true;
@@ -245,15 +263,14 @@ pub async fn osc_thread(
                     // Rising edge
                     if !pulse_edge {
                         pulse_edge = true;
-                        send_beat_param(toggle_beat, &osc_addresses.beat_toggle, &socket, target_addr);
-                        send_beat_param(pulse_edge, &osc_addresses.beat_pulse, &socket, target_addr);
+                        send_beat_params(pulse_edge, toggle_beat, &osc_addresses, &socket, target_addr);
                         toggle_beat = !toggle_beat;
                         heart_beat_interval = time::interval(beat_pulse_duration);
                         heart_beat_interval.reset();
                     } else {
                         // Falling edge
                         pulse_edge = false;
-                        send_beat_param(pulse_edge, &osc_addresses.beat_pulse, &socket, target_addr);
+                        send_beat_params(pulse_edge, toggle_beat, &osc_addresses, &socket, target_addr);
                         let new_interval = latest_rr.saturating_sub(beat_pulse_duration);
                         heart_beat_interval = time::interval(new_interval);
                         heart_beat_interval.reset();
@@ -274,6 +291,5 @@ pub async fn osc_thread(
         &socket,
         target_addr,
     );
-    send_beat_param(false, &osc_addresses.beat_toggle, &socket, target_addr);
-    send_beat_param(false, &osc_addresses.beat_pulse, &socket, target_addr);
+    send_beat_params(false, false, &osc_addresses, &socket, target_addr);
 }
