@@ -462,6 +462,7 @@ pub async fn viewer<B: Backend>(
         }
 
         // HR Notification Updates
+        // Impromptu HR Data Dispatcher
         if let Ok(hr_data) = app.hr_rx.try_recv() {
             match hr_data {
                 DeviceData::HeartRateStatus(hr) => {
@@ -472,7 +473,8 @@ pub async fn viewer<B: Backend>(
                     if matches!(app.error_message, Some(ErrorPopup::Intermittent(_))) {
                         app.error_message = None;
                     }
-                    app.osc_tx.send(hr).unwrap();
+                    app.osc_tx.send(hr.clone()).unwrap();
+                    app.log_tx.send(hr).unwrap();
                 }
                 DeviceData::Error(error) => {
                     // Don't override a fatal error

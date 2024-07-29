@@ -1,5 +1,6 @@
 [package]
-name = "btlescan"
+name = "null-iron-heart"
+repository = "https://github.com/nullstalgia/null-iron-heart"
 version = "0.1.1"
 edition = "2021"
 
@@ -27,3 +28,5 @@ log = "0.4.22"
 fast_log = "1.6.16"
 tokio-util = "0.7.11"
 rand = "0.8.5"
+csv-async = { version = "1.3.0", features = ["tokio", "with_serde"] }
+csv = "1.3.0"

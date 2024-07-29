@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     heart_rate::{start_notification_thread, HeartRateStatus},
+    logging::logging_thread,
     osc::osc_thread,
     scan::{bluetooth_event_thread, get_characteristics},
     settings::{OSCSettings, Settings},
@@ -60,6 +61,9 @@ pub struct App {
     // Sending data to the OSC thread
     pub osc_rx: Arc<Mutex<UnboundedReceiver<HeartRateStatus>>>,
     pub osc_tx: UnboundedSender<HeartRateStatus>,
+    // Sending data to the logging thread
+    pub log_rx: Arc<Mutex<UnboundedReceiver<HeartRateStatus>>>,
+    pub log_tx: UnboundedSender<HeartRateStatus>,
     pub ble_scan_paused: Arc<AtomicBool>,
     pub state: AppState,
     pub table_state: TableState,
@@ -80,6 +84,7 @@ pub struct App {
     pub ble_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub hr_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub osc_thread_handle: Option<tokio::task::JoinHandle<()>>,
+    pub logging_thread_handle: Option<tokio::task::JoinHandle<()>>,
     // Used for the graphs in the heart rate view
     pub heart_rate_history: Vec<u16>,
     pub rr_history: Vec<u16>,
@@ -90,6 +95,7 @@ impl App {
         let (app_tx, app_rx) = mpsc::unbounded_channel();
         let (hr_tx, hr_rx) = mpsc::unbounded_channel();
         let (osc_tx, osc_rx) = mpsc::unbounded_channel();
+        let (log_tx, log_rx) = mpsc::unbounded_channel();
         let mut error_message = None;
         let settings = Settings::new().unwrap_or_else(|err| {
             warn!("Failed to load settings: {}", err);
@@ -105,6 +111,8 @@ impl App {
             hr_rx,
             osc_tx,
             osc_rx: Arc::new(Mutex::new(osc_rx)),
+            log_tx,
+            log_rx: Arc::new(Mutex::new(log_rx)),
             ble_scan_paused: Arc::new(AtomicBool::default()),
             state: AppState::MainMenu,
             table_state: TableState::default(),
@@ -125,6 +133,7 @@ impl App {
             ble_thread_handle: None,
             hr_thread_handle: None,
             osc_thread_handle: None,
+            logging_thread_handle: None,
         }
     }
 
@@ -204,6 +213,22 @@ impl App {
         }));
     }
 
+    pub async fn start_logging_thread(&mut self) {
+        let logging_rx_clone = Arc::clone(&self.log_rx);
+        let misc_settings_clone = self.settings.misc.clone();
+        let shutdown_requested_clone = self.shutdown_requested.clone();
+
+        debug!("Spawning Logging thread");
+        self.logging_thread_handle = Some(tokio::spawn(async move {
+            logging_thread(
+                logging_rx_clone,
+                misc_settings_clone,
+                shutdown_requested_clone,
+            )
+            .await
+        }));
+    }
+
     pub async fn join_threads(&mut self) {
         use tokio::time::{timeout, Duration};
         let duration = Duration::from_secs(3);
@@ -230,6 +255,13 @@ impl App {
                 error!("Failed to join OSC thread: {:?}", err);
             }
         }
+
+        if let Some(handle) = self.logging_thread_handle.take() {
+            debug!("Joining Logging thread");
+            if let Err(err) = timeout(duration, handle).await {
+                error!("Failed to join Logging thread: {:?}", err);
+            }
+        }
     }
 
     pub fn save_settings(&mut self) -> Result<(), std::io::Error> {
@@ -244,17 +276,18 @@ impl App {
             let new_name = device.name.clone();
             let mut damaged = false;
             if self.settings.ble.saved_address != new_id {
-                self.settings.ble.saved_address = new_id;
+                self.settings.ble.saved_address = new_id.clone();
                 damaged = true;
             }
             // TODO See if I can find a way to get "Unknown" programatically,
             // not a fan of hardcoding it (and it's "" in the ::default())
             // Maybe do a .new() and supply a None?
             if self.settings.ble.saved_name != new_name && new_name != "Unknown" {
-                self.settings.ble.saved_name = new_name;
+                self.settings.ble.saved_name = new_name.clone();
                 damaged = true;
             }
             if damaged {
+                info!("Updating saved device! Name: {} MAC: {}", new_name, new_id);
                 self.save_settings().expect("Failed to save settings");
             }
         }

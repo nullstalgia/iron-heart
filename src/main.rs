@@ -15,6 +15,7 @@ mod app;
 mod company_codes;
 mod heart_rate;
 mod heart_rate_measurement;
+mod logging;
 mod osc;
 mod panic_handler;
 mod scan;
@@ -64,6 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         app.save_settings()?;
         app.start_osc_thread().await;
         app.start_bluetooth_event_thread().await;
+        app.start_logging_thread().await;
         debug!("Started OSC and Bluetooth CentralEvent threads");
     }
     // Main app loop

@@ -13,8 +13,7 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
         .panic_section(format!(
             "This is a bug. Consider reporting it at {}",
-            //env!("CARGO_PKG_REPOSITORY")
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            env!("CARGO_PKG_REPOSITORY")
         ))
         .display_location_section(true)
         .display_env_section(true)

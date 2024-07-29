@@ -6,14 +6,15 @@ use std::fs::File;
 use std::io::Write;
 use toml;
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[allow(unused)]
 pub struct MiscSettings {
     log_level: String,
-    write_bpm_to_file: bool,
-    write_bpm_file_path: String,
-    log_sessions_to_csv: bool,
-    log_sessions_csv_path: String,
+    pub write_bpm_to_file: bool,
+    pub write_rr_to_file: bool,
+    pub bpm_file_path: String,
+    pub log_sessions_to_csv: bool,
+    pub log_sessions_csv_path: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -27,6 +28,7 @@ pub struct BLESettings {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[allow(unused)]
 pub struct OSCSettings {
+    // enabled: bool,
     pub host_ip: String,
     pub target_ip: String,
     pub port: u16,
@@ -52,7 +54,7 @@ pub struct OSCSettings {
 pub struct Settings {
     pub osc: OSCSettings,
     pub ble: BLESettings,
-    misc: MiscSettings,
+    pub misc: MiscSettings,
 }
 
 impl Settings {
@@ -107,7 +109,9 @@ impl Settings {
             .unwrap()
             .set_default("misc.write_bpm_to_file", false)
             .unwrap()
-            .set_default("misc.write_bpm_file_path", "bpm.txt")
+            .set_default("misc.write_rr_to_file", false)
+            .unwrap()
+            .set_default("misc.bpm_file_path", "bpm.txt")
             .unwrap()
             .set_default("misc.log_sessions_to_csv", false)
             .unwrap()
