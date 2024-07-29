@@ -275,18 +275,16 @@ impl App {
             let new_id = device.get_id();
             let new_name = device.name.clone();
             let mut damaged = false;
-            if self.settings.ble.saved_address != new_id {
-                self.settings.ble.saved_address = new_id.clone();
+            if self.settings.ble.saved_address != new_id || self.settings.ble.saved_name != new_name
+            {
                 damaged = true;
             }
             // TODO See if I can find a way to get "Unknown" programatically,
             // not a fan of hardcoding it (and it's "" in the ::default())
             // Maybe do a .new() and supply a None?
-            if self.settings.ble.saved_name != new_name && new_name != "Unknown" {
+            if damaged && new_name != "Unknown" {
+                self.settings.ble.saved_address = new_id.clone();
                 self.settings.ble.saved_name = new_name.clone();
-                damaged = true;
-            }
-            if damaged {
                 info!("Updating saved device! Name: {} MAC: {}", new_name, new_id);
                 self.save_settings().expect("Failed to save settings");
             }

@@ -78,7 +78,6 @@ pub async fn logging_thread(
         tokio::select! {
             Some(heart_rate_status) = locked_reciever.recv() => {
                 if heart_rate_status.heart_rate_bpm > 0 {
-                    debug!("{:?}", heart_rate_status);
                     let reported_rr = if rr_cooldown == 0 {
                         heart_rate_status.rr_intervals.last().unwrap_or(&last_rr)
                     } else {

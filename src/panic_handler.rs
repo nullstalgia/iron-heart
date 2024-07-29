@@ -23,6 +23,7 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
         let _ = disable_raw_mode();
         let _ = execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
 
+        error!("Panic! {:?}", panic_info);
         let msg = format!("{}", panic_hook.panic_report(panic_info));
         #[cfg(not(debug_assertions))]
         {
@@ -32,8 +33,9 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
 
             let file_path = handle_dump(&meta, panic_info);
             // prints human-panic message
-            print_msg(file_path, &meta)
+            print_msg(file_path.clone(), &meta)
                 .expect("human-panic: printing error message to console failed");
+            info!("Full panic dump at: {:?}", file_path);
         }
         eprintln!("Error: {}", strip_ansi_escapes::strip_str(msg));
 

@@ -214,9 +214,6 @@ pub async fn osc_thread(
     let mut locked_receiver = osc_rx_arc.lock().await;
 
     // TODO:
-    // with hide disconnects, dont forget to do HRTwitchUp and Down
-
-    // TODO:
     // Don't allow showing 0 on the display, just hide it until we've put in a real value
 
     // Maybe option for twitches to be a toggle and/or pulse?
