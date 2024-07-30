@@ -82,7 +82,6 @@ pub struct App {
     pub frame_count: usize,
     pub error_message: Option<ErrorPopup>,
     pub settings: Settings,
-    pub heart_rate_display: bool,
     pub heart_rate_status: HeartRateStatus,
     pub shutdown_requested: CancellationToken,
     pub ble_thread_handle: Option<tokio::task::JoinHandle<()>>,
@@ -133,7 +132,6 @@ impl App {
             frame_count: 0,
             error_message,
             settings,
-            heart_rate_display: false,
             heart_rate_status: HeartRateStatus::default(),
             heart_rate_history: VecDeque::with_capacity(CHART_BPM_MAX_ELEMENTS),
             rr_history: VecDeque::with_capacity(CHART_RR_MAX_ELEMENTS),
@@ -304,8 +302,11 @@ impl App {
     }
 
     pub fn get_selected_device(&self) -> Option<&DeviceInfo> {
-        self.discovered_devices
-            .get(self.table_state.selected().unwrap_or(0))
+        if let Some(selected_index) = self.table_state.selected() {
+            self.discovered_devices.get(selected_index)
+        } else {
+            None
+        }
     }
 
     pub fn is_idle_on_main_menu(&self) -> bool {
@@ -356,6 +357,61 @@ impl App {
                     self.rr_history.pop_front();
                 }
             }
+        }
+    }
+
+    fn table_state_scroll(up: bool, state: &mut TableState, table_len: usize) {
+        if table_len == 0 {
+            return;
+        }
+        let next = match state.selected() {
+            Some(selected) => {
+                if up {
+                    (selected + table_len - 1) % table_len
+                } else {
+                    (selected + 1) % table_len
+                }
+            }
+            None => 0,
+        };
+        state.select(Some(next));
+    }
+
+    pub fn scroll_down(&mut self) {
+        match self.state {
+            AppState::CharacteristicView => {
+                self.characteristic_scroll = self.characteristic_scroll.wrapping_add(1);
+            }
+            AppState::MainMenu => {
+                Self::table_state_scroll(
+                    false,
+                    &mut self.table_state,
+                    self.discovered_devices.len(),
+                );
+            }
+            AppState::SaveDevicePrompt => {
+                Self::table_state_scroll(false, &mut self.save_prompt_state, 3);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn scroll_up(&mut self) {
+        match self.state {
+            AppState::CharacteristicView => {
+                self.characteristic_scroll = self.characteristic_scroll.saturating_sub(1);
+            }
+            AppState::MainMenu => {
+                Self::table_state_scroll(
+                    true,
+                    &mut self.table_state,
+                    self.discovered_devices.len(),
+                );
+            }
+            AppState::SaveDevicePrompt => {
+                Self::table_state_scroll(true, &mut self.save_prompt_state, 3);
+            }
+            _ => {}
         }
     }
 }

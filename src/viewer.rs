@@ -21,9 +21,7 @@ use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
 use crate::widgets::detail_table::detail_table;
 use crate::widgets::device_table::device_table;
-use crate::widgets::heart_rate_display::{
-    heart_rate_display, CHART_BPM_MAX_ELEMENTS, CHART_RR_MAX_ELEMENTS,
-};
+use crate::widgets::heart_rate_display::heart_rate_display;
 use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
 use crate::widgets::save_prompt::save_prompt;
@@ -42,7 +40,7 @@ pub async fn viewer<B: Backend>(
     app.save_prompt_state.select(Some(0));
 
     // Big loop here, drawing the different possible UIs
-    // then handing all events (keys, bt, bt -> osc)
+    // then handing all events (keys, bt, bt -> osc | log | ui)
 
     // TODO Make this shit smaller
     loop {
@@ -70,6 +68,7 @@ pub async fn viewer<B: Backend>(
 
             let device_binding = &DeviceInfo::default();
             // Causes a borrow issue, strange.
+            // I think it's due to the .get() in .get_selected_device()
             // let selected_device = app.get_selected_device().unwrap_or(device_binding);
             let selected_device = app
                 .discovered_devices
@@ -122,11 +121,7 @@ pub async fn viewer<B: Backend>(
                     }
                 }
                 AppState::HeartRateViewNoData | AppState::HeartRateView => {
-                    // Draw the heart rate overlay
-                    let area = centered_rect(100, 100, f.size());
                     heart_rate_display(f, &app);
-                    //f.render_widget(Clear, area);
-                    // f.render_widget(heart_rate_view, area);
                 }
             }
 
@@ -203,15 +198,11 @@ pub async fn viewer<B: Backend>(
                         error!("This is a test error message");
                     }
                     KeyCode::Char('q') => {
-                        // if app.app_state == AppState::MainMenu {
                         break;
-                        // }
-                        // TODO Gracefully disconnect bluetooth?
                     }
                     KeyCode::Char('c') | KeyCode::Char('C') => {
                         if key.modifiers == KeyModifiers::CONTROL {
                             break;
-                            // TODO Gracefully disconnect bluetooth?
                         } else {
                             if app.is_idle_on_main_menu() {
                                 app.state = AppState::ConnectingForCharacteristics;
@@ -241,14 +232,17 @@ pub async fn viewer<B: Backend>(
                             app.state = AppState::MainMenu;
                         } else if app.state == AppState::SaveDevicePrompt {
                             let chosen_option = app.save_prompt_state.selected().unwrap_or(0);
-                            // TODO Make this not weirdly hard-coded numbers?
+                            const ALLOW_SAVING_OPTION: usize = 0;
+                            const NO_ACTION_OPTION: usize = 1;
+                            const NEVER_ASK_TO_SAVE_OPTION: usize = 2;
+
                             match chosen_option {
-                                0 => {
+                                ALLOW_SAVING_OPTION => {
                                     app.allow_saving = true;
                                     app.save_settings().expect("Failed to save settings");
                                 }
-                                1 => {}
-                                2 => {
+                                NO_ACTION_OPTION => {}
+                                NEVER_ASK_TO_SAVE_OPTION => {
                                     app.settings.ble.never_ask_to_save = true;
                                     app.save_settings().expect("Failed to save settings");
                                 }
@@ -266,68 +260,10 @@ pub async fn viewer<B: Backend>(
                         }
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        // Ugly, fix.
-                        // TODO See if you can generalize this + Down, especially for the Save dialog
-                        // Use match on the app_state?
-                        if app.state == AppState::CharacteristicView {
-                            app.characteristic_scroll += 1;
-                        } else if app.state == AppState::MainMenu
-                            && !app.discovered_devices.is_empty()
-                        {
-                            let next = match app.table_state.selected() {
-                                Some(selected) => {
-                                    if selected >= app.discovered_devices.len() - 1 {
-                                        0
-                                    } else {
-                                        selected + 1
-                                    }
-                                }
-                                None => 0,
-                            };
-                            app.table_state.select(Some(next));
-                        } else if app.state == AppState::SaveDevicePrompt {
-                            let next = match app.save_prompt_state.selected() {
-                                Some(selected) => {
-                                    if selected >= 3 - 1 {
-                                        0
-                                    } else {
-                                        selected + 1
-                                    }
-                                }
-                                None => 0,
-                            };
-                            app.save_prompt_state.select(Some(next));
-                        }
+                        app.scroll_down();
                     }
-                    // Ditto.
                     KeyCode::Up | KeyCode::Char('k') => {
-                        if app.state == AppState::CharacteristicView {
-                            app.characteristic_scroll = app.characteristic_scroll.saturating_sub(1);
-                        } else if app.state == AppState::MainMenu {
-                            let previous = match app.table_state.selected() {
-                                Some(selected) => {
-                                    if selected == 0 {
-                                        app.discovered_devices.len().checked_sub(1).unwrap_or(0)
-                                    } else {
-                                        selected - 1
-                                    }
-                                }
-                                None => 0,
-                            };
-                            app.table_state.select(Some(previous));
-                        } else if app.state == AppState::SaveDevicePrompt {
-                            let previous = match app.save_prompt_state.selected() {
-                                Some(selected) => {
-                                    if selected == 0 {
-                                        3 - 1
-                                    } else {
-                                        selected - 1
-                                    }
-                                }
-                                None => 0,
-                            };
-                            app.save_prompt_state.select(Some(previous));
-                        }
+                        app.scroll_up();
                     }
                     _ => {}
                 }
@@ -418,9 +354,6 @@ pub async fn viewer<B: Backend>(
                     if app.state == AppState::ConnectingForCharacteristics {
                         app.state = AppState::CharacteristicView;
                     } else {
-                        // TODO Maybe this should reset everything since it's a connect?
-                        //app.is_loading_characteristics = false;
-                        app.heart_rate_display = true;
                         app.state = if app.heart_rate_status.heart_rate_bpm > 0 {
                             AppState::HeartRateView
                         } else {
@@ -468,7 +401,6 @@ pub async fn viewer<B: Backend>(
         if let Ok(hr_data) = app.hr_rx.try_recv() {
             match hr_data {
                 DeviceData::HeartRateStatus(hr) => {
-                    //app.heart_rate_display = true;
                     app.heart_rate_status = hr.clone();
                     // Assume we have proper data now
                     app.state = AppState::HeartRateView;
@@ -486,7 +418,6 @@ pub async fn viewer<B: Backend>(
                         app.error_message = Some(error);
                     }
                     app.osc_tx.send(HeartRateStatus::default()).unwrap();
-                    //app.is_loading_characteristics = false;
                 }
                 _ => {}
             }
