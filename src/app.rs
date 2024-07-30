@@ -1,3 +1,7 @@
+use chrono::prelude::*;
+use log::*;
+use ratatui::widgets::TableState;
+use std::collections::VecDeque;
 use std::{
     f32::consts::PI,
     sync::{
@@ -6,9 +10,6 @@ use std::{
     },
     time::Duration,
 };
-
-use log::*;
-use ratatui::widgets::TableState;
 use tokio::sync::{
     mpsc::{self, UnboundedReceiver, UnboundedSender},
     Mutex,
@@ -22,6 +23,9 @@ use crate::{
     scan::{bluetooth_event_thread, get_characteristics},
     settings::{OSCSettings, Settings},
     structs::{Characteristic, DeviceInfo},
+    widgets::heart_rate_display::{
+        heart_rate_display, CHART_BPM_MAX_ELEMENTS, CHART_RR_MAX_ELEMENTS,
+    },
 };
 
 pub enum DeviceData {
@@ -86,8 +90,10 @@ pub struct App {
     pub osc_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub logging_thread_handle: Option<tokio::task::JoinHandle<()>>,
     // Used for the graphs in the heart rate view
-    pub heart_rate_history: Vec<u16>,
-    pub rr_history: Vec<u16>,
+    pub heart_rate_history: VecDeque<f64>,
+    pub rr_history: VecDeque<f64>,
+    pub session_high: (f64, DateTime<Local>),
+    pub session_low: (f64, DateTime<Local>),
 }
 
 impl App {
@@ -127,13 +133,15 @@ impl App {
             settings,
             heart_rate_display: false,
             heart_rate_status: HeartRateStatus::default(),
-            heart_rate_history: Vec::with_capacity(50),
-            rr_history: Vec::with_capacity(50),
+            heart_rate_history: VecDeque::with_capacity(CHART_BPM_MAX_ELEMENTS),
+            rr_history: VecDeque::with_capacity(CHART_RR_MAX_ELEMENTS),
             shutdown_requested: CancellationToken::new(),
             ble_thread_handle: None,
             hr_thread_handle: None,
             osc_thread_handle: None,
             logging_thread_handle: None,
+            session_high: (0.0, Local::now()),
+            session_low: (0.0, Local::now()),
         }
     }
 
@@ -298,5 +306,34 @@ impl App {
 
     pub fn is_idle_on_main_menu(&self) -> bool {
         self.error_message.is_none() && self.state == AppState::MainMenu
+    }
+
+    fn update_session_stats(&mut self, new_hr: f64) {
+        if self.session_low.0 == 0.0 || self.session_high.0 == 0.0 {
+            self.session_low = (new_hr, Local::now());
+            self.session_high = (new_hr, Local::now());
+        } else if new_hr > self.session_high.0 {
+            self.session_high = (new_hr, Local::now());
+        } else if new_hr < self.session_low.0 {
+            self.session_low = (new_hr, Local::now());
+        }
+    }
+
+    pub fn append_to_history(&mut self, hr_data: &HeartRateStatus) {
+        let bpm = hr_data.heart_rate_bpm as f64;
+        if bpm > 0.0 {
+            self.update_session_stats(bpm);
+
+            self.heart_rate_history.push_back(bpm);
+            if self.heart_rate_history.len() > CHART_BPM_MAX_ELEMENTS {
+                self.heart_rate_history.pop_front();
+            }
+            for rr in &hr_data.rr_intervals {
+                self.rr_history.push_back(rr.as_secs_f64());
+                if self.rr_history.len() > CHART_RR_MAX_ELEMENTS {
+                    self.rr_history.pop_front();
+                }
+            }
+        }
     }
 }

@@ -21,7 +21,9 @@ use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
 use crate::widgets::detail_table::detail_table;
 use crate::widgets::device_table::device_table;
-use crate::widgets::heart_rate_display::heart_rate_display;
+use crate::widgets::heart_rate_display::{
+    heart_rate_display, CHART_BPM_MAX_ELEMENTS, CHART_RR_MAX_ELEMENTS,
+};
 use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
 use crate::widgets::save_prompt::save_prompt;
@@ -122,9 +124,9 @@ pub async fn viewer<B: Backend>(
                 AppState::HeartRateViewNoData | AppState::HeartRateView => {
                     // Draw the heart rate overlay
                     let area = centered_rect(100, 100, f.size());
-                    let heart_rate_overlay = heart_rate_display(&app.heart_rate_status);
+                    heart_rate_display(f, &app);
                     //f.render_widget(Clear, area);
-                    f.render_widget(heart_rate_overlay, area);
+                    // f.render_widget(heart_rate_view, area);
                 }
             }
 
@@ -470,9 +472,11 @@ pub async fn viewer<B: Backend>(
                     app.heart_rate_status = hr.clone();
                     // Assume we have proper data now
                     app.state = AppState::HeartRateView;
+                    // Dismiss intermittent errors if we just got a notification packet
                     if matches!(app.error_message, Some(ErrorPopup::Intermittent(_))) {
                         app.error_message = None;
                     }
+                    app.append_to_history(&hr);
                     app.osc_tx.send(hr.clone()).unwrap();
                     app.log_tx.send(hr).unwrap();
                 }
