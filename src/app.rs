@@ -1,4 +1,4 @@
-use chrono::prelude::*;
+use chrono::{DateTime, Local};
 use log::*;
 use ratatui::widgets::TableState;
 use std::collections::VecDeque;

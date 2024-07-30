@@ -1,17 +1,16 @@
 use log::*;
 use rand::Rng;
-use rosc::{address, encoder};
+use rosc::encoder;
 use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
 use std::net::{SocketAddrV4, UdpSocket};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, f32, thread};
-use tokio_util::sync::CancellationToken;
-
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{self, sleep, Duration, Instant};
+use tokio_util::sync::CancellationToken;
 
-use crate::heart_rate::HeartRateStatus;
+use crate::heart_rate::{BatteryLevel, HeartRateStatus};
 use crate::settings::OSCSettings;
 
 const OSC_NOW: OscTime = OscTime {
@@ -19,19 +18,23 @@ const OSC_NOW: OscTime = OscTime {
     fractional: 0,
 };
 
-fn form_bpm_bundle(hr_status: &HeartRateStatus, osc_addresses: &OSCAddresses) -> OscBundle {
+fn form_bpm_bundle(
+    hr_status: &HeartRateStatus,
+    hiding_disconnect: bool,
+    osc_addresses: &OSCAddresses,
+) -> OscBundle {
     let mut bundle = OscBundle {
         timetag: OSC_NOW,
         content: vec![],
     };
 
-    let int_hr_msg = OscMessage {
-        addr: osc_addresses.int_hr.clone(),
+    let hr_int_msg = OscMessage {
+        addr: osc_addresses.hr_int.clone(),
         args: vec![OscType::Int(hr_status.heart_rate_bpm as i32)],
     };
 
-    let float_hr_msg = OscMessage {
-        addr: osc_addresses.float_hr.clone(),
+    let hr_float_msg = OscMessage {
+        addr: osc_addresses.hr_float.clone(),
         args: vec![OscType::Float(
             (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0,
         )],
@@ -40,6 +43,27 @@ fn form_bpm_bundle(hr_status: &HeartRateStatus, osc_addresses: &OSCAddresses) ->
     let connected_msg = OscMessage {
         addr: osc_addresses.connected.clone(),
         args: vec![OscType::Bool(hr_status.heart_rate_bpm > 0)],
+    };
+
+    let hiding_disconnect_msg = OscMessage {
+        addr: osc_addresses.hiding_disconnect.clone(),
+        args: vec![OscType::Bool(hiding_disconnect)],
+    };
+
+    let battery_int_msg = OscMessage {
+        addr: osc_addresses.battery_int.clone(),
+        args: vec![OscType::Int(match hr_status.battery_level {
+            BatteryLevel::Level(level) => level as i32,
+            _ => 0,
+        })],
+    };
+
+    let battery_float_msg = OscMessage {
+        addr: osc_addresses.battery_float.clone(),
+        args: vec![OscType::Float(match hr_status.battery_level {
+            BatteryLevel::Level(level) => (level as f32 / 100.0),
+            _ => 0.0,
+        })],
     };
 
     if hr_status.heart_rate_bpm == 0 {
@@ -66,10 +90,14 @@ fn form_bpm_bundle(hr_status: &HeartRateStatus, osc_addresses: &OSCAddresses) ->
         args: vec![OscType::Bool(hr_status.twitch_down)],
     };
 
-    bundle.content.push(OscPacket::Message(int_hr_msg));
-    bundle.content.push(OscPacket::Message(float_hr_msg));
+    bundle.content.push(OscPacket::Message(hr_int_msg));
+    bundle.content.push(OscPacket::Message(hr_float_msg));
     bundle.content.push(OscPacket::Message(connected_msg));
-    //bundle.content.push(OscPacket::Message(battery_msg));
+    bundle
+        .content
+        .push(OscPacket::Message(hiding_disconnect_msg));
+    bundle.content.push(OscPacket::Message(battery_int_msg));
+    bundle.content.push(OscPacket::Message(battery_float_msg));
     bundle.content.push(OscPacket::Message(twitch_up_msg));
     bundle.content.push(OscPacket::Message(twitch_down_msg));
 
@@ -78,11 +106,12 @@ fn form_bpm_bundle(hr_status: &HeartRateStatus, osc_addresses: &OSCAddresses) ->
 
 fn send_bpm_bundle(
     hr_status: &HeartRateStatus,
+    hiding_disconnect: bool,
     osc_addresses: &OSCAddresses,
     socket: &UdpSocket,
     target_addr: SocketAddrV4,
 ) {
-    let bundle = form_bpm_bundle(hr_status, osc_addresses);
+    let bundle = form_bpm_bundle(hr_status, hiding_disconnect, osc_addresses);
     let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
     socket.send_to(&msg_buf, target_addr).unwrap();
 }
@@ -119,11 +148,13 @@ fn send_beat_params(
 struct OSCAddresses {
     beat_toggle: String,
     beat_pulse: String,
-    int_hr: String,
-    float_hr: String,
+    hr_int: String,
+    hr_float: String,
     connected: String,
+    hiding_disconnect: String,
     latest_rr: String,
-    // battery: String,
+    battery_int: String,
+    battery_float: String,
     rr_twitch_up: String,
     rr_twitch_down: String,
 }
@@ -141,11 +172,13 @@ impl OSCAddresses {
         OSCAddresses {
             beat_toggle: format_address(&osc_settings, &osc_settings.param_beat_toggle),
             beat_pulse: format_address(&osc_settings, &osc_settings.param_beat_pulse),
-            int_hr: format_address(&osc_settings, &osc_settings.param_bpm_int),
-            float_hr: format_address(&osc_settings, &osc_settings.param_bpm_float),
+            hr_int: format_address(&osc_settings, &osc_settings.param_bpm_int),
+            hr_float: format_address(&osc_settings, &osc_settings.param_bpm_float),
             connected: format_address(&osc_settings, &osc_settings.param_hrm_connected),
+            hiding_disconnect: format_address(&osc_settings, &osc_settings.param_hiding_disconnect),
             latest_rr: format_address(&osc_settings, &osc_settings.param_latest_rr_int),
-            //battery: format_address(&osc_settings, &osc_settings.param_battery_float),
+            battery_int: format_address(&osc_settings, &osc_settings.param_hrm_battery_int),
+            battery_float: format_address(&osc_settings, &osc_settings.param_hrm_battery_float),
             rr_twitch_up: format_address(&osc_settings, &osc_settings.param_rr_twitch_up),
             rr_twitch_down: format_address(&osc_settings, &osc_settings.param_rr_twitch_down),
         }
@@ -161,11 +194,7 @@ fn rr_from_bpm(bpm: u16) -> Duration {
 
 fn mimic_hr_activity(hr_status: &HeartRateStatus) -> HeartRateStatus {
     let mut mimic = HeartRateStatus::default();
-    // This does work, but is disabled to make
-    // more obvious it's active during the inital testing phase
-    // TODO: Enable this before release
-    //let jitter = rand::thread_rng().gen_range(-3..3);
-    let jitter = 0;
+    let jitter = rand::thread_rng().gen_range(-3..3);
     mimic.heart_rate_bpm = hr_status.heart_rate_bpm.saturating_add_signed(jitter);
     mimic.battery_level = hr_status.battery_level;
     // Add chance to fake a twitch
@@ -190,12 +219,14 @@ pub async fn osc_thread(
     // Initalize
     send_bpm_bundle(
         &HeartRateStatus::default(),
+        false,
         &osc_addresses,
         &socket,
         target_addr,
     );
     send_beat_params(false, false, &osc_addresses, &socket, target_addr);
 
+    // Always the most recent data from the monitor
     let mut hr_status = HeartRateStatus::default();
     let mut toggle_beat: bool = true;
 
@@ -207,9 +238,14 @@ pub async fn osc_thread(
 
     // Used when BLE connection is lost, but we don't want to
     // hide the BPM display in VRChat, we'll just bounce around
-    // the last known actual value.
-    let mut mimic_ble_activity = false;
+    // the last known actual value until we reconnect or time out.
+    let mut hide_ble_disconnection = false;
     let mut mimic_update_interval = time::interval(Duration::from_secs(7));
+
+    let mut disconnected_at = Instant::now();
+
+    let max_hide_disconnection =
+        Duration::from_secs(osc_settings.max_hide_disconnection_sec as u64);
 
     let mut locked_receiver = osc_rx_arc.lock().await;
 
@@ -232,16 +268,18 @@ pub async fn osc_thread(
                             } else if !use_real_rr {
                                 latest_rr = rr_from_bpm(hr_status.heart_rate_bpm);
                             }
-                            mimic_ble_activity = false;
-                            send_bpm_bundle(&hr_status, &osc_addresses, &socket, target_addr);
+                            hide_ble_disconnection = false;
                         } else {
-                            if osc_settings.hide_disconnections_pre {
-                                mimic_ble_activity = true;
+                            if osc_settings.hide_disconnections {
+                                if !hide_ble_disconnection {
+                                    hide_ble_disconnection = true;
+                                    disconnected_at = Instant::now();
+                                }
                             } else {
                                 hr_status = data;
-                                send_bpm_bundle(&hr_status, &osc_addresses, &socket, target_addr);
                             }
                         }
+                        send_bpm_bundle(&hr_status, hide_ble_disconnection, &osc_addresses, &socket, target_addr);
                     },
                     None => {
                         error!("OSC: Channel closed");
@@ -257,33 +295,41 @@ pub async fn osc_thread(
             // to allow sending a pulse without a blocking sleep() call
             _ = heart_beat_interval.tick() => {
                 if hr_status.heart_rate_bpm > 0 {
-                    // Rising edge
-                    if !pulse_edge {
+                    if hide_ble_disconnection && disconnected_at.elapsed() > max_hide_disconnection {
+                        pulse_edge = false;
+                    } else if !pulse_edge {
+                        // Rising edge
                         pulse_edge = true;
-                        send_beat_params(pulse_edge, toggle_beat, &osc_addresses, &socket, target_addr);
                         toggle_beat = !toggle_beat;
                         heart_beat_interval = time::interval(beat_pulse_duration);
                         heart_beat_interval.reset();
                     } else {
                         // Falling edge
                         pulse_edge = false;
-                        send_beat_params(pulse_edge, toggle_beat, &osc_addresses, &socket, target_addr);
                         let new_interval = latest_rr.saturating_sub(beat_pulse_duration);
                         heart_beat_interval = time::interval(new_interval);
                         heart_beat_interval.reset();
                     }
+                    send_beat_params(pulse_edge, toggle_beat, &osc_addresses, &socket, target_addr);
                 }
             }
             _ = mimic_update_interval.tick() => {
-                if mimic_ble_activity && hr_status.heart_rate_bpm > 0 {
-                    let mimic = mimic_hr_activity(&hr_status);
-                    send_bpm_bundle(&mimic, &osc_addresses, &socket, target_addr);
+                if hide_ble_disconnection {
+                    if disconnected_at.elapsed() > max_hide_disconnection {
+                        hr_status = HeartRateStatus::default();
+                        send_bpm_bundle(&hr_status, false, &osc_addresses, &socket, target_addr);
+                        send_beat_params(false, false, &osc_addresses, &socket, target_addr);
+                    } else if hr_status.heart_rate_bpm > 0 {
+                        let mimic = mimic_hr_activity(&hr_status);
+                        send_bpm_bundle(&mimic, hide_ble_disconnection, &osc_addresses, &socket, target_addr);
+                    }
                 }
             }
         }
     }
     send_bpm_bundle(
         &HeartRateStatus::default(),
+        false,
         &osc_addresses,
         &socket,
         target_addr,

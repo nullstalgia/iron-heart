@@ -36,9 +36,13 @@ pub struct OSCSettings {
     pub pulse_length_ms: u16,
     pub only_positive_floathr: bool,
     // Pre is in case I change it after sending to initial "clients"
-    pub hide_disconnections_pre: bool,
+    pub hide_disconnections: bool,
+    pub max_hide_disconnection_sec: u16,
     pub address_prefix: String,
     pub param_hrm_connected: String,
+    pub param_hiding_disconnect: String,
+    pub param_hrm_battery_int: String,
+    pub param_hrm_battery_float: String,
     pub param_beat_toggle: String,
     pub param_beat_pulse: String,
     pub param_bpm_int: String,
@@ -78,10 +82,17 @@ impl Settings {
             .unwrap()
             .set_default("osc.address_prefix", "/avatar/parameters/")
             .unwrap()
-            // TODO ask if people want this by default?
-            .set_default("osc.hide_disconnections_pre", true)
+            .set_default("osc.hide_disconnections", false)
+            .unwrap()
+            .set_default("osc.max_hide_disconnection_sec", 60)
             .unwrap()
             .set_default("osc.param_hrm_connected", "isHRConnected")
+            .unwrap()
+            .set_default("osc.param_hiding_disconnect", "isHRReconnecting")
+            .unwrap()
+            .set_default("osc.param_hrm_battery_int", "HRBattery")
+            .unwrap()
+            .set_default("osc.param_hrm_battery_float", "HRBatteryFloat")
             .unwrap()
             .set_default("osc.param_beat_toggle", "HeartBeatToggle")
             .unwrap()
@@ -121,10 +132,6 @@ impl Settings {
             .set_default("misc.session_stats_use_12hr", true)
             .unwrap()
             .build()?;
-
-        // Now that we're done, let's access our configuration
-        // println!("debug: {:?}", s.get_bool("debug"));
-        // println!("database: {:?}", s.get::<String>("database.url"));
 
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_deserialize()
