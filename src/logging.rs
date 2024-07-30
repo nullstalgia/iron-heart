@@ -107,7 +107,7 @@ pub async fn logging_thread(
                             .seek(tokio::io::SeekFrom::Start(0))
                             .await
                             .expect("Failed to seek to start of BPM file");
-                        txt_writer.write(txt_output.as_bytes()).await.expect("Failed to write to BPM file");
+                        txt_writer.write_all(txt_output.as_bytes()).await.expect("Failed to write to BPM file");
                         txt_writer.flush().await.expect("Failed to flush BPM file");
                     }
                     last_rr = *reported_rr;
