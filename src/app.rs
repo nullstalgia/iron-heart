@@ -24,7 +24,7 @@ use crate::{
     settings::{OSCSettings, Settings},
     structs::{Characteristic, DeviceInfo},
     widgets::heart_rate_display::{
-        heart_rate_display, CHART_BPM_MAX_ELEMENTS, CHART_RR_MAX_ELEMENTS,
+        CHART_BPM_MAX_ELEMENTS, CHART_BPM_VERT_MARGIN, CHART_RR_MAX_ELEMENTS, CHART_RR_VERT_MARGIN,
     },
 };
 
@@ -92,8 +92,10 @@ pub struct App {
     // Used for the graphs in the heart rate view
     pub heart_rate_history: VecDeque<f64>,
     pub rr_history: VecDeque<f64>,
-    pub session_high: (f64, DateTime<Local>),
-    pub session_low: (f64, DateTime<Local>),
+    pub session_high_bpm: (f64, DateTime<Local>),
+    pub session_low_bpm: (f64, DateTime<Local>),
+    pub session_high_rr: f64,
+    pub session_low_rr: f64,
 }
 
 impl App {
@@ -140,8 +142,10 @@ impl App {
             hr_thread_handle: None,
             osc_thread_handle: None,
             logging_thread_handle: None,
-            session_high: (0.0, Local::now()),
-            session_low: (0.0, Local::now()),
+            session_high_bpm: (0.0, Local::now()),
+            session_low_bpm: (0.0, Local::now()),
+            session_high_rr: 0.0,
+            session_low_rr: 0.0,
         }
     }
 
@@ -308,21 +312,39 @@ impl App {
         self.error_message.is_none() && self.state == AppState::MainMenu
     }
 
-    fn update_session_stats(&mut self, new_hr: f64) {
-        if self.session_low.0 == 0.0 || self.session_high.0 == 0.0 {
-            self.session_low = (new_hr, Local::now());
-            self.session_high = (new_hr, Local::now());
-        } else if new_hr > self.session_high.0 {
-            self.session_high = (new_hr, Local::now());
-        } else if new_hr < self.session_low.0 {
-            self.session_low = (new_hr, Local::now());
+    fn update_session_stats(&mut self, new_hr: f64, new_rr: Option<&Duration>) {
+        if self.session_low_bpm.0 == 0.0 || self.session_high_bpm.0 == 0.0 {
+            self.session_low_bpm = (new_hr - CHART_BPM_VERT_MARGIN, Local::now());
+            self.session_high_bpm = (new_hr + CHART_BPM_VERT_MARGIN, Local::now());
+        } else if new_hr > self.session_high_bpm.0 {
+            self.session_high_bpm = (new_hr, Local::now());
+        } else if new_hr < self.session_low_bpm.0 {
+            self.session_low_bpm = (new_hr, Local::now());
         }
+
+        if let Some(rr) = new_rr {
+            let rr_secs = rr.as_secs_f64();
+            if self.session_low_rr == 0.0 || self.session_high_rr == 0.0 {
+                self.session_low_rr = rr_secs - CHART_RR_VERT_MARGIN;
+                self.session_high_rr = rr_secs + CHART_RR_VERT_MARGIN;
+            } else if rr_secs > self.session_high_rr {
+                self.session_high_rr = rr_secs;
+            } else if rr_secs < self.session_low_rr {
+                self.session_low_rr = rr_secs;
+            }
+        }
+
+        // if let Some(rr) = new_rr {
+        //     let rr_secs = rr.as_secs_f64();
+        //     self.session_low_rr = self.session_low_rr.min(rr_secs).max(0.0);
+        //     self.session_high_rr = self.session_high_rr.max(rr_secs);
+        // }
     }
 
     pub fn append_to_history(&mut self, hr_data: &HeartRateStatus) {
         let bpm = hr_data.heart_rate_bpm as f64;
         if bpm > 0.0 {
-            self.update_session_stats(bpm);
+            self.update_session_stats(bpm, hr_data.rr_intervals.last());
 
             self.heart_rate_history.push_back(bpm);
             if self.heart_rate_history.len() > CHART_BPM_MAX_ELEMENTS {
