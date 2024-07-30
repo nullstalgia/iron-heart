@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "hr_osc"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "hr_osc"]
 
 env:
   CARGO_TERM_COLOR: always
