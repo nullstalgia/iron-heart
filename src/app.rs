@@ -325,11 +325,11 @@ impl App {
 
         if let Some(rr) = new_rr {
             let rr_secs = rr.as_secs_f64();
-            if self.session_low_rr == 0.0 || self.session_high_rr == 0.0 {
-                self.session_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(0.0);
-                self.session_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(3.0);
+            if self.session_high_rr == 0.0 {
+                self.session_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(rr_secs);
+                self.session_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(2.0);
             } else if rr_secs > self.session_high_rr {
-                self.session_high_rr = rr_secs.min(3.0);
+                self.session_high_rr = rr_secs.min(2.0);
             } else if rr_secs < self.session_low_rr {
                 self.session_low_rr = rr_secs;
             }

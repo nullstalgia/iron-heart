@@ -5,7 +5,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style, Stylize},
     symbols,
-    widgets::{Axis, Block, Chart, Dataset},
+    widgets::{Axis, Block, Chart, Dataset, GraphType},
     Frame,
 };
 
@@ -28,6 +28,7 @@ pub fn render_bpm_chart(
         .collect();
     let datasets = vec![Dataset::default()
         .name("BPM")
+        .graph_type(GraphType::Line)
         .marker(symbols::Marker::Dot)
         .style(Style::default().fg(Color::Red))
         .data(&bpm_data)];
@@ -70,6 +71,7 @@ pub fn render_rr_chart(
         .collect();
     let datasets = vec![Dataset::default()
         .name("RR")
+        .graph_type(GraphType::Line)
         .marker(symbols::Marker::Dot)
         .style(Style::default().fg(Color::Blue))
         .data(&rr_data)];
@@ -134,11 +136,13 @@ pub fn render_combined_chart(
     let datasets = vec![
         Dataset::default()
             .name("(RR)")
+            .graph_type(GraphType::Line)
             .marker(symbols::Marker::Dot)
             .style(Style::default().fg(Color::Blue))
             .data(&rr_data),
         Dataset::default()
             .name("BPM")
+            .graph_type(GraphType::Line)
             .marker(symbols::Marker::Dot)
             .style(Style::default().fg(Color::Red))
             .data(&bpm_data),
