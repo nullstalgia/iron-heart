@@ -21,6 +21,7 @@ const OSC_NOW: OscTime = OscTime {
 fn form_bpm_bundle(
     hr_status: &HeartRateStatus,
     hiding_disconnect: bool,
+    delay_initial_connected: bool,
     osc_addresses: &OSCAddresses,
 ) -> OscBundle {
     let mut bundle = OscBundle {
@@ -40,9 +41,15 @@ fn form_bpm_bundle(
         )],
     };
 
+    let connected = if delay_initial_connected {
+        false
+    } else {
+        hr_status.heart_rate_bpm > 0
+    };
+
     let connected_msg = OscMessage {
         addr: osc_addresses.connected.clone(),
-        args: vec![OscType::Bool(hr_status.heart_rate_bpm > 0)],
+        args: vec![OscType::Bool(connected)],
     };
 
     let hiding_disconnect_msg = OscMessage {
@@ -107,11 +114,17 @@ fn form_bpm_bundle(
 fn send_bpm_bundle(
     hr_status: &HeartRateStatus,
     hiding_disconnect: bool,
+    delay_initial_connected: bool,
     osc_addresses: &OSCAddresses,
     socket: &UdpSocket,
     target_addr: SocketAddrV4,
 ) {
-    let bundle = form_bpm_bundle(hr_status, hiding_disconnect, osc_addresses);
+    let bundle = form_bpm_bundle(
+        hr_status,
+        hiding_disconnect,
+        delay_initial_connected,
+        osc_addresses,
+    );
     let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
     socket.send_to(&msg_buf, target_addr).unwrap();
 }
@@ -216,10 +229,15 @@ pub async fn osc_thread(
 
     let osc_addresses = OSCAddresses::new(&osc_settings);
 
+    // Used to delay the connected bool by one update "cycle",
+    // as otherwise a value of "0" can sneak in on the display.
+    let mut delay_initial_connected = true;
+
     // Initalize
     send_bpm_bundle(
         &HeartRateStatus::default(),
         false,
+        delay_initial_connected,
         &osc_addresses,
         &socket,
         target_addr,
@@ -247,9 +265,6 @@ pub async fn osc_thread(
 
     let mut locked_receiver = osc_rx_arc.lock().await;
 
-    // TODO:
-    // Don't allow showing 0 on the display, just hide it until we've put in a real value
-
     // Maybe option for twitches to be a toggle and/or pulse?
     // Current implementation is a weird mix of both, but is simple to implement
     loop {
@@ -259,6 +274,7 @@ pub async fn osc_thread(
                     Some(data) => {
                         if data.heart_rate_bpm > 0 {
                             hr_status = data;
+                            disconnected_at = None;
                             if let Some(new_rr) = hr_status.rr_intervals.last() {
                                 latest_rr = *new_rr;
                                 // Mark that we know we'll get real RR intervals
@@ -266,7 +282,6 @@ pub async fn osc_thread(
                             } else if !use_real_rr {
                                 latest_rr = rr_from_bpm(hr_status.heart_rate_bpm);
                             }
-                            disconnected_at = None;
                         } else {
                             if osc_settings.hide_disconnections {
                                 if disconnected_at.is_none() {
@@ -274,6 +289,7 @@ pub async fn osc_thread(
                                 }
                             } else {
                                 hr_status = data;
+                                delay_initial_connected = true;
                             }
                         }
                         let hiding_ble_disconnection = if let Some(dc_timestamp) = disconnected_at {
@@ -281,7 +297,11 @@ pub async fn osc_thread(
                         } else {
                             false
                         };
-                        send_bpm_bundle(&hr_status, hiding_ble_disconnection, &osc_addresses, &socket, target_addr);
+                        send_bpm_bundle(&hr_status, hiding_ble_disconnection, delay_initial_connected, &osc_addresses, &socket, target_addr);
+                        // Check after sending, otherwise it won't have any effect
+                        if delay_initial_connected && (hr_status.heart_rate_bpm > 0) {
+                            delay_initial_connected = false;
+                        }
                     },
                     None => {
                         error!("OSC: Channel closed");
@@ -296,7 +316,7 @@ pub async fn osc_thread(
             // This interval flip/flops between the RR duration and the pulse duration
             // to allow sending a pulse without a blocking sleep() call
             _ = heart_beat_interval.tick() => {
-                if hr_status.heart_rate_bpm > 0 {
+                if hr_status.heart_rate_bpm > 0 && !delay_initial_connected {
                     if !pulse_edge {
                         // Rising edge
                         pulse_edge = true;
@@ -323,10 +343,11 @@ pub async fn osc_thread(
                         mimic = mimic_hr_activity(&hr_status);
                     } else {
                         // Alright, we're really disconnected now
+                        delay_initial_connected = true;
                         hr_status = HeartRateStatus::default();
                         send_beat_params(false, false, &osc_addresses, &socket, target_addr);
                     }
-                    send_bpm_bundle(&mimic, hiding_ble_disconnection, &osc_addresses, &socket, target_addr);
+                    send_bpm_bundle(&mimic, hiding_ble_disconnection, delay_initial_connected, &osc_addresses, &socket, target_addr);
                 }
             }
         }
@@ -334,6 +355,7 @@ pub async fn osc_thread(
     send_bpm_bundle(
         &HeartRateStatus::default(),
         false,
+        delay_initial_connected,
         &osc_addresses,
         &socket,
         target_addr,
