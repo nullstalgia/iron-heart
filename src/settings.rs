@@ -16,6 +16,9 @@ pub struct MiscSettings {
     pub log_sessions_to_csv: bool,
     pub log_sessions_csv_path: String,
     pub session_stats_use_12hr: bool,
+    pub session_chart_hr_enabled: bool,
+    pub session_chart_rr_enabled: bool,
+    pub session_charts_combine: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -130,6 +133,12 @@ impl Settings {
             .set_default("misc.log_sessions_csv_path", "session_logs")
             .unwrap()
             .set_default("misc.session_stats_use_12hr", true)
+            .unwrap()
+            .set_default("misc.session_chart_hr_enabled", true)
+            .unwrap()
+            .set_default("misc.session_chart_rr_enabled", true)
+            .unwrap()
+            .set_default("misc.session_charts_combine", true)
             .unwrap()
             .build()?;
 

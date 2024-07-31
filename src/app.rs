@@ -326,7 +326,7 @@ impl App {
         if let Some(rr) = new_rr {
             let rr_secs = rr.as_secs_f64();
             if self.session_low_rr == 0.0 || self.session_high_rr == 0.0 {
-                self.session_low_rr = rr_secs - CHART_RR_VERT_MARGIN;
+                self.session_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(0.0);
                 self.session_high_rr = rr_secs + CHART_RR_VERT_MARGIN;
             } else if rr_secs > self.session_high_rr {
                 self.session_high_rr = rr_secs;
@@ -334,12 +334,6 @@ impl App {
                 self.session_low_rr = rr_secs;
             }
         }
-
-        // if let Some(rr) = new_rr {
-        //     let rr_secs = rr.as_secs_f64();
-        //     self.session_low_rr = self.session_low_rr.min(rr_secs).max(0.0);
-        //     self.session_high_rr = self.session_high_rr.max(rr_secs);
-        // }
     }
 
     pub fn append_to_history(&mut self, hr_data: &HeartRateStatus) {
