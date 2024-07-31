@@ -239,10 +239,8 @@ pub async fn osc_thread(
     // Used when BLE connection is lost, but we don't want to
     // hide the BPM display in VRChat, we'll just bounce around
     // the last known actual value until we reconnect or time out.
-    let mut hide_ble_disconnection = false;
-    let mut mimic_update_interval = time::interval(Duration::from_secs(7));
-
-    let mut disconnected_at = Instant::now();
+    let mut disconnected_at: Option<Instant> = None;
+    let mut disconnect_update_interval = time::interval(Duration::from_secs(7));
 
     let max_hide_disconnection =
         Duration::from_secs(osc_settings.max_hide_disconnection_sec as u64);
@@ -268,18 +266,22 @@ pub async fn osc_thread(
                             } else if !use_real_rr {
                                 latest_rr = rr_from_bpm(hr_status.heart_rate_bpm);
                             }
-                            hide_ble_disconnection = false;
+                            disconnected_at = None;
                         } else {
                             if osc_settings.hide_disconnections {
-                                if !hide_ble_disconnection {
-                                    hide_ble_disconnection = true;
-                                    disconnected_at = Instant::now();
+                                if disconnected_at.is_none() {
+                                    disconnected_at = Some(Instant::now());
                                 }
                             } else {
                                 hr_status = data;
                             }
                         }
-                        send_bpm_bundle(&hr_status, hide_ble_disconnection, &osc_addresses, &socket, target_addr);
+                        let hiding_ble_disconnection = if let Some(dc_timestamp) = disconnected_at {
+                            (dc_timestamp.elapsed() < max_hide_disconnection) && (hr_status.heart_rate_bpm > 0)
+                        } else {
+                            false
+                        };
+                        send_bpm_bundle(&hr_status, hiding_ble_disconnection, &osc_addresses, &socket, target_addr);
                     },
                     None => {
                         error!("OSC: Channel closed");
@@ -295,9 +297,7 @@ pub async fn osc_thread(
             // to allow sending a pulse without a blocking sleep() call
             _ = heart_beat_interval.tick() => {
                 if hr_status.heart_rate_bpm > 0 {
-                    if hide_ble_disconnection && disconnected_at.elapsed() > max_hide_disconnection {
-                        pulse_edge = false;
-                    } else if !pulse_edge {
+                    if !pulse_edge {
                         // Rising edge
                         pulse_edge = true;
                         toggle_beat = !toggle_beat;
@@ -313,16 +313,20 @@ pub async fn osc_thread(
                     send_beat_params(pulse_edge, toggle_beat, &osc_addresses, &socket, target_addr);
                 }
             }
-            _ = mimic_update_interval.tick() => {
-                if hide_ble_disconnection {
-                    if disconnected_at.elapsed() > max_hide_disconnection {
+            // Sending mimic and disabling if we've been disconnected for too long
+            _ = disconnect_update_interval.tick() => {
+                if let Some(dc_timestamp) = disconnected_at {
+                    let mut mimic = HeartRateStatus::default();
+                    let hiding_ble_disconnection = (dc_timestamp.elapsed() < max_hide_disconnection) && (hr_status.heart_rate_bpm > 0);
+
+                    if hiding_ble_disconnection {
+                        mimic = mimic_hr_activity(&hr_status);
+                    } else {
+                        // Alright, we're really disconnected now
                         hr_status = HeartRateStatus::default();
-                        send_bpm_bundle(&hr_status, false, &osc_addresses, &socket, target_addr);
                         send_beat_params(false, false, &osc_addresses, &socket, target_addr);
-                    } else if hr_status.heart_rate_bpm > 0 {
-                        let mimic = mimic_hr_activity(&hr_status);
-                        send_bpm_bundle(&mimic, hide_ble_disconnection, &osc_addresses, &socket, target_addr);
                     }
+                    send_bpm_bundle(&mimic, hiding_ble_disconnection, &osc_addresses, &socket, target_addr);
                 }
             }
         }
