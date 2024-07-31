@@ -36,9 +36,6 @@ pub async fn logging_thread(
     let exe_path = env::current_exe().expect("Failed to get executable path");
 
     let mut last_rr = Duration::from_secs(0);
-    // I've noticed the first few RR intervals after a reconnect can have
-    // garbage data. This is a simple way to ignore them.
-    let mut rr_cooldown = 0;
 
     let mut txt_path = exe_path.parent().unwrap().to_path_buf();
     txt_path.push(misc_settings.bpm_file_path);
@@ -78,12 +75,8 @@ pub async fn logging_thread(
         tokio::select! {
             Some(heart_rate_status) = locked_reciever.recv() => {
                 if heart_rate_status.heart_rate_bpm > 0 {
-                    let reported_rr = if rr_cooldown == 0 {
-                        heart_rate_status.rr_intervals.last().unwrap_or(&last_rr)
-                    } else {
-                        rr_cooldown -= 1;
-                        &last_rr
-                    };
+                    let reported_rr = heart_rate_status.rr_intervals.last().unwrap_or(&last_rr);
+
                     if let Some(csv_writer) = &mut csv_writer {
                         let csv_data = CsvData {
                             Timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -111,8 +104,6 @@ pub async fn logging_thread(
                         txt_writer.flush().await.expect("Failed to flush BPM file");
                     }
                     last_rr = *reported_rr;
-                } else {
-                    rr_cooldown = RR_IGNORE_COUNT;
                 }
             }
             _ = shutdown_token.cancelled() => {

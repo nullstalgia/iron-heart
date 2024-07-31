@@ -25,6 +25,8 @@ pub const BATTERY_LEVEL_CHARACTERISTIC_UUID: Uuid =
     Uuid::from_u128(0x00002a19_0000_1000_8000_00805f9b34fb);
 pub const BATTERY_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb);
 
+const RR_COOLDOWN_AMOUNT: usize = 3;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BatteryLevel {
     #[default]
@@ -85,6 +87,7 @@ pub async fn start_notification_thread(
                                     let characteristics = device.characteristics();
                                     let mut battery_level = BatteryLevel::NotReported;
                                     let mut latest_rr: Duration = Duration::from_secs(1);
+                                    let mut rr_cooldown = RR_COOLDOWN_AMOUNT;
                                     let len = characteristics.len();
                                     debug!("Found {} characteristics", len);
                                     if let Some(characteristic) = characteristics
@@ -130,9 +133,23 @@ pub async fn start_notification_thread(
                                             Some(data) = notification_stream.next() => {
                                                 if data.uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID {
                                                     let measurement = parse_hrm(&data.value);
+                                                    // An oddity I've noticed, is if we don't get an RR interval each update,
+                                                    // there's a decent chance that the next one we do get will be weirdly high.
+                                                    // So we'll just ignore the first few values we get after an empty set.
+                                                    let new_interval_count = measurement.rr_intervals.len();
+                                                    let rr_intervals = if new_interval_count > rr_cooldown {
+                                                        measurement.rr_intervals[rr_cooldown..].to_vec()
+                                                    } else {
+                                                        Vec::new()
+                                                    };
+                                                    rr_cooldown = if rr_cooldown == 0 && measurement.rr_intervals.is_empty() {
+                                                        RR_COOLDOWN_AMOUNT
+                                                    } else {
+                                                        rr_cooldown.saturating_sub(new_interval_count)
+                                                    };
                                                     let mut twitch_up = false;
                                                     let mut twitch_down = false;
-                                                    for new_rr in measurement.rr_intervals.iter() {
+                                                    for new_rr in rr_intervals.iter() {
                                                         // Duration.abs_diff() is nightly only for now, agh
                                                         if (new_rr.as_secs_f32() - latest_rr.as_secs_f32()).abs() > twitch_threshold {
                                                             if new_rr > &latest_rr {
@@ -145,7 +162,7 @@ pub async fn start_notification_thread(
                                                     }
                                                     let status = HeartRateStatus {
                                                         heart_rate_bpm: measurement.bpm,
-                                                        rr_intervals: measurement.rr_intervals,
+                                                        rr_intervals,
                                                         battery_level,
                                                         twitch_up,
                                                         twitch_down,
