@@ -88,13 +88,19 @@ pub struct App {
     pub hr_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub osc_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub logging_thread_handle: Option<tokio::task::JoinHandle<()>>,
-    // Used for the graphs in the heart rate view
+    // Raw histories
     pub heart_rate_history: VecDeque<f64>,
     pub rr_history: VecDeque<f64>,
+    // Used for the graphs in the heart rate view
+    pub hr_dataset: Vec<(f64, f64)>,
+    pub rr_dataset: Vec<(f64, f64)>,
     pub session_high_bpm: (f64, DateTime<Local>),
     pub session_low_bpm: (f64, DateTime<Local>),
+    pub session_avg_bpm: f64,
+    // "Session" is a bit of a misnomer for these
     pub session_high_rr: f64,
     pub session_low_rr: f64,
+    pub session_avg_rr: f64,
 }
 
 impl App {
@@ -135,6 +141,8 @@ impl App {
             heart_rate_status: HeartRateStatus::default(),
             heart_rate_history: VecDeque::with_capacity(CHART_BPM_MAX_ELEMENTS),
             rr_history: VecDeque::with_capacity(CHART_RR_MAX_ELEMENTS),
+            hr_dataset: Vec::with_capacity(CHART_BPM_MAX_ELEMENTS),
+            rr_dataset: Vec::with_capacity(CHART_RR_MAX_ELEMENTS),
             shutdown_requested: CancellationToken::new(),
             ble_thread_handle: None,
             hr_thread_handle: None,
@@ -142,8 +150,10 @@ impl App {
             logging_thread_handle: None,
             session_high_bpm: (0.0, Local::now()),
             session_low_bpm: (0.0, Local::now()),
+            session_avg_bpm: 0.0,
             session_high_rr: 0.0,
             session_low_rr: 0.0,
+            session_avg_rr: 0.0,
         }
     }
 
@@ -335,11 +345,64 @@ impl App {
             if self.session_high_rr == 0.0 {
                 self.session_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(rr_secs);
                 self.session_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(rr_max);
+            }
+
+            if self.settings.misc.session_chart_rr_reactive {
+                self.session_low_rr = *self
+                    .rr_history
+                    .iter()
+                    .reduce(|a, b| if a < b { a } else { b })
+                    .unwrap_or(&0.0);
+                self.session_high_rr = *self
+                    .rr_history
+                    .iter()
+                    .reduce(|a, b| if a > b { a } else { b })
+                    .unwrap_or(&0.0);
             } else if rr_secs > self.session_high_rr {
                 self.session_high_rr = rr_secs.min(rr_max);
             } else if rr_secs < self.session_low_rr {
                 self.session_low_rr = rr_secs;
             }
+
+            self.session_avg_rr = (self.session_low_rr + self.session_high_rr) / 2.0;
+        }
+        self.session_avg_bpm = ((self.session_low_bpm.0 + self.session_high_bpm.0) / 2.0).ceil();
+    }
+
+    fn update_chart_data(&mut self) {
+        let hr_enabled = self.settings.misc.session_chart_hr_enabled;
+        let rr_enabled = self.settings.misc.session_chart_rr_enabled;
+        let rr_reactive = self.settings.misc.session_chart_rr_reactive;
+        let combine = self.settings.misc.session_charts_combine;
+        if rr_enabled {
+            self.rr_dataset = self
+                .rr_history
+                .iter()
+                .rev()
+                .enumerate()
+                .map(|(i, &x)| {
+                    if hr_enabled && combine {
+                        let normalized = (x - self.session_low_rr)
+                            / (self.session_high_rr - self.session_low_rr);
+                        let scaled = normalized
+                            * (self.session_high_bpm.0 - self.session_low_bpm.0)
+                            + self.session_low_bpm.0;
+                        (i as f64, scaled)
+                    } else {
+                        (i as f64, x)
+                    }
+                })
+                .collect();
+        }
+
+        if hr_enabled {
+            self.hr_dataset = self
+                .heart_rate_history
+                .iter()
+                .rev()
+                .enumerate()
+                .map(|(i, &x)| (i as f64, x))
+                .collect();
         }
     }
 
@@ -362,6 +425,8 @@ impl App {
                     self.rr_history.pop_front();
                 }
             }
+
+            self.update_chart_data();
         }
     }
 

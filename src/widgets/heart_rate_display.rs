@@ -37,68 +37,17 @@ pub fn heart_rate_display(frame: &mut Frame, app: &App) {
     let hr_chart = app.settings.misc.session_chart_hr_enabled;
     let rr_chart = app.settings.misc.session_chart_rr_enabled;
     let combined = app.settings.misc.session_charts_combine;
-    let rr_reactive = app.settings.misc.session_chart_rr_reactive;
 
     if combined && hr_chart && rr_chart {
-        render_combined_chart(
-            frame,
-            shared_chart,
-            rr_reactive,
-            Some(&app.heart_rate_history),
-            Some(&app.rr_history),
-            &app.session_high_bpm,
-            &app.session_low_bpm,
-            &app.session_high_rr,
-            &app.session_low_rr,
-        );
+        render_combined_chart(frame, shared_chart, app, true, true);
     } else {
         if hr_chart && rr_chart {
-            render_combined_chart(
-                frame,
-                bpm_history,
-                rr_reactive,
-                Some(&app.heart_rate_history),
-                None,
-                &app.session_high_bpm,
-                &app.session_low_bpm,
-                &app.session_high_rr,
-                &app.session_low_rr,
-            );
-            render_combined_chart(
-                frame,
-                rr_history,
-                rr_reactive,
-                None,
-                Some(&app.rr_history),
-                &app.session_high_bpm,
-                &app.session_low_bpm,
-                &app.session_high_rr,
-                &app.session_low_rr,
-            );
+            render_combined_chart(frame, bpm_history, app, true, false);
+            render_combined_chart(frame, rr_history, app, false, true);
         } else if hr_chart {
-            render_combined_chart(
-                frame,
-                shared_chart,
-                rr_reactive,
-                Some(&app.heart_rate_history),
-                None,
-                &app.session_high_bpm,
-                &app.session_low_bpm,
-                &app.session_high_rr,
-                &app.session_low_rr,
-            );
+            render_combined_chart(frame, shared_chart, app, true, false);
         } else if rr_chart {
-            render_combined_chart(
-                frame,
-                shared_chart,
-                rr_reactive,
-                None,
-                Some(&app.rr_history),
-                &app.session_high_bpm,
-                &app.session_low_bpm,
-                &app.session_high_rr,
-                &app.session_low_rr,
-            );
+            render_combined_chart(frame, shared_chart, app, false, true);
         }
     }
 }
