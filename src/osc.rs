@@ -22,6 +22,7 @@ fn form_bpm_bundle(
     hr_status: &HeartRateStatus,
     hiding_disconnect: bool,
     delay_initial_connected: bool,
+    positive_float_bpm: bool,
     osc_addresses: &OSCAddresses,
 ) -> OscBundle {
     let mut bundle = OscBundle {
@@ -36,9 +37,11 @@ fn form_bpm_bundle(
 
     let bpm_float_msg = OscMessage {
         addr: osc_addresses.bpm_float.clone(),
-        args: vec![OscType::Float(
-            (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0,
-        )],
+        args: vec![OscType::Float(if positive_float_bpm {
+            hr_status.heart_rate_bpm as f32 / 255.0
+        } else {
+            (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0
+        })],
     };
 
     let connected = if delay_initial_connected {
@@ -115,6 +118,7 @@ fn send_bpm_bundle(
     hr_status: &HeartRateStatus,
     hiding_disconnect: bool,
     delay_initial_connected: bool,
+    positive_float_bpm: bool,
     osc_addresses: &OSCAddresses,
     socket: &UdpSocket,
     target_addr: SocketAddrV4,
@@ -123,6 +127,7 @@ fn send_bpm_bundle(
         hr_status,
         hiding_disconnect,
         delay_initial_connected,
+        positive_float_bpm,
         osc_addresses,
     );
     let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
@@ -229,6 +234,8 @@ pub async fn osc_thread(
 
     let osc_addresses = OSCAddresses::new(&osc_settings);
 
+    let positive_float_bpm = osc_settings.only_positive_float_bpm;
+
     // Used to delay the connected bool by one update "cycle",
     // as otherwise a value of "0" can sneak in on the display.
     let mut delay_initial_connected = true;
@@ -238,6 +245,7 @@ pub async fn osc_thread(
         &HeartRateStatus::default(),
         false,
         delay_initial_connected,
+        positive_float_bpm,
         &osc_addresses,
         &socket,
         target_addr,
@@ -297,7 +305,7 @@ pub async fn osc_thread(
                         } else {
                             false
                         };
-                        send_bpm_bundle(&hr_status, hiding_ble_disconnection, delay_initial_connected, &osc_addresses, &socket, target_addr);
+                        send_bpm_bundle(&hr_status, hiding_ble_disconnection, delay_initial_connected, positive_float_bpm, &osc_addresses, &socket, target_addr);
                         // Check after sending, otherwise it won't have any effect
                         if delay_initial_connected && (hr_status.heart_rate_bpm > 0) {
                             delay_initial_connected = false;
@@ -347,7 +355,7 @@ pub async fn osc_thread(
                         hr_status = HeartRateStatus::default();
                         send_beat_params(false, false, &osc_addresses, &socket, target_addr);
                     }
-                    send_bpm_bundle(&mimic, hiding_ble_disconnection, delay_initial_connected, &osc_addresses, &socket, target_addr);
+                    send_bpm_bundle(&mimic, hiding_ble_disconnection, delay_initial_connected, positive_float_bpm, &osc_addresses, &socket, target_addr);
                 }
             }
         }
@@ -356,6 +364,7 @@ pub async fn osc_thread(
         &HeartRateStatus::default(),
         false,
         delay_initial_connected,
+        positive_float_bpm,
         &osc_addresses,
         &socket,
         target_addr,
