@@ -205,7 +205,6 @@ pub async fn viewer<B: Backend>(
                             break;
                         } else {
                             if app.is_idle_on_main_menu() {
-                                app.state = AppState::ConnectingForCharacteristics;
                                 app.connect_for_characteristics().await;
                             }
                         }

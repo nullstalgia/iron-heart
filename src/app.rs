@@ -158,6 +158,9 @@ impl App {
     }
 
     pub async fn connect_for_characteristics(&mut self) {
+        if self.discovered_devices.is_empty() {
+            return;
+        }
         let selected_device = self
             .get_selected_device()
             .expect("This crash is expected if discovered_devices is empty");
@@ -169,6 +172,7 @@ impl App {
         let app_tx_clone = self.ble_tx.clone();
 
         debug!("Spawning characteristics thread");
+        self.state = AppState::ConnectingForCharacteristics;
         tokio::spawn(async move { get_characteristics(app_tx_clone, device).await });
     }
 
