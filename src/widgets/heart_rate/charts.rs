@@ -104,6 +104,7 @@ pub fn render_rr_chart(
 pub fn render_combined_chart(
     f: &mut Frame,
     area: Rect,
+    rr_reactive: bool,
     bpm_data: &VecDeque<f64>,
     rr_data: &VecDeque<f64>,
     bpm_session_high: &(f64, DateTime<Local>),
@@ -120,8 +121,25 @@ pub fn render_combined_chart(
 
     let bpm_bounds = [bpm_session_low.0, bpm_session_high.0];
     let avg_bpm = ((bpm_session_low.0 + bpm_session_high.0) / 2.0).ceil();
-    let rr_bounds = [(rr_session_low), (rr_session_high)];
-    let avg_rr = (rr_session_low + rr_session_high) / 2.0;
+
+    let rr_low = if rr_reactive {
+        rr_data
+            .iter()
+            .reduce(|a, b| if a < b { a } else { b })
+            .unwrap_or(&0.0)
+    } else {
+        rr_session_low
+    };
+    let rr_high = if rr_reactive {
+        rr_data
+            .iter()
+            .reduce(|a, b| if a > b { a } else { b })
+            .unwrap_or(&0.0)
+    } else {
+        rr_session_high
+    };
+    let rr_bounds = [(rr_low), (rr_high)];
+    let avg_rr = (rr_low + rr_high) / 2.0;
 
     let rr_data: Vec<(f64, f64)> = rr_data
         .iter()

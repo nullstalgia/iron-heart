@@ -16,7 +16,7 @@ use crate::{
 pub const CHART_BPM_MAX_ELEMENTS: usize = 120;
 pub const CHART_RR_MAX_ELEMENTS: usize = 120;
 pub const CHART_BPM_VERT_MARGIN: f64 = 3.0;
-pub const CHART_RR_VERT_MARGIN: f64 = 1.0;
+pub const CHART_RR_VERT_MARGIN: f64 = 0.1;
 
 pub fn heart_rate_display(frame: &mut Frame, app: &App) {
     let area = frame.size();
@@ -40,11 +40,13 @@ pub fn heart_rate_display(frame: &mut Frame, app: &App) {
     let hr_chart = app.settings.misc.session_chart_hr_enabled;
     let rr_chart = app.settings.misc.session_chart_rr_enabled;
     let combined = app.settings.misc.session_charts_combine;
+    let rr_reactive = app.settings.misc.session_chart_rr_reactive;
 
     if combined && hr_chart && rr_chart {
         render_combined_chart(
             frame,
             shared_chart,
+            rr_reactive,
             &app.heart_rate_history,
             &app.rr_history,
             &app.session_high_bpm,

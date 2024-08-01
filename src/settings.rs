@@ -18,6 +18,8 @@ pub struct MiscSettings {
     pub session_stats_use_12hr: bool,
     pub session_chart_hr_enabled: bool,
     pub session_chart_rr_enabled: bool,
+    pub session_chart_rr_max: f64,
+    pub session_chart_rr_reactive: bool,
     pub session_charts_combine: bool,
 }
 
@@ -27,6 +29,7 @@ pub struct BLESettings {
     pub never_ask_to_save: bool,
     pub saved_name: String,
     pub saved_address: String,
+    pub rr_ignore_after_empty: u16,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -38,7 +41,6 @@ pub struct OSCSettings {
     pub port: u16,
     pub pulse_length_ms: u16,
     pub only_positive_floathr: bool,
-    // Pre is in case I change it after sending to initial "clients"
     pub hide_disconnections: bool,
     pub max_hide_disconnection_sec: u16,
     pub address_prefix: String,
@@ -55,6 +57,7 @@ pub struct OSCSettings {
     pub twitch_rr_threshold_ms: u16,
     pub param_rr_twitch_up: String,
     pub param_rr_twitch_down: String,
+    // TODO Session Max/Min Params?
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -119,6 +122,8 @@ impl Settings {
             .unwrap()
             .set_default("ble.saved_name", "")
             .unwrap()
+            .set_default("ble.rr_ignore_after_empty", 0)
+            .unwrap()
             // TODO set back to info before release
             .set_default("misc.log_level", "debug")
             .unwrap()
@@ -137,6 +142,10 @@ impl Settings {
             .set_default("misc.session_chart_hr_enabled", true)
             .unwrap()
             .set_default("misc.session_chart_rr_enabled", true)
+            .unwrap()
+            .set_default("misc.session_chart_rr_max", 1.5)
+            .unwrap()
+            .set_default("misc.session_chart_rr_reactive", true)
             .unwrap()
             .set_default("misc.session_charts_combine", true)
             .unwrap()

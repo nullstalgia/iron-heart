@@ -204,11 +204,13 @@ impl App {
         // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
+        let rr_ignore_after_empty = self.settings.ble.rr_ignore_after_empty as usize;
         debug!("Spawning notification thread, AppState: {:?}", self.state);
         self.hr_thread_handle = Some(tokio::spawn(async move {
             start_notification_thread(
                 hr_tx_clone,
                 device,
+                rr_ignore_after_empty,
                 rr_twitch_threshold,
                 shutdown_requested_clone,
             )
@@ -329,11 +331,12 @@ impl App {
 
         if let Some(rr) = new_rr {
             let rr_secs = rr.as_secs_f64();
+            let rr_max = self.settings.misc.session_chart_rr_max;
             if self.session_high_rr == 0.0 {
                 self.session_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(rr_secs);
-                self.session_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(2.0);
+                self.session_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(rr_max);
             } else if rr_secs > self.session_high_rr {
-                self.session_high_rr = rr_secs.min(2.0);
+                self.session_high_rr = rr_secs.min(rr_max);
             } else if rr_secs < self.session_low_rr {
                 self.session_low_rr = rr_secs;
             }
@@ -342,6 +345,7 @@ impl App {
 
     pub fn append_to_history(&mut self, hr_data: &HeartRateStatus) {
         let bpm = hr_data.heart_rate_bpm as f64;
+        let rr_max = self.settings.misc.session_chart_rr_max;
         if bpm > 0.0 {
             self.update_session_stats(bpm, hr_data.rr_intervals.last());
 
@@ -350,7 +354,7 @@ impl App {
                 self.heart_rate_history.pop_front();
             }
             for rr in &hr_data.rr_intervals {
-                self.rr_history.push_back(rr.as_secs_f64());
+                self.rr_history.push_back(rr.as_secs_f64().min(rr_max));
                 if self.rr_history.len() > CHART_RR_MAX_ELEMENTS {
                     self.rr_history.pop_front();
                 }
