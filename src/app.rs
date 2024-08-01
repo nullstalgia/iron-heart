@@ -354,7 +354,10 @@ impl App {
                 self.heart_rate_history.pop_front();
             }
             for rr in &hr_data.rr_intervals {
-                self.rr_history.push_back(rr.as_secs_f64().min(rr_max));
+                if rr.as_secs_f64() > rr_max {
+                    continue;
+                }
+                self.rr_history.push_back(rr.as_secs_f64());
                 if self.rr_history.len() > CHART_RR_MAX_ELEMENTS {
                     self.rr_history.pop_front();
                 }

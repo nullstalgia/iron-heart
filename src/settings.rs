@@ -143,7 +143,7 @@ impl Settings {
             .unwrap()
             .set_default("misc.session_chart_rr_enabled", true)
             .unwrap()
-            .set_default("misc.session_chart_rr_max", 1.5)
+            .set_default("misc.session_chart_rr_max", 2.0)
             .unwrap()
             .set_default("misc.session_chart_rr_reactive", true)
             .unwrap()
