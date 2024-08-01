@@ -19,7 +19,8 @@ pub struct MiscSettings {
     pub session_chart_bpm_enabled: bool,
     pub session_chart_rr_enabled: bool,
     pub session_chart_rr_max: f64,
-    pub session_chart_rr_reactive: bool,
+    pub session_chart_rr_clamp_high: bool,
+    pub session_chart_rr_clamp_low: bool,
     pub session_charts_combine: bool,
 }
 
@@ -145,7 +146,9 @@ impl Settings {
             .unwrap()
             .set_default("misc.session_chart_rr_max", 2.0)
             .unwrap()
-            .set_default("misc.session_chart_rr_reactive", true)
+            .set_default("misc.session_chart_rr_clamp_high", true)
+            .unwrap()
+            .set_default("misc.session_chart_rr_clamp_low", false)
             .unwrap()
             .set_default("misc.session_charts_combine", true)
             .unwrap()

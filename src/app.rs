@@ -347,21 +347,23 @@ impl App {
                 self.session_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(rr_max);
             }
 
-            if self.settings.misc.session_chart_rr_reactive {
-                self.session_low_rr = *self
-                    .rr_history
-                    .iter()
-                    .reduce(|a, b| if a < b { a } else { b })
-                    .unwrap_or(&0.0);
+            if self.settings.misc.session_chart_rr_clamp_high {
                 self.session_high_rr = *self
                     .rr_history
                     .iter()
                     .reduce(|a, b| if a > b { a } else { b })
                     .unwrap_or(&0.0);
-            } else if rr_secs > self.session_high_rr {
-                self.session_high_rr = rr_secs.min(rr_max);
-            } else if rr_secs < self.session_low_rr {
-                self.session_low_rr = rr_secs;
+            } else {
+                self.session_high_rr = self.session_high_rr.max(rr_secs);
+            }
+            if self.settings.misc.session_chart_rr_clamp_low {
+                self.session_high_rr = *self
+                    .rr_history
+                    .iter()
+                    .reduce(|a, b| if a < b { a } else { b })
+                    .unwrap_or(&0.0);
+            } else {
+                self.session_low_rr = self.session_low_rr.min(rr_secs);
             }
 
             self.session_avg_rr = (self.session_low_rr + self.session_high_rr) / 2.0;
@@ -372,7 +374,6 @@ impl App {
     fn update_chart_data(&mut self) {
         let bpm_enabled = self.settings.misc.session_chart_bpm_enabled;
         let rr_enabled = self.settings.misc.session_chart_rr_enabled;
-        let rr_reactive = self.settings.misc.session_chart_rr_reactive;
         let combine = self.settings.misc.session_charts_combine;
         if rr_enabled {
             self.rr_dataset = self
