@@ -29,13 +29,13 @@ fn form_bpm_bundle(
         content: vec![],
     };
 
-    let hr_int_msg = OscMessage {
-        addr: osc_addresses.hr_int.clone(),
+    let bpm_int_msg = OscMessage {
+        addr: osc_addresses.bpm_int.clone(),
         args: vec![OscType::Int(hr_status.heart_rate_bpm as i32)],
     };
 
-    let hr_float_msg = OscMessage {
-        addr: osc_addresses.hr_float.clone(),
+    let bpm_float_msg = OscMessage {
+        addr: osc_addresses.bpm_float.clone(),
         args: vec![OscType::Float(
             (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0,
         )],
@@ -97,8 +97,8 @@ fn form_bpm_bundle(
         args: vec![OscType::Bool(hr_status.twitch_down)],
     };
 
-    bundle.content.push(OscPacket::Message(hr_int_msg));
-    bundle.content.push(OscPacket::Message(hr_float_msg));
+    bundle.content.push(OscPacket::Message(bpm_int_msg));
+    bundle.content.push(OscPacket::Message(bpm_float_msg));
     bundle.content.push(OscPacket::Message(connected_msg));
     bundle
         .content
@@ -161,8 +161,8 @@ fn send_beat_params(
 struct OSCAddresses {
     beat_toggle: String,
     beat_pulse: String,
-    hr_int: String,
-    hr_float: String,
+    bpm_int: String,
+    bpm_float: String,
     connected: String,
     hiding_disconnect: String,
     latest_rr: String,
@@ -185,8 +185,8 @@ impl OSCAddresses {
         OSCAddresses {
             beat_toggle: format_address(&osc_settings, &osc_settings.param_beat_toggle),
             beat_pulse: format_address(&osc_settings, &osc_settings.param_beat_pulse),
-            hr_int: format_address(&osc_settings, &osc_settings.param_bpm_int),
-            hr_float: format_address(&osc_settings, &osc_settings.param_bpm_float),
+            bpm_int: format_address(&osc_settings, &osc_settings.param_bpm_int),
+            bpm_float: format_address(&osc_settings, &osc_settings.param_bpm_float),
             connected: format_address(&osc_settings, &osc_settings.param_hrm_connected),
             hiding_disconnect: format_address(&osc_settings, &osc_settings.param_hiding_disconnect),
             latest_rr: format_address(&osc_settings, &osc_settings.param_latest_rr_int),

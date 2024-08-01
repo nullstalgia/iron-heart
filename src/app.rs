@@ -92,7 +92,7 @@ pub struct App {
     pub heart_rate_history: VecDeque<f64>,
     pub rr_history: VecDeque<f64>,
     // Used for the graphs in the heart rate view
-    pub hr_dataset: Vec<(f64, f64)>,
+    pub bpm_dataset: Vec<(f64, f64)>,
     pub rr_dataset: Vec<(f64, f64)>,
     pub session_high_bpm: (f64, DateTime<Local>),
     pub session_low_bpm: (f64, DateTime<Local>),
@@ -141,7 +141,7 @@ impl App {
             heart_rate_status: HeartRateStatus::default(),
             heart_rate_history: VecDeque::with_capacity(CHART_BPM_MAX_ELEMENTS),
             rr_history: VecDeque::with_capacity(CHART_RR_MAX_ELEMENTS),
-            hr_dataset: Vec::with_capacity(CHART_BPM_MAX_ELEMENTS),
+            bpm_dataset: Vec::with_capacity(CHART_BPM_MAX_ELEMENTS),
             rr_dataset: Vec::with_capacity(CHART_RR_MAX_ELEMENTS),
             shutdown_requested: CancellationToken::new(),
             ble_thread_handle: None,
@@ -329,14 +329,14 @@ impl App {
         self.error_message.is_none() && self.state == AppState::MainMenu
     }
 
-    fn update_session_stats(&mut self, new_hr: f64, new_rr: Option<&Duration>) {
+    fn update_session_stats(&mut self, new_bpm: f64, new_rr: Option<&Duration>) {
         if self.session_low_bpm.0 == 0.0 || self.session_high_bpm.0 == 0.0 {
-            self.session_low_bpm = (new_hr - CHART_BPM_VERT_MARGIN, Local::now());
-            self.session_high_bpm = (new_hr + CHART_BPM_VERT_MARGIN, Local::now());
-        } else if new_hr > self.session_high_bpm.0 {
-            self.session_high_bpm = (new_hr, Local::now());
-        } else if new_hr < self.session_low_bpm.0 {
-            self.session_low_bpm = (new_hr, Local::now());
+            self.session_low_bpm = (new_bpm - CHART_BPM_VERT_MARGIN, Local::now());
+            self.session_high_bpm = (new_bpm + CHART_BPM_VERT_MARGIN, Local::now());
+        } else if new_bpm > self.session_high_bpm.0 {
+            self.session_high_bpm = (new_bpm, Local::now());
+        } else if new_bpm < self.session_low_bpm.0 {
+            self.session_low_bpm = (new_bpm, Local::now());
         }
 
         if let Some(rr) = new_rr {
@@ -370,7 +370,7 @@ impl App {
     }
 
     fn update_chart_data(&mut self) {
-        let hr_enabled = self.settings.misc.session_chart_hr_enabled;
+        let bpm_enabled = self.settings.misc.session_chart_bpm_enabled;
         let rr_enabled = self.settings.misc.session_chart_rr_enabled;
         let rr_reactive = self.settings.misc.session_chart_rr_reactive;
         let combine = self.settings.misc.session_charts_combine;
@@ -381,7 +381,7 @@ impl App {
                 .rev()
                 .enumerate()
                 .map(|(i, &x)| {
-                    if hr_enabled && combine {
+                    if bpm_enabled && combine {
                         let normalized = (x - self.session_low_rr)
                             / (self.session_high_rr - self.session_low_rr);
                         let scaled = normalized
@@ -395,8 +395,8 @@ impl App {
                 .collect();
         }
 
-        if hr_enabled {
-            self.hr_dataset = self
+        if bpm_enabled {
+            self.bpm_dataset = self
                 .heart_rate_history
                 .iter()
                 .rev()

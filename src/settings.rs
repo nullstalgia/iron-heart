@@ -16,7 +16,7 @@ pub struct MiscSettings {
     pub log_sessions_to_csv: bool,
     pub log_sessions_csv_path: String,
     pub session_stats_use_12hr: bool,
-    pub session_chart_hr_enabled: bool,
+    pub session_chart_bpm_enabled: bool,
     pub session_chart_rr_enabled: bool,
     pub session_chart_rr_max: f64,
     pub session_chart_rr_reactive: bool,
@@ -40,7 +40,7 @@ pub struct OSCSettings {
     pub target_ip: String,
     pub port: u16,
     pub pulse_length_ms: u16,
-    pub only_positive_floathr: bool,
+    pub only_positive_float_bpm: bool,
     pub hide_disconnections: bool,
     pub max_hide_disconnection_sec: u16,
     pub address_prefix: String,
@@ -57,7 +57,7 @@ pub struct OSCSettings {
     pub twitch_rr_threshold_ms: u16,
     pub param_rr_twitch_up: String,
     pub param_rr_twitch_down: String,
-    // TODO Session Max/Min Params?
+    // TODO Session Max/Min/Avg Params?
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -84,7 +84,7 @@ impl Settings {
             .unwrap()
             .set_default("osc.pulse_length_ms", 100)
             .unwrap()
-            .set_default("osc.only_positive_floathr", false)
+            .set_default("osc.only_positive_float_bpm", false)
             .unwrap()
             .set_default("osc.address_prefix", "/avatar/parameters/")
             .unwrap()
@@ -139,7 +139,7 @@ impl Settings {
             .unwrap()
             .set_default("misc.session_stats_use_12hr", true)
             .unwrap()
-            .set_default("misc.session_chart_hr_enabled", true)
+            .set_default("misc.session_chart_bpm_enabled", true)
             .unwrap()
             .set_default("misc.session_chart_rr_enabled", true)
             .unwrap()

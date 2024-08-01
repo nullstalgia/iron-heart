@@ -34,17 +34,17 @@ pub fn heart_rate_display(frame: &mut Frame, app: &App) {
         &app.session_low_bpm,
         app.settings.misc.session_stats_use_12hr,
     );
-    let hr_chart = app.settings.misc.session_chart_hr_enabled;
+    let bpm_chart = app.settings.misc.session_chart_bpm_enabled;
     let rr_chart = app.settings.misc.session_chart_rr_enabled;
     let combined = app.settings.misc.session_charts_combine;
 
-    if combined && hr_chart && rr_chart {
+    if combined && bpm_chart && rr_chart {
         render_combined_chart(frame, shared_chart, app, true, true);
     } else {
-        if hr_chart && rr_chart {
+        if bpm_chart && rr_chart {
             render_combined_chart(frame, bpm_history, app, true, false);
             render_combined_chart(frame, rr_history, app, false, true);
-        } else if hr_chart {
+        } else if bpm_chart {
             render_combined_chart(frame, shared_chart, app, true, false);
         } else if rr_chart {
             render_combined_chart(frame, shared_chart, app, false, true);
