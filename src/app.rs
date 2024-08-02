@@ -96,10 +96,9 @@ pub struct App {
     pub session_high_bpm: (f64, DateTime<Local>),
     pub session_low_bpm: (f64, DateTime<Local>),
     pub session_avg_bpm: f64,
-    // "Session" is a bit of a misnomer for these
-    pub session_high_rr: f64,
-    pub session_low_rr: f64,
-    pub session_avg_rr: f64,
+    pub chart_high_rr: f64,
+    pub chart_low_rr: f64,
+    pub chart_avg_rr: f64,
 }
 
 impl App {
@@ -150,9 +149,9 @@ impl App {
             session_high_bpm: (0.0, Local::now()),
             session_low_bpm: (0.0, Local::now()),
             session_avg_bpm: 0.0,
-            session_high_rr: 0.0,
-            session_low_rr: 0.0,
-            session_avg_rr: 0.0,
+            chart_high_rr: 0.0,
+            chart_low_rr: 0.0,
+            chart_avg_rr: 0.0,
         }
     }
 
@@ -341,31 +340,31 @@ impl App {
         if let Some(rr) = new_rr {
             let rr_secs = rr.as_secs_f64();
             let rr_max = self.settings.misc.session_chart_rr_max;
-            if self.session_high_rr == 0.0 {
-                self.session_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(rr_secs);
-                self.session_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(rr_max);
+            if self.chart_high_rr == 0.0 {
+                self.chart_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(rr_secs);
+                self.chart_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(rr_max);
             }
 
             if self.settings.misc.session_chart_rr_clamp_high {
-                self.session_high_rr = *self
+                self.chart_high_rr = *self
                     .rr_history
                     .iter()
                     .reduce(|a, b| if a > b { a } else { b })
                     .unwrap_or(&0.0);
             } else {
-                self.session_high_rr = self.session_high_rr.max(rr_secs);
+                self.chart_high_rr = self.chart_high_rr.max(rr_secs);
             }
             if self.settings.misc.session_chart_rr_clamp_low {
-                self.session_high_rr = *self
+                self.chart_high_rr = *self
                     .rr_history
                     .iter()
                     .reduce(|a, b| if a < b { a } else { b })
                     .unwrap_or(&0.0);
             } else {
-                self.session_low_rr = self.session_low_rr.min(rr_secs);
+                self.chart_low_rr = self.chart_low_rr.min(rr_secs);
             }
 
-            self.session_avg_rr = (self.session_low_rr + self.session_high_rr) / 2.0;
+            self.chart_avg_rr = (self.chart_low_rr + self.chart_high_rr) / 2.0;
         }
         self.session_avg_bpm = ((self.session_low_bpm.0 + self.session_high_bpm.0) / 2.0).ceil();
     }
@@ -382,8 +381,8 @@ impl App {
                 .enumerate()
                 .map(|(i, &x)| {
                     if bpm_enabled && combine {
-                        let normalized = (x - self.session_low_rr)
-                            / (self.session_high_rr - self.session_low_rr);
+                        let normalized =
+                            (x - self.chart_low_rr) / (self.chart_high_rr - self.chart_low_rr);
                         let scaled = normalized
                             * (self.session_high_bpm.0 - self.session_low_bpm.0)
                             + self.session_low_bpm.0;

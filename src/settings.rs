@@ -54,7 +54,6 @@ pub struct OSCSettings {
     pub param_bpm_int: String,
     pub param_bpm_float: String,
     pub param_latest_rr_int: String,
-    // RR Twitch Params
     pub twitch_rr_threshold_ms: u16,
     pub param_rr_twitch_up: String,
     pub param_rr_twitch_down: String,
@@ -77,81 +76,44 @@ impl Settings {
         let s = Config::builder()
             // Start off by merging in the "default" configuration file
             .add_source(ConfigFile::from(config_path).required(false))
-            .set_default("osc.host_ip", "0.0.0.0")
-            .unwrap()
-            .set_default("osc.target_ip", "127.0.0.1")
-            .unwrap()
-            .set_default("osc.port", 9000)
-            .unwrap()
-            .set_default("osc.pulse_length_ms", 100)
-            .unwrap()
-            .set_default("osc.only_positive_float_bpm", false)
-            .unwrap()
-            .set_default("osc.address_prefix", "/avatar/parameters/")
-            .unwrap()
-            .set_default("osc.hide_disconnections", false)
-            .unwrap()
-            .set_default("osc.max_hide_disconnection_sec", 60)
-            .unwrap()
-            .set_default("osc.param_hrm_connected", "isHRConnected")
-            .unwrap()
-            .set_default("osc.param_hiding_disconnect", "isHRReconnecting")
-            .unwrap()
-            .set_default("osc.param_hrm_battery_int", "HRBattery")
-            .unwrap()
-            .set_default("osc.param_hrm_battery_float", "HRBatteryFloat")
-            .unwrap()
-            .set_default("osc.param_beat_toggle", "HeartBeatToggle")
-            .unwrap()
-            .set_default("osc.param_beat_pulse", "isHRBeat")
-            .unwrap()
-            .set_default("osc.param_bpm_int", "HR")
-            .unwrap()
-            .set_default("osc.param_bpm_float", "floatHR")
-            .unwrap()
-            .set_default("osc.param_latest_rr_int", "RRInterval")
-            .unwrap()
-            .set_default("osc.twitch_rr_threshold_ms", 50)
-            .unwrap()
-            .set_default("osc.param_rr_twitch_up", "HRTwitchUp")
-            .unwrap()
-            .set_default("osc.param_rr_twitch_down", "HRTwitchDown")
-            .unwrap()
-            .set_default("ble.never_ask_to_save", false)
-            .unwrap()
-            .set_default("ble.saved_address", "")
-            .unwrap()
-            .set_default("ble.saved_name", "")
-            .unwrap()
-            .set_default("ble.rr_ignore_after_empty", 0)
-            .unwrap()
+            .set_default("osc.host_ip", "0.0.0.0")?
+            .set_default("osc.target_ip", "127.0.0.1")?
+            .set_default("osc.port", 9000)?
+            .set_default("osc.pulse_length_ms", 100)?
+            .set_default("osc.only_positive_float_bpm", false)?
+            .set_default("osc.address_prefix", "/avatar/parameters/")?
+            .set_default("osc.hide_disconnections", false)?
+            .set_default("osc.max_hide_disconnection_sec", 60)?
+            .set_default("osc.param_hrm_connected", "isHRConnected")?
+            .set_default("osc.param_hiding_disconnect", "isHRReconnecting")?
+            .set_default("osc.param_hrm_battery_int", "HRBattery")?
+            .set_default("osc.param_hrm_battery_float", "HRBatteryFloat")?
+            .set_default("osc.param_beat_toggle", "HeartBeatToggle")?
+            .set_default("osc.param_beat_pulse", "isHRBeat")?
+            .set_default("osc.param_bpm_int", "HR")?
+            .set_default("osc.param_bpm_float", "floatHR")?
+            .set_default("osc.param_latest_rr_int", "RRInterval")?
+            .set_default("osc.twitch_rr_threshold_ms", 50)?
+            .set_default("osc.param_rr_twitch_up", "HRTwitchUp")?
+            .set_default("osc.param_rr_twitch_down", "HRTwitchDown")?
+            .set_default("ble.never_ask_to_save", false)?
+            .set_default("ble.saved_address", "")?
+            .set_default("ble.saved_name", "")?
+            .set_default("ble.rr_ignore_after_empty", 0)?
             // TODO set back to info before release
-            .set_default("misc.log_level", "debug")
-            .unwrap()
-            .set_default("misc.write_bpm_to_file", false)
-            .unwrap()
-            .set_default("misc.write_rr_to_file", false)
-            .unwrap()
-            .set_default("misc.bpm_file_path", "bpm.txt")
-            .unwrap()
-            .set_default("misc.log_sessions_to_csv", false)
-            .unwrap()
-            .set_default("misc.log_sessions_csv_path", "session_logs")
-            .unwrap()
-            .set_default("misc.session_stats_use_12hr", true)
-            .unwrap()
-            .set_default("misc.session_chart_bpm_enabled", true)
-            .unwrap()
-            .set_default("misc.session_chart_rr_enabled", true)
-            .unwrap()
-            .set_default("misc.session_chart_rr_max", 2.0)
-            .unwrap()
-            .set_default("misc.session_chart_rr_clamp_high", true)
-            .unwrap()
-            .set_default("misc.session_chart_rr_clamp_low", false)
-            .unwrap()
-            .set_default("misc.session_charts_combine", true)
-            .unwrap()
+            .set_default("misc.log_level", "debug")?
+            .set_default("misc.write_bpm_to_file", false)?
+            .set_default("misc.write_rr_to_file", false)?
+            .set_default("misc.bpm_file_path", "bpm.txt")?
+            .set_default("misc.log_sessions_to_csv", false)?
+            .set_default("misc.log_sessions_csv_path", "session_logs")?
+            .set_default("misc.session_stats_use_12hr", true)?
+            .set_default("misc.session_chart_bpm_enabled", true)?
+            .set_default("misc.session_chart_rr_enabled", true)?
+            .set_default("misc.session_chart_rr_max", 2.0)?
+            .set_default("misc.session_chart_rr_clamp_high", true)?
+            .set_default("misc.session_chart_rr_clamp_low", false)?
+            .set_default("misc.session_charts_combine", true)?
             .build()?;
 
         // You can deserialize (and thus freeze) the entire configuration as

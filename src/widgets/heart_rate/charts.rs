@@ -20,8 +20,8 @@ pub fn render_combined_chart(
 ) {
     let mut datasets = Vec::new();
 
-    let rr_bounds = [app.session_low_rr, app.session_high_rr];
-    let avg_rr = app.session_avg_rr;
+    let rr_bounds = [app.chart_low_rr, app.chart_high_rr];
+    let avg_rr = app.chart_avg_rr;
     let bpm_bounds = [app.session_low_bpm.0, app.session_high_bpm.0];
     let avg_bpm = app.session_avg_bpm;
 

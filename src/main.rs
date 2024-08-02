@@ -61,7 +61,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("Starting app...");
 
     if !had_error {
-        // Try to create a default config file if it doesn't exist
+        // Creates default config and adds any missing fields
+        // (will remove fields that aren't declared in settings.rs)
         app.save_settings()?;
         app.start_osc_thread().await;
         app.start_bluetooth_event_thread().await;
