@@ -69,6 +69,11 @@ pub async fn logging_thread(
         txt_writer = Some(BufWriter::new(file));
     }
 
+    if !misc_settings.log_sessions_to_csv && !misc_settings.write_bpm_to_file {
+        info!("No data logging was enabled! Shutting down thread.");
+        return;
+    }
+
     loop {
         tokio::select! {
             Some(heart_rate_status) = locked_reciever.recv() => {
