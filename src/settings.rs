@@ -7,7 +7,6 @@ use std::io::Write;
 use toml;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-#[allow(unused)]
 pub struct MiscSettings {
     log_level: String,
     pub write_bpm_to_file: bool,
@@ -25,7 +24,6 @@ pub struct MiscSettings {
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
-#[allow(unused)]
 pub struct BLESettings {
     pub never_ask_to_save: bool,
     pub saved_name: String,
@@ -34,7 +32,6 @@ pub struct BLESettings {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-#[allow(unused)]
 pub struct OSCSettings {
     // enabled: bool,
     pub host_ip: String,
@@ -60,16 +57,27 @@ pub struct OSCSettings {
     // TODO Session Max/Min/Avg Params?
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct DummySettings {
+    pub enabled: bool,
+    pub low_bpm: u16,
+    pub high_bpm: u16,
+    pub bpm_speed: f32,
+    pub loops_before_dc: u16,
+}
+
 #[derive(Debug, Deserialize, Serialize, Default)]
-#[allow(unused)]
 pub struct Settings {
     pub osc: OSCSettings,
     pub ble: BLESettings,
     pub misc: MiscSettings,
+    pub dummy: DummySettings,
 }
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
+        // TODO Maybe not use exe path so people can install to path?
+        // Not sure about the use case amount though...
         let exe_path = env::current_exe().expect("Failed to get executable path");
         let config_path = exe_path.with_extension("toml");
 
@@ -114,6 +122,11 @@ impl Settings {
             .set_default("misc.session_chart_rr_clamp_high", true)?
             .set_default("misc.session_chart_rr_clamp_low", false)?
             .set_default("misc.session_charts_combine", true)?
+            .set_default("dummy.enabled", false)?
+            .set_default("dummy.low_bpm", 50)?
+            .set_default("dummy.high_bpm", 120)?
+            .set_default("dummy.bpm_speed", 1.5)?
+            .set_default("dummy.loops_before_dc", 2)?
             .build()?;
 
         // You can deserialize (and thus freeze) the entire configuration as

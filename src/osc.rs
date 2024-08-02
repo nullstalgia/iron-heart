@@ -209,7 +209,7 @@ impl OSCAddresses {
 // Only used as a backup if the HRM doesn't support
 // sending RR intervals
 // (Or when mimicking)
-fn rr_from_bpm(bpm: u16) -> Duration {
+pub fn rr_from_bpm(bpm: u16) -> Duration {
     Duration::from_secs_f32(60.0 / bpm as f32)
 }
 

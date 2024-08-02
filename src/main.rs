@@ -14,6 +14,7 @@ use log::*;
 mod app;
 mod company_codes;
 mod heart_rate;
+mod heart_rate_dummy;
 mod heart_rate_measurement;
 mod logging;
 mod osc;
@@ -64,10 +65,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // Creates default config and adds any missing fields
         // (will remove fields that aren't declared in settings.rs)
         app.save_settings()?;
+        if app.settings.dummy.enabled {
+            app.start_dummy_thread().await;
+        } else {
+            app.start_bluetooth_event_thread().await;
+            app.start_logging_thread().await;
+        }
         app.start_osc_thread().await;
-        app.start_bluetooth_event_thread().await;
-        app.start_logging_thread().await;
-        debug!("Started OSC and Bluetooth CentralEvent threads");
     }
     // Main app loop
     viewer(&mut terminal, &mut app).await?;

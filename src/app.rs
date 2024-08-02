@@ -15,6 +15,7 @@ use tokio::sync::{
 };
 use tokio_util::sync::CancellationToken;
 
+use crate::heart_rate_dummy::start_dummy_thread;
 use crate::{
     heart_rate::{start_notification_thread, HeartRateStatus},
     logging::logging_thread,
@@ -87,6 +88,7 @@ pub struct App {
     pub hr_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub osc_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub logging_thread_handle: Option<tokio::task::JoinHandle<()>>,
+    pub dummy_thread_handle: Option<tokio::task::JoinHandle<()>>,
     // Raw histories
     pub heart_rate_history: VecDeque<f64>,
     pub rr_history: VecDeque<f64>,
@@ -95,10 +97,14 @@ pub struct App {
     pub rr_dataset: Vec<(f64, f64)>,
     pub session_high_bpm: (f64, DateTime<Local>),
     pub session_low_bpm: (f64, DateTime<Local>),
-    pub session_avg_bpm: f64,
+    // Usually same as session but can have a margin applied
+    pub chart_high_bpm: f64,
+    pub chart_mid_bpm: f64,
+    pub chart_low_bpm: f64,
+
     pub chart_high_rr: f64,
+    pub chart_mid_rr: f64,
     pub chart_low_rr: f64,
-    pub chart_avg_rr: f64,
 }
 
 impl App {
@@ -146,12 +152,15 @@ impl App {
             hr_thread_handle: None,
             osc_thread_handle: None,
             logging_thread_handle: None,
+            dummy_thread_handle: None,
             session_high_bpm: (0.0, Local::now()),
             session_low_bpm: (0.0, Local::now()),
-            session_avg_bpm: 0.0,
+            chart_high_bpm: 0.0,
+            chart_low_bpm: 0.0,
+            chart_mid_bpm: 0.0,
             chart_high_rr: 0.0,
             chart_low_rr: 0.0,
-            chart_avg_rr: 0.0,
+            chart_mid_rr: 0.0,
         }
     }
 
@@ -242,7 +251,7 @@ impl App {
         let misc_settings_clone = self.settings.misc.clone();
         let shutdown_requested_clone = self.shutdown_requested.clone();
 
-        debug!("Spawning Logging thread");
+        debug!("Spawning Data Logging thread");
         self.logging_thread_handle = Some(tokio::spawn(async move {
             logging_thread(
                 logging_rx_clone,
@@ -250,6 +259,18 @@ impl App {
                 shutdown_requested_clone,
             )
             .await
+        }));
+    }
+
+    pub async fn start_dummy_thread(&mut self) {
+        let hr_tx_clone = self.hr_tx.clone();
+        let shutdown_requested_clone = self.shutdown_requested.clone();
+        let dummy_settings_clone = self.settings.dummy.clone();
+        debug!("Spawning Dummy thread");
+        self.state = AppState::HeartRateView;
+        self.chart_high_rr = self.settings.misc.session_chart_rr_max;
+        self.hr_thread_handle = Some(tokio::spawn(async move {
+            start_dummy_thread(hr_tx_clone, dummy_settings_clone, shutdown_requested_clone).await
         }));
     }
 
@@ -284,6 +305,13 @@ impl App {
             debug!("Joining Logging thread");
             if let Err(err) = timeout(duration, handle).await {
                 error!("Failed to join Logging thread: {:?}", err);
+            }
+        }
+
+        if let Some(handle) = self.dummy_thread_handle.take() {
+            debug!("Joining Dummy thread");
+            if let Err(err) = timeout(duration, handle).await {
+                error!("Failed to join Dummy thread: {:?}", err);
             }
         }
     }
@@ -329,13 +357,18 @@ impl App {
 
     fn update_session_stats(&mut self, new_bpm: f64, new_rr: Option<&Duration>) {
         if self.session_low_bpm.0 == 0.0 || self.session_high_bpm.0 == 0.0 {
-            self.session_low_bpm = (new_bpm - CHART_BPM_VERT_MARGIN, Local::now());
-            self.session_high_bpm = (new_bpm + CHART_BPM_VERT_MARGIN, Local::now());
+            self.chart_low_bpm = new_bpm - CHART_BPM_VERT_MARGIN;
+            self.chart_high_bpm = new_bpm + CHART_BPM_VERT_MARGIN;
+            self.session_low_bpm = (new_bpm, Local::now());
+            self.session_high_bpm = (new_bpm, Local::now());
         } else if new_bpm > self.session_high_bpm.0 {
             self.session_high_bpm = (new_bpm, Local::now());
         } else if new_bpm < self.session_low_bpm.0 {
             self.session_low_bpm = (new_bpm, Local::now());
         }
+        self.chart_high_bpm = self.chart_high_bpm.max(new_bpm);
+        self.chart_low_bpm = self.chart_low_bpm.min(new_bpm);
+        self.chart_mid_bpm = ((self.chart_low_bpm + self.chart_high_bpm) / 2.0).ceil();
 
         if let Some(rr) = new_rr {
             let rr_secs = rr.as_secs_f64();
@@ -344,8 +377,7 @@ impl App {
                 self.chart_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(rr_secs);
                 self.chart_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(rr_max);
             }
-
-            if self.settings.misc.session_chart_rr_clamp_high {
+            if self.settings.misc.session_chart_rr_clamp_high && !self.settings.dummy.enabled {
                 self.chart_high_rr = *self
                     .rr_history
                     .iter()
@@ -364,9 +396,8 @@ impl App {
                 self.chart_low_rr = self.chart_low_rr.min(rr_secs);
             }
 
-            self.chart_avg_rr = (self.chart_low_rr + self.chart_high_rr) / 2.0;
+            self.chart_mid_rr = (self.chart_low_rr + self.chart_high_rr) / 2.0;
         }
-        self.session_avg_bpm = ((self.session_low_bpm.0 + self.session_high_bpm.0) / 2.0).ceil();
     }
 
     fn update_chart_data(&mut self) {
@@ -383,9 +414,8 @@ impl App {
                     if bpm_enabled && combine {
                         let normalized =
                             (x - self.chart_low_rr) / (self.chart_high_rr - self.chart_low_rr);
-                        let scaled = normalized
-                            * (self.session_high_bpm.0 - self.session_low_bpm.0)
-                            + self.session_low_bpm.0;
+                        let scaled = normalized * (self.chart_high_bpm - self.chart_low_bpm)
+                            + self.chart_low_bpm;
                         (i as f64, scaled)
                     } else {
                         (i as f64, x)
