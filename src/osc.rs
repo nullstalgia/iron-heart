@@ -159,8 +159,11 @@ fn send_beat_params(
     bundle.content.push(OscPacket::Message(pulse_msg));
     bundle.content.push(OscPacket::Message(toggle_msg));
 
-    let msg_buf = encoder::encode(&OscPacket::Bundle(bundle)).unwrap();
-    socket.send_to(&msg_buf, target_addr).unwrap();
+    let msg_buf =
+        encoder::encode(&OscPacket::Bundle(bundle)).expect("Failed to encode OSC bundle!");
+    socket
+        .send_to(&msg_buf, target_addr)
+        .expect("Failed to send via UDP Socket!!!");
 }
 
 struct OSCAddresses {
@@ -226,11 +229,13 @@ pub async fn osc_thread(
     osc_settings: OSCSettings,
     shutdown_token: CancellationToken,
 ) {
+    let host_addr = SocketAddrV4::from_str(&format!("{}:{}", osc_settings.host_ip, 0))
+        .expect("Invalid host IP address!");
     let target_addr =
         SocketAddrV4::from_str(&format!("{}:{}", osc_settings.target_ip, osc_settings.port))
             .expect("Invalid target IP address!");
     // TODO Add error handling
-    let socket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to UDP socket!");
+    let socket = UdpSocket::bind(host_addr).expect("Failed to bind to UDP socket!");
 
     let osc_addresses = OSCAddresses::new(&osc_settings);
 
