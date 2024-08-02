@@ -111,8 +111,7 @@ pub async fn viewer<B: Backend>(
                         f.render_widget(inspect_overlay, area);
                     } else if app.state == AppState::SaveDevicePrompt {
                         let area = centered_rect(30, 30, f.size());
-                        let save_device_prompt =
-                            save_prompt(app.save_prompt_state.selected(), selected_device);
+                        let save_device_prompt = save_prompt();
                         f.render_stateful_widget(
                             save_device_prompt,
                             area,
@@ -198,7 +197,9 @@ pub async fn viewer<B: Backend>(
                         error!("This is a test error message");
                     }
                     KeyCode::Char('q') => {
-                        break;
+                        if app.is_idle_on_main_menu() {
+                            break;
+                        }
                     }
                     KeyCode::Char('c') | KeyCode::Char('C') => {
                         if key.modifiers == KeyModifiers::CONTROL {

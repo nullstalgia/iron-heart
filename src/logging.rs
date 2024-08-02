@@ -23,8 +23,6 @@ struct CsvData {
     Battery: u8,
 }
 
-const RR_IGNORE_COUNT: usize = 5;
-
 pub async fn logging_thread(
     logging_rx_arc: Arc<Mutex<mpsc::UnboundedReceiver<HeartRateStatus>>>,
     misc_settings: MiscSettings,

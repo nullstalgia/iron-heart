@@ -1,18 +1,13 @@
 use crate::app::{DeviceData, ErrorPopup};
-use crate::heart_rate_measurement::{parse_hrm, HeartRateMeasurement};
-use crate::structs::{Characteristic, DeviceInfo};
-// TODO See if this weird manager shadowing is normal
-use btleplug::api::{
-    Central, CentralEvent, Manager as _, Peripheral, PeripheralProperties, ScanFilter,
-};
-use btleplug::platform::Manager;
+use crate::heart_rate_measurement::parse_hrm;
+use crate::structs::DeviceInfo;
+
+use btleplug::api::Peripheral;
 use futures::StreamExt;
 use log::*;
 use std::sync::Arc;
 use std::time::Duration;
-use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -23,7 +18,7 @@ pub const HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID: Uuid =
 
 pub const BATTERY_LEVEL_CHARACTERISTIC_UUID: Uuid =
     Uuid::from_u128(0x00002a19_0000_1000_8000_00805f9b34fb);
-pub const BATTERY_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb);
+//pub const BATTERY_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BatteryLevel {

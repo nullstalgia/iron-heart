@@ -2,12 +2,12 @@ use log::*;
 use rand::Rng;
 use rosc::encoder;
 use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
+use std::f32;
 use std::net::{SocketAddrV4, UdpSocket};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{env, f32, thread};
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::{self, sleep, Duration, Instant};
+use tokio::time::{self, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 use crate::heart_rate::{BatteryLevel, HeartRateStatus};
@@ -71,7 +71,7 @@ fn form_bpm_bundle(
     let battery_float_msg = OscMessage {
         addr: osc_addresses.battery_float.clone(),
         args: vec![OscType::Float(match hr_status.battery_level {
-            BatteryLevel::Level(level) => (level as f32 / 100.0),
+            BatteryLevel::Level(level) => level as f32 / 100.0,
             _ => 0.0,
         })],
     };

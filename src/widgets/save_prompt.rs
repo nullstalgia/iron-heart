@@ -1,14 +1,12 @@
 use ratatui::{
     layout::{Alignment, Constraint},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::Line,
     widgets::{Block, Borders, Row, Table},
 };
 
-use crate::{structs::DeviceInfo, utils::extract_manufacturer_data};
-
 /// Creates a pop-up asking if the user wants to save the device for faster connection in the future.
-pub fn save_prompt(selected: Option<usize>, selected_device: &DeviceInfo) -> Table {
+pub fn save_prompt() -> Table<'static> {
     // let normal_style
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 

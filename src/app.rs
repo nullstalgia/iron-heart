@@ -3,7 +3,6 @@ use log::*;
 use ratatui::widgets::TableState;
 use std::collections::VecDeque;
 use std::{
-    f32::consts::PI,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -21,7 +20,7 @@ use crate::{
     logging::logging_thread,
     osc::osc_thread,
     scan::{bluetooth_event_thread, get_characteristics},
-    settings::{OSCSettings, Settings},
+    settings::Settings,
     structs::{Characteristic, DeviceInfo},
     widgets::heart_rate_display::{
         CHART_BPM_MAX_ELEMENTS, CHART_BPM_VERT_MARGIN, CHART_RR_MAX_ELEMENTS, CHART_RR_VERT_MARGIN,

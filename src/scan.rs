@@ -1,9 +1,6 @@
 use crate::app::{DeviceData, ErrorPopup};
-use crate::heart_rate::{
-    BATTERY_LEVEL_CHARACTERISTIC_UUID, BATTERY_SERVICE_UUID,
-    HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID, HEART_RATE_SERVICE_UUID,
-};
 use crate::structs::{Characteristic, DeviceInfo};
+// TODO See if this weird manager shadowing is normal
 use btleplug::api::{
     Central, CentralEvent, Manager as _, Peripheral, PeripheralProperties, ScanFilter,
 };

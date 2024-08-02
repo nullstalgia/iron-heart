@@ -1,6 +1,3 @@
-use std::collections::VecDeque;
-
-use chrono::{DateTime, Local};
 use ratatui::{
     layout::Rect,
     style::{Color, Style, Stylize},
@@ -11,9 +8,7 @@ use ratatui::{
 
 use crate::{
     app::App,
-    widgets::heart_rate_display::{
-        CHART_BPM_MAX_ELEMENTS, CHART_BPM_VERT_MARGIN, CHART_RR_MAX_ELEMENTS, CHART_RR_VERT_MARGIN,
-    },
+    widgets::heart_rate_display::{CHART_BPM_MAX_ELEMENTS, CHART_RR_MAX_ELEMENTS},
 };
 
 pub fn render_combined_chart(
@@ -72,12 +67,14 @@ pub fn render_combined_chart(
         ]
     };
 
-    let bounds = if render_rr && render_bpm {
-        bpm_bounds
+    let y_bounds = if render_bpm { bpm_bounds } else { rr_bounds };
+
+    let x_bound_top = if render_rr && render_bpm {
+        CHART_BPM_MAX_ELEMENTS.max(CHART_RR_MAX_ELEMENTS)
     } else if render_bpm {
-        bpm_bounds
+        CHART_BPM_MAX_ELEMENTS
     } else {
-        rr_bounds
+        CHART_RR_MAX_ELEMENTS
     };
 
     let chart = Chart::new(datasets)
@@ -85,13 +82,13 @@ pub fn render_combined_chart(
         .x_axis(
             Axis::default()
                 .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, CHART_RR_MAX_ELEMENTS as f64]),
+                .bounds([0.0, x_bound_top as f64]),
         )
         .y_axis(
             Axis::default()
                 .style(Style::default().fg(Color::Gray))
                 .labels(labels)
-                .bounds(bounds),
+                .bounds(y_bounds),
         );
     f.render_widget(chart, area);
 }
