@@ -15,7 +15,7 @@ jobs:
             archive: zip
           - target: x86_64-unknown-linux-musl
             archive: tar.gz tar.xz tar.zst
-            pre_script: .github/scripts/linux_dep.sh
+            pre_script: ".github/scripts/linux_dep.sh"
           - target: x86_64-apple-darwin
             archive: zip
             rust_ver: 1.74
@@ -30,3 +30,4 @@ jobs:
           ARCHIVE_TYPES: ${{ matrix.archive }}
           PRE_BUILD: ${{ matrix.pre_script }}
           TOOLCHAIN_VERSION: ${{ matrix.rust_ver }}
+          EXTRA_FILES: "README.md LICENSE"
