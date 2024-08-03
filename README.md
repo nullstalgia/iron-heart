@@ -1,43 +1,107 @@
-[![Build](https://github.com/ztroop/btlescan/actions/workflows/build.yml/badge.svg)](https://github.com/ztroop/btlescan/actions/workflows/build.yml)
+[![Build](https://github.com/nullstalgia/null_iron_heart/actions/workflows/build.yml/badge.svg)](https://github.com/nullstalgia/null_iron_heart/actions/workflows/build.yml)
 
-# btlescan
+# null_iron_heart
 
 ## Summary
 
-This tool provides a cross-platform CLI with an interactive way to view Bluetooth Low Energy (BTLE) devices, showcasing their Address/UUID, Name, TX Power, and RSSI (Received Signal Strength Indicator) in a table format. It also provides functionality to inspect GATT information.
+![demo](./assets/nih-demo.gif)
 
-![demo](./assets/demo.png)
+A Rust-based BLE Heart Rate Monitor bridge for OSC in Social VR, and other miscellaneous uses!
 
 ## Features
 
-- Real-Time Discovery: Continuously scans for Bluetooth devices, updating the list in real-time as new devices appear or existing devices become unavailable.
-- Device Information: Displays detailed information about each detected Bluetooth device, including:
-    - **Address/UUID**: The unique address or UUID of the Bluetooth device.
-    - **Name**: The name of the Bluetooth device, if available.
-    - **TX Power**: The transmission power level, indicating the strength at which the device is broadcasting its signal.
-    - **RSSI**: Received Signal Strength Indicator, a measure of the power present in the received signal, indicating how close or far the device is.
-- Interactive UI: The terminal-based user interface allows users to scroll through the list of discovered devices, providing an easy way to browse and select devices of interest.
-- Keyboard Navigation: Supports simple keyboard controls for navigation:
-    - **Up/Down Arrows**: Scroll through the list of devices.
-    - **Q**: Quit the application.
-    - **S**: Toggle scanning.
-    - **ENTER**: Open or close widget.
+- Accurate heart-beat effects: Using the monitor's reported time between heart beats (RR Interval), we can drive avatar effects that match your heart's beating!
+- Supports any BLE-specification-following Heart Rate Monitor! (Many by Polar, Coospo, etc.)
+- Quick reconnection to saved device on app startup
+- Terminal UI and Charts: Powered by [Ratatui](https://ratatui.rs/)
+- CSV Logging and Text File support
+- Dummy: Test avatars and prefabs without needing to put on/own a sensor
+- Hide temporary disconnections (optional): In case of spotty connections, this can help mask those moments of signal loss
 
-## Installation
+## Configuration File
+### null_iron_heart.toml (default)
 
-```sh
-git clone git@github.com:ztroop/btlescan.git && cd ./btlescan
-cargo install --path .
-```
+```toml
+[osc]
+host_ip = "0.0.0.0"
+target_ip = "127.0.0.1"
+port = 9000
+# Duration that MS `param_beat_pulse` will be true for each "beat"
+pulse_length_ms = 100
+only_positive_float_bpm = false
+# While it tries to reconnect, it will keep the bool true and jitter the value slightly to mimic a connection.
+hide_disconnections = false
+max_hide_disconnection_sec = 60
+address_prefix = "/avatar/parameters/"
+# Bool
+param_hrm_connected = "isHRConnected"
+# Bool: See hide_disconnections
+param_hiding_disconnect = "isHRReconnecting"
+# Int: 0 - 100
+param_hrm_battery_int = "HRBattery"
+# Float: 0.0 - 1.0
+param_hrm_battery_float = "HRBatteryFloat"
+# Bool: On each heart beat, this param flip/flops
+param_beat_toggle = "HeartBeatToggle"
+# Bool: See pulse_length_ms
+param_beat_pulse = "isHRBeat"
+# Int: 0 - 255
+param_bpm_int = "HR"
+# Float: -1.0 to 1.0 (or 0.0 to 1.0 if only_positive_float_bpm)
+param_bpm_float = "floatHR"
+# Int: Only useful for local debugging, value is too large to sync (goes over 255)
+param_latest_rr_int = "RRInterval"
+# Bool params that hold True for a moment if RR Interval changed more than the threshold
+# Useful for triggering ear twitches or similar!
+twitch_rr_threshold_ms = 50
+param_rr_twitch_up = "HRTwitchUp"
+param_rr_twitch_down = "HRTwitchDown"
 
-### Arch Linux (AUR)
+[ble]
+never_ask_to_save = false
+saved_name = ""
+saved_address = ""
+# If no RR was supplied for an update, burn X values before using new ones
+rr_ignore_after_empty = 0
 
-You can install `btlescan` from the [AUR](https://aur.archlinux.org/packages/btlescan) with using an [AUR helper](https://wiki.archlinux.org/title/AUR_helpers).
+[misc]
+log_level = "debug"
+# Useful for OBS
+write_bpm_to_file = false
+# Writes under BPM
+write_rr_to_file = false
+bpm_file_path = "bpm.txt"
+log_sessions_to_csv = false
+log_sessions_csv_path = "session_logs"
+session_stats_use_12hr = true
+session_chart_bpm_enabled = true
+session_chart_rr_enabled = true
+session_chart_rr_max = 2.0
+session_chart_rr_clamp_high = true
+session_chart_rr_clamp_low = false
+# False to show charts side-by-side
+session_charts_combine = true
 
-```shell
-paru -S btlescan
+[dummy]
+# Ignore BLE entirely, send values for testing
+enabled = false
+low_bpm = 50
+high_bpm = 120
+# How many packets to send per second
+bpm_speed = 1.5
+# How many cycles from low->high before simulating a disconnect, 0 to disable
+# Will trigger hide_disconnections behavior if also enabled
+loops_before_dc = 2
 ```
 
 ## Alternatives
 
-If you're looking to manage or pair Bluetooth devices, check out [bluetui](https://github.com/pythops/bluetui)!
+If you want to see a C# implementation or need OSCQuery/Quest Standalone support, check out [Natsumi-sama](https://github.com/Natsumi-sama)'s [HRPresence](https://github.com/Natsumi-sama/HRPresence).
+
+## Acknowledgments/Author Notes
+
+- This is my first Rust project! If you see any glaring issues, let me know!
+- This project is based on [Zackary Troop](https://github.com/ztroop)'s [btlescan](https://github.com/ztroop/btlescan) project! It provided a great starting point for me, as I was already wanting to use [btleplug](https://github.com/deviceplug/btleplug) and [Ratatui](https://github.com/ratatui-org/ratatui).
+- Many thanks to [Nathan Fairhurst](https://github.com/IamfromSpace) for their robust BLE HR Measurement packet decoding snippet (from [rust-cycle](https://github.com/IamfromSpace/rust-cycle))!
+- More thanks to burntsushi for their blog posts on Rust, namely [Error Handling in Rust](https://blog.burntsushi.net/rust-error-handling/).
+- Cheers to [Strophox](https://github.com/Strophox/tetrs) for inspiring me and this section
