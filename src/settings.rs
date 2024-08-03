@@ -14,12 +14,12 @@ pub struct MiscSettings {
     pub log_sessions_to_csv: bool,
     pub log_sessions_csv_path: String,
     pub session_stats_use_12hr: bool,
-    pub session_chart_bpm_enabled: bool,
-    pub session_chart_rr_enabled: bool,
-    pub session_chart_rr_max: f64,
-    pub session_chart_rr_clamp_high: bool,
-    pub session_chart_rr_clamp_low: bool,
-    pub session_charts_combine: bool,
+    pub chart_bpm_enabled: bool,
+    pub chart_rr_enabled: bool,
+    pub chart_rr_max: f64,
+    pub chart_rr_clamp_high: bool,
+    pub chart_rr_clamp_low: bool,
+    pub charts_combine: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -107,20 +107,19 @@ impl Settings {
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?
             .set_default("ble.rr_ignore_after_empty", 0)?
-            // TODO set back to info before release
-            .set_default("misc.log_level", "debug")?
+            .set_default("misc.log_level", "info")?
             .set_default("misc.write_bpm_to_file", false)?
             .set_default("misc.write_rr_to_file", false)?
             .set_default("misc.bpm_file_path", "bpm.txt")?
             .set_default("misc.log_sessions_to_csv", false)?
             .set_default("misc.log_sessions_csv_path", "session_logs")?
             .set_default("misc.session_stats_use_12hr", true)?
-            .set_default("misc.session_chart_bpm_enabled", true)?
-            .set_default("misc.session_chart_rr_enabled", true)?
-            .set_default("misc.session_chart_rr_max", 2.0)?
-            .set_default("misc.session_chart_rr_clamp_high", true)?
-            .set_default("misc.session_chart_rr_clamp_low", false)?
-            .set_default("misc.session_charts_combine", true)?
+            .set_default("misc.chart_bpm_enabled", true)?
+            .set_default("misc.chart_rr_enabled", true)?
+            .set_default("misc.chart_rr_max", 2.0)?
+            .set_default("misc.chart_rr_clamp_high", true)?
+            .set_default("misc.chart_rr_clamp_low", false)?
+            .set_default("misc.charts_combine", true)?
             .set_default("dummy.enabled", false)?
             .set_default("dummy.low_bpm", 50)?
             .set_default("dummy.high_bpm", 120)?
@@ -128,7 +127,6 @@ impl Settings {
             .set_default("dummy.loops_before_dc", 2)?
             .build()?;
 
-        // You can deserialize (and thus freeze) the entire configuration as
         s.try_deserialize()
     }
     pub fn save(&self) -> Result<(), std::io::Error> {

@@ -80,7 +80,7 @@ saved_address = ""
 rr_ignore_after_empty = 0
 
 [misc]
-log_level = "debug"
+log_level = "info"
 # Useful for OBS
 write_bpm_to_file = false
 # Writes under BPM
@@ -89,13 +89,13 @@ bpm_file_path = "bpm.txt"
 log_sessions_to_csv = false
 log_sessions_csv_path = "session_logs"
 session_stats_use_12hr = true
-session_chart_bpm_enabled = true
-session_chart_rr_enabled = true
-session_chart_rr_max = 2.0
-session_chart_rr_clamp_high = true
-session_chart_rr_clamp_low = false
+chart_bpm_enabled = true
+chart_rr_enabled = true
+chart_rr_max = 2.0
+chart_rr_clamp_high = true
+chart_rr_clamp_low = false
 # False to show charts side-by-side
-session_charts_combine = true
+charts_combine = true
 
 [dummy]
 # Ignore BLE entirely, send values for testing
