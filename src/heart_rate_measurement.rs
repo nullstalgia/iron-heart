@@ -85,7 +85,7 @@ mod tests {
                 energy_expended: Some(523),
                 rr_intervals: vec!(Duration::from_secs_f32(266.0 / 1024.0))
             },
-            parse_hrm(&vec!(0b11001, 70, 0, 11, 2, 10, 1))
+            parse_hrm(&[0b11001, 70, 0, 11, 2, 10, 1])
         );
     }
 
@@ -98,7 +98,7 @@ mod tests {
                 energy_expended: None,
                 rr_intervals: vec!(Duration::from_secs_f32(266.0 / 1024.0))
             },
-            parse_hrm(&vec!(0b10001, 70, 0, 10, 1))
+            parse_hrm(&[0b10001, 70, 0, 10, 1])
         );
     }
 
@@ -115,7 +115,7 @@ mod tests {
                     Duration::from_secs_f32(780.0 / 1024.0)
                 )
             },
-            parse_hrm(&vec!(0b10000, 70, 10, 1, 11, 2, 12, 3))
+            parse_hrm(&[0b10000, 70, 10, 1, 11, 2, 12, 3])
         );
     }
 
@@ -128,7 +128,7 @@ mod tests {
                 energy_expended: None,
                 rr_intervals: vec!(Duration::from_secs_f32(266.0 / 1024.0))
             },
-            parse_hrm(&vec!(0b10000, 70, 10, 1))
+            parse_hrm(&[0b10000, 70, 10, 1])
         );
     }
 
@@ -141,7 +141,7 @@ mod tests {
                 energy_expended: Some(266),
                 rr_intervals: Vec::with_capacity(0),
             },
-            parse_hrm(&vec!(0b1001, 70, 0, 10, 1))
+            parse_hrm(&[0b1001, 70, 0, 10, 1])
         );
     }
 
@@ -154,7 +154,7 @@ mod tests {
                 energy_expended: Some(266),
                 rr_intervals: Vec::with_capacity(0),
             },
-            parse_hrm(&vec!(0b1000, 70, 10, 1))
+            parse_hrm(&[0b1000, 70, 10, 1])
         );
     }
 
@@ -167,7 +167,7 @@ mod tests {
                 energy_expended: None,
                 rr_intervals: Vec::with_capacity(0),
             },
-            parse_hrm(&vec!(0b100, 70))
+            parse_hrm(&[0b100, 70])
         );
     }
 
@@ -180,7 +180,7 @@ mod tests {
                 energy_expended: None,
                 rr_intervals: Vec::with_capacity(0),
             },
-            parse_hrm(&vec!(0b110, 70))
+            parse_hrm(&[0b110, 70])
         );
     }
 
@@ -193,7 +193,7 @@ mod tests {
                 energy_expended: None,
                 rr_intervals: Vec::with_capacity(0),
             },
-            parse_hrm(&vec!(1, 10, 1))
+            parse_hrm(&[1, 10, 1])
         );
     }
 
@@ -206,7 +206,7 @@ mod tests {
                 energy_expended: None,
                 rr_intervals: Vec::with_capacity(0),
             },
-            parse_hrm(&vec!(1, 70, 0))
+            parse_hrm(&[1, 70, 0])
         );
     }
 
@@ -219,7 +219,7 @@ mod tests {
                 energy_expended: None,
                 rr_intervals: Vec::with_capacity(0),
             },
-            parse_hrm(&vec!(0, 70))
+            parse_hrm(&[0, 70])
         );
     }
 }

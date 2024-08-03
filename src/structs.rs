@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 /// A struct to hold the information of a Bluetooth device.
 #[derive(Clone, Default)]
+#[allow(dead_code)]
 pub struct DeviceInfo {
     // TODO id vs address
     pub id: String,
@@ -66,7 +67,10 @@ pub struct Characteristic {
 }
 
 /// A struct to hold the information of a GATT Descriptor.
+#[allow(dead_code)]
 pub struct ManufacturerData {
     pub company_code: String,
     pub data: String,
 }
+
+// TODO Remove do more tests with ManufacturerData so I can remove #[allow(dead_code)]

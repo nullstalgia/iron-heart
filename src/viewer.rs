@@ -120,7 +120,7 @@ pub async fn viewer<B: Backend>(
                     }
                 }
                 AppState::HeartRateViewNoData | AppState::HeartRateView => {
-                    heart_rate_display(f, &app);
+                    heart_rate_display(f, app);
                 }
             }
 
@@ -288,7 +288,7 @@ pub async fn viewer<B: Backend>(
                         if device
                             .services
                             .iter()
-                            .any(|service| service.clone() == HEART_RATE_SERVICE_UUID)
+                            .any(|service| *service == HEART_RATE_SERVICE_UUID)
                         {
                             app.discovered_devices.push(device.clone());
                         }

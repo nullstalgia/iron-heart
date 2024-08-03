@@ -335,8 +335,8 @@ impl App {
             // not a fan of hardcoding it (and it's "" in the ::default())
             // Maybe do a .new() and supply a None?
             if damaged && new_name != "Unknown" {
-                self.settings.ble.saved_address = new_id.clone();
-                self.settings.ble.saved_name = new_name.clone();
+                self.settings.ble.saved_address.clone_from(&new_id);
+                self.settings.ble.saved_name.clone_from(&new_name);
                 info!("Updating saved device! Name: {} MAC: {}", new_name, new_id);
                 self.save_settings().expect("Failed to save settings");
             }
