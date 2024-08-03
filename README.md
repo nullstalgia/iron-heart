@@ -20,16 +20,16 @@ A Rust-based BLE Heart Rate Monitor bridge for OSC in Social VR, and other misce
 
 ## How to use
 1. Place the executable in a convenient spot
-  - It will generate a log file and configuration file on first launch
-  - You can copy it into [VRCX](https://github.com/vrcx-team/VRCX)'s App Autostart folder, or add a shortcut instead!
+    - It will generate a log file and configuration file on first launch
+    - You can copy it into [VRCX](https://github.com/vrcx-team/VRCX)'s App Autostart folder, or add a shortcut instead!
 2. Power on and wear the Heart Rate sensor
 3. Find the device in the list of Discovered Devices
-  - Only compatible devices\* will be shown in the list!
-  - If your device does not show up in the list, make sure it's powered on and in range of your Bluetooth Adapter
-  - If your device is a Smartwatch/Mi Band/other more complex smart gadget that has a HR Sensor, it may not be compatible.
+    - Only compatible devices\* will be shown in the list!
+    - If your device does not show up in the list, make sure it's powered on and in range of your Bluetooth Adapter
+    - If your device is a Smartwatch/Mi Band/other more complex smart gadget that has a HR Sensor, it may not be compatible.
 4. Connect, and done!
-  - The rest is up to you! You can use [my free Heart Rate Prefab for VRChat](https://nullstalgia.booth.pm/items/5156075), make your own systems, use it with OBS, etc!
-  - See below for the default parameter names, and their types.
+    - The rest is up to you! You can use [my free Heart Rate Prefab for VRChat](https://nullstalgia.booth.pm/items/5156075), make your own systems, use it with OBS, etc!
+    - See below for the default parameter names, and their types.
 
 \*: devices that advertise the Heart Rate Measurement characteristic. Usually devices whose main purpose is to measure heart rate will advertise this (i.e. Polar/Coospo/etc sensors)!
 
