@@ -1,33 +1,47 @@
-# From: https://github.com/marketplace/actions/rust-release-binary
+# From: https://github.com/marketplace/actions/build-and-upload-rust-binary-to-github-releases
+name: Release
+
+permissions:
+  contents: write
+
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - v[0-9]+.*
 
 jobs:
-  release:
-    name: release ${{ matrix.target }}
+  create-release:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-assets:
+    needs: create-release
     strategy:
-      fail-fast: false
       matrix:
         include:
-          - target: x86_64-pc-windows-gnu
-            archive: zip
-          - target: x86_64-unknown-linux-musl
-            archive: tar.gz tar.xz tar.zst
-            pre_script: ".github/scripts/linux_dep.sh"
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
           - target: x86_64-apple-darwin
-            archive: zip
-            rust_ver: 1.73
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@master
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+      - name: Get Dependencies (Linux)
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+        if: startsWith(matrix.os, 'ubuntu')
+      - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          RUSTTARGET: ${{ matrix.target }}
-          ARCHIVE_TYPES: ${{ matrix.archive }}
-          PRE_BUILD: ${{ matrix.pre_script }}
-          TOOLCHAIN_VERSION: ${{ matrix.rust_ver }}
-          EXTRA_FILES: "README.md LICENSE"
+          bin: ...
+          target: ${{ matrix.target }}
+          include: LICENSE,README.md
+          tar: unix
+          zip: windows
+          archive: $bin-$tag-$target
+          token: ${{ secrets.GITHUB_TOKEN }}
