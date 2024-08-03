@@ -40,14 +40,12 @@ pub fn heart_rate_display(frame: &mut Frame, app: &App) {
 
     if combined && bpm_chart && rr_chart {
         render_combined_chart(frame, shared_chart, app, true, true);
-    } else {
-        if bpm_chart && rr_chart {
-            render_combined_chart(frame, bpm_history, app, true, false);
-            render_combined_chart(frame, rr_history, app, false, true);
-        } else if bpm_chart {
-            render_combined_chart(frame, shared_chart, app, true, false);
-        } else if rr_chart {
-            render_combined_chart(frame, shared_chart, app, false, true);
-        }
+    } else if bpm_chart && rr_chart {
+        render_combined_chart(frame, bpm_history, app, true, false);
+        render_combined_chart(frame, rr_history, app, false, true);
+    } else if bpm_chart {
+        render_combined_chart(frame, shared_chart, app, true, false);
+    } else if rr_chart {
+        render_combined_chart(frame, shared_chart, app, false, true);
     }
 }

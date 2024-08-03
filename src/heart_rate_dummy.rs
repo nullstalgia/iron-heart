@@ -22,9 +22,11 @@ pub async fn start_dummy_thread(
 
     let mut loops: u16 = 0;
     let mut positive_direction = true;
-    let mut hr_status = HeartRateStatus::default();
-    hr_status.heart_rate_bpm = low_bpm.saturating_sub(1);
-    hr_status.battery_level = BatteryLevel::Level(100);
+    let mut hr_status = HeartRateStatus {
+        heart_rate_bpm: low_bpm.saturating_sub(1),
+        battery_level: BatteryLevel::Level(100),
+        ..Default::default()
+    };
 
     loop {
         tokio::select! {

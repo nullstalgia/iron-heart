@@ -180,8 +180,8 @@ struct OSCAddresses {
     rr_twitch_down: String,
 }
 
-fn format_address(osc_settings: &OSCSettings, param: &str) -> String {
-    let mut address = format!("{}/{}", osc_settings.address_prefix, param);
+fn format_address(prefix: &str, param: &str) -> String {
+    let mut address = format!("{}/{}", prefix, param);
     while let Some(pos) = address.find("//") {
         address.replace_range(pos..pos + 2, "/");
     }
@@ -190,18 +190,19 @@ fn format_address(osc_settings: &OSCSettings, param: &str) -> String {
 
 impl OSCAddresses {
     fn new(osc_settings: &OSCSettings) -> Self {
+        let prefix = &osc_settings.address_prefix;
         OSCAddresses {
-            beat_toggle: format_address(&osc_settings, &osc_settings.param_beat_toggle),
-            beat_pulse: format_address(&osc_settings, &osc_settings.param_beat_pulse),
-            bpm_int: format_address(&osc_settings, &osc_settings.param_bpm_int),
-            bpm_float: format_address(&osc_settings, &osc_settings.param_bpm_float),
-            connected: format_address(&osc_settings, &osc_settings.param_hrm_connected),
-            hiding_disconnect: format_address(&osc_settings, &osc_settings.param_hiding_disconnect),
-            latest_rr: format_address(&osc_settings, &osc_settings.param_latest_rr_int),
-            battery_int: format_address(&osc_settings, &osc_settings.param_hrm_battery_int),
-            battery_float: format_address(&osc_settings, &osc_settings.param_hrm_battery_float),
-            rr_twitch_up: format_address(&osc_settings, &osc_settings.param_rr_twitch_up),
-            rr_twitch_down: format_address(&osc_settings, &osc_settings.param_rr_twitch_down),
+            beat_toggle: format_address(prefix, &osc_settings.param_beat_toggle),
+            beat_pulse: format_address(prefix, &osc_settings.param_beat_pulse),
+            bpm_int: format_address(prefix, &osc_settings.param_bpm_int),
+            bpm_float: format_address(prefix, &osc_settings.param_bpm_float),
+            connected: format_address(prefix, &osc_settings.param_hrm_connected),
+            hiding_disconnect: format_address(prefix, &osc_settings.param_hiding_disconnect),
+            latest_rr: format_address(prefix, &osc_settings.param_latest_rr_int),
+            battery_int: format_address(prefix, &osc_settings.param_hrm_battery_int),
+            battery_float: format_address(prefix, &osc_settings.param_hrm_battery_float),
+            rr_twitch_up: format_address(prefix, &osc_settings.param_rr_twitch_up),
+            rr_twitch_down: format_address(prefix, &osc_settings.param_rr_twitch_down),
         }
     }
 }
@@ -295,16 +296,15 @@ pub async fn osc_thread(
                             } else if !use_real_rr {
                                 latest_rr = rr_from_bpm(hr_status.heart_rate_bpm);
                             }
-                        } else {
-                            if osc_settings.hide_disconnections {
-                                if disconnected_at.is_none() {
-                                    disconnected_at = Some(Instant::now());
-                                }
-                            } else {
-                                hr_status = data;
-                                delay_initial_connected = true;
+                        } else if osc_settings.hide_disconnections {
+                            if disconnected_at.is_none() {
+                                disconnected_at = Some(Instant::now());
                             }
+                        } else {
+                            hr_status = data;
+                            delay_initial_connected = true;
                         }
+
                         let hiding_ble_disconnection = if let Some(dc_timestamp) = disconnected_at {
                             (dc_timestamp.elapsed() < max_hide_disconnection) && (hr_status.heart_rate_bpm > 0)
                         } else {

@@ -204,10 +204,8 @@ pub async fn viewer<B: Backend>(
                     KeyCode::Char('c') | KeyCode::Char('C') => {
                         if key.modifiers == KeyModifiers::CONTROL {
                             break;
-                        } else {
-                            if app.is_idle_on_main_menu() {
-                                app.connect_for_characteristics().await;
-                            }
+                        } else if app.is_idle_on_main_menu() {
+                            app.connect_for_characteristics().await;
                         }
                     }
                     KeyCode::Char('s') => {
@@ -376,15 +374,14 @@ pub async fn viewer<B: Backend>(
                     app.error_message = Some(ErrorPopup::Intermittent(
                         "Disconnected from device!".to_string(),
                     ));
-                    if app.state == AppState::HeartRateView
+                    if (app.state == AppState::HeartRateView
                         || app.state == AppState::HeartRateViewNoData
-                        || app.state == AppState::MainMenu
+                        || app.state == AppState::MainMenu)
+                        && id == app.get_selected_device().unwrap().id
                     {
-                        if id == app.get_selected_device().unwrap().id {
-                            debug!("Disconnected from device {:?}, resuming BLE scan", id);
-                            app.osc_tx.send(HeartRateStatus::default()).unwrap();
-                            app.ble_scan_paused.store(false, Ordering::SeqCst);
-                        }
+                        debug!("Disconnected from device {:?}, resuming BLE scan", id);
+                        app.osc_tx.send(HeartRateStatus::default()).unwrap();
+                        app.ble_scan_paused.store(false, Ordering::SeqCst);
                     }
                 }
                 // Not possible to receive this here

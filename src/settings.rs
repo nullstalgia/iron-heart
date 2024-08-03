@@ -4,7 +4,6 @@ use serde_derive::{Deserialize, Serialize};
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use toml;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MiscSettings {

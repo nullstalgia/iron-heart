@@ -50,19 +50,19 @@ pub fn render_combined_chart(
     let labels = if render_bpm && render_rr {
         vec![
             format!("{} ({:.1})", bpm_bounds[0], rr_bounds[0]).bold(),
-            format!("{} ({:.1})", avg_bpm, avg_rr).bold().into(),
+            format!("{} ({:.1})", avg_bpm, avg_rr).bold(),
             format!("{} ({:.1})", bpm_bounds[1], rr_bounds[1]).bold(),
         ]
     } else if render_bpm {
         vec![
             format!("{}", bpm_bounds[0]).bold(),
-            format!("{}", avg_bpm).bold().into(),
+            format!("{}", avg_bpm).bold(),
             format!("{}", bpm_bounds[1]).bold(),
         ]
     } else {
         vec![
             format!("{:.1}", rr_bounds[0]).bold(),
-            format!("{:.1}", avg_rr).bold().into(),
+            format!("{:.1}", avg_rr).bold(),
             format!("{:.1}", rr_bounds[1]).bold(),
         ]
     };

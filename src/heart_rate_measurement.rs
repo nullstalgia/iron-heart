@@ -29,7 +29,7 @@ pub struct HeartRateMeasurement {
 }
 
 // Notably, this function always assumes a valid input
-pub fn parse_hrm(data: &Vec<u8>) -> HeartRateMeasurement {
+pub fn parse_hrm(data: &[u8]) -> HeartRateMeasurement {
     let is_16_bit = data[0] & 1 == 1;
     let has_sensor_detection = data[0] & 0b100 == 0b100;
     let has_energy_expended = data[0] & 0b1000 == 0b1000;
