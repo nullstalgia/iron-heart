@@ -13,6 +13,7 @@ use tokio::sync::{
     mpsc::{self, UnboundedReceiver, UnboundedSender},
     Mutex,
 };
+use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
 use crate::heart_rate_dummy::start_dummy_thread;
@@ -275,7 +276,6 @@ impl App {
     }
 
     pub async fn join_threads(&mut self) {
-        use tokio::time::{timeout, Duration};
         let duration = Duration::from_secs(3);
         info!("Sending shutdown signal to threads!");
         self.shutdown_requested.cancel();

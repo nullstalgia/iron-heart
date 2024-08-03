@@ -41,10 +41,10 @@ A Rust-based BLE Heart Rate Monitor bridge for OSC in Social VR, and other misce
 host_ip = "0.0.0.0"
 target_ip = "127.0.0.1"
 port = 9000
-# Duration that MS `param_beat_pulse` will be true for each "beat"
+# Duration in MS that `param_beat_pulse` will be true for each "beat"
 pulse_length_ms = 100
 only_positive_float_bpm = false
-# While it tries to reconnect, it will keep the bool true and jitter the value slightly to mimic a connection.
+# If app loses connection to sensor, it will keep the Connected bool true and jitter the value slightly to mimic a connection.
 hide_disconnections = false
 max_hide_disconnection_sec = 60
 address_prefix = "/avatar/parameters/"
