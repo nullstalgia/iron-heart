@@ -18,6 +18,7 @@ jobs:
             pre_script: .github/scripts/linux_dep.sh
           - target: x86_64-apple-darwin
             archive: zip
+            rust_ver: 1.74
     steps:
       - uses: actions/checkout@master
       - name: Compile and release
@@ -27,4 +28,5 @@ jobs:
         with:
           RUSTTARGET: ${{ matrix.target }}
           ARCHIVE_TYPES: ${{ matrix.archive }}
-          PRE_BUILD:  ${{ matrix.pre_script }}
+          PRE_BUILD: ${{ matrix.pre_script }}
+          TOOLCHAIN_VERSION: ${{ matrix.rust_ver }}
