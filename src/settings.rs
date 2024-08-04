@@ -80,6 +80,12 @@ impl Settings {
         let exe_path = env::current_exe().expect("Failed to get executable path");
         let config_path = exe_path.with_extension("toml");
 
+        let default_log_level = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "info"
+        };
+
         let s = Config::builder()
             // Start off by merging in the "default" configuration file
             .add_source(ConfigFile::from(config_path).required(false))
@@ -107,7 +113,7 @@ impl Settings {
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?
             .set_default("ble.rr_ignore_after_empty", 0)?
-            .set_default("misc.log_level", "info")?
+            .set_default("misc.log_level", default_log_level)?
             .set_default("misc.write_bpm_to_file", false)?
             .set_default("misc.write_rr_to_file", false)?
             .set_default("misc.bpm_file_path", "bpm.txt")?
