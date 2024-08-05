@@ -104,7 +104,7 @@ pub async fn websocket_thread(
                         Some(Ok(message)) => {
                             if message.is_text() {
                                 let text = message.as_text().unwrap();
-                                if let Ok(hr) = serde_json::from_str::<JSONHeartRate>(&text) {
+                                if let Ok(hr) = serde_json::from_str::<JSONHeartRate>(text) {
                                     hr_status.heart_rate_bpm = hr.bpm;
                                     if let Some(battery) = hr.battery {
                                         hr_status.battery_level = BatteryLevel::Level(battery);
