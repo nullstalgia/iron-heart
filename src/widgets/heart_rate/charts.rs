@@ -25,6 +25,12 @@ pub fn render_combined_chart(
     let bpm_bounds = [app.chart_low_bpm, app.chart_high_bpm];
     let avg_bpm = app.chart_mid_bpm;
 
+    let combine_charts = render_bpm && render_rr;
+    // By default we have the combined chart enabled, but if the user's
+    // monitor doesn't support RR, we should hide just the RR portion
+    let hide_rr = combine_charts && app.rr_dataset.is_empty();
+    let render_rr = render_rr && !hide_rr;
+
     if render_rr {
         datasets.push(
             Dataset::default()
