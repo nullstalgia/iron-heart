@@ -16,7 +16,8 @@ use tokio::sync::{
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
-use crate::heart_rate_dummy::start_dummy_thread;
+use crate::heart_rate_dummy::dummy_thread;
+use crate::heart_rate_websocket::websocket_thread;
 use crate::{
     heart_rate::{start_notification_thread, HeartRateStatus},
     logging::logging_thread,
@@ -35,6 +36,7 @@ pub enum DeviceData {
     DeviceInfo(DeviceInfo),
     Characteristics(Vec<Characteristic>),
     HeartRateStatus(HeartRateStatus),
+    WebsocketReady(std::net::SocketAddr),
     Error(ErrorPopup),
 }
 
@@ -45,6 +47,7 @@ pub enum AppState {
     SaveDevicePrompt,
     ConnectingForHeartRate,
     ConnectingForCharacteristics,
+    WaitingForWebsocket,
     HeartRateView,
     HeartRateViewNoData,
 }
@@ -90,6 +93,7 @@ pub struct App {
     pub osc_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub logging_thread_handle: Option<tokio::task::JoinHandle<()>>,
     pub dummy_thread_handle: Option<tokio::task::JoinHandle<()>>,
+    pub websocket_thread_handle: Option<tokio::task::JoinHandle<()>>,
     // Raw histories
     pub heart_rate_history: VecDeque<f64>,
     pub rr_history: VecDeque<f64>,
@@ -102,10 +106,11 @@ pub struct App {
     pub chart_high_bpm: f64,
     pub chart_mid_bpm: f64,
     pub chart_low_bpm: f64,
-
     pub chart_high_rr: f64,
     pub chart_mid_rr: f64,
     pub chart_low_rr: f64,
+
+    pub websocket_url: Option<String>,
 }
 
 impl App {
@@ -154,6 +159,7 @@ impl App {
             osc_thread_handle: None,
             logging_thread_handle: None,
             dummy_thread_handle: None,
+            websocket_thread_handle: None,
             session_high_bpm: (0.0, Local::now()),
             session_low_bpm: (0.0, Local::now()),
             chart_high_bpm: 0.0,
@@ -162,6 +168,7 @@ impl App {
             chart_high_rr: 0.0,
             chart_low_rr: 0.0,
             chart_mid_rr: 0.0,
+            websocket_url: None,
         }
     }
 
@@ -270,8 +277,24 @@ impl App {
         debug!("Spawning Dummy thread");
         self.state = AppState::HeartRateView;
         self.chart_high_rr = self.settings.misc.chart_rr_max;
-        self.hr_thread_handle = Some(tokio::spawn(async move {
-            start_dummy_thread(hr_tx_clone, dummy_settings_clone, shutdown_requested_clone).await
+        self.dummy_thread_handle = Some(tokio::spawn(async move {
+            dummy_thread(hr_tx_clone, dummy_settings_clone, shutdown_requested_clone).await
+        }));
+    }
+
+    pub async fn start_websocket_thread(&mut self) {
+        let hr_tx_clone = self.hr_tx.clone();
+        let shutdown_requested_clone = self.shutdown_requested.clone();
+        let websocket_settings_clone = self.settings.websocket.clone();
+        debug!("Spawning Websocket thread");
+        self.state = AppState::WaitingForWebsocket;
+        self.websocket_thread_handle = Some(tokio::spawn(async move {
+            websocket_thread(
+                hr_tx_clone,
+                websocket_settings_clone,
+                shutdown_requested_clone,
+            )
+            .await
         }));
     }
 
@@ -291,6 +314,13 @@ impl App {
             debug!("Joining HR thread");
             if let Err(err) = timeout(duration, handle).await {
                 error!("Failed to join HR thread: {:?}", err);
+            }
+        }
+
+        if let Some(handle) = self.websocket_thread_handle.take() {
+            debug!("Joining Websocket thread");
+            if let Err(err) = timeout(duration, handle).await {
+                error!("Failed to join Websocket thread: {:?}", err);
             }
         }
 

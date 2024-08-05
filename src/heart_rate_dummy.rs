@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 
-pub async fn start_dummy_thread(
+pub async fn dummy_thread(
     hr_tx: mpsc::UnboundedSender<DeviceData>,
     dummy_settings: DummySettings,
     shutdown_token: CancellationToken,

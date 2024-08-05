@@ -10,8 +10,9 @@ A Rust-based BLE Heart Rate Monitor bridge for OSC in Social VR, and other misce
 
 ## Features
 
-- Accurate heart-beat effects: Using the monitor's reported time between heart beats (RR Interval), we can drive avatar effects that match your heart's beating!
 - Supports any BLE-specification-following Heart Rate Monitor! (Many by Polar, Coospo, etc.)
+- Supports receiving heart rate data via WebSockets with JSON payloads!
+- Accurate heart-beat effects: Using the monitor's reported time between heart beats (RR Interval), we can drive avatar effects that match your heart's beating!
 - Quick reconnection to saved device on app startup
 - Terminal UI and Charts: Powered by [Ratatui](https://ratatui.rs/)
 - CSV Logging and Text File support
@@ -21,7 +22,7 @@ A Rust-based BLE Heart Rate Monitor bridge for OSC in Social VR, and other misce
 ## How to use
 1. Place the executable in a convenient spot
     - It will generate a log file and configuration file on first launch
-    - You can copy it into [VRCX](https://github.com/vrcx-team/VRCX)'s App Autostart folder, or add a shortcut instead!
+    - You can then make a shortcut to the file, and place it in [VRCX](https://github.com/vrcx-team/VRCX)'s App Auto-Launcher folder to have it start alongside VRChat!
 2. Power on and wear the Heart Rate sensor
 3. Find the device in the list of Discovered Devices
     - Only compatible devices\* will be shown in the list!
@@ -79,6 +80,11 @@ saved_address = ""
 # If no RR was supplied for an update, burn X values before using new ones
 rr_ignore_after_empty = 0
 
+[websocket]
+# Note: BLE is disabled if websockets are enabled
+enabled = false
+port = 5566
+
 [misc]
 log_level = "info"
 # Useful for OBS
@@ -98,7 +104,7 @@ chart_rr_clamp_low = false
 charts_combine = true
 
 [dummy]
-# Ignore BLE entirely, send values for testing
+# Ignore BLE and WebSockets entirely, just send values for testing
 enabled = false
 low_bpm = 50
 high_bpm = 120
@@ -108,6 +114,10 @@ bpm_speed = 1.5
 # Will trigger hide_disconnections behavior if also enabled
 loops_before_dc = 2
 ```
+
+## Known Compatible WebSocket Senders
+
+- [HeartSoos](https://play.google.com/store/apps/details?id=lucheart.heartsoos.wearapp) by [LucHeart](https://github.com/LucHeart) for WearOS - Supports sending BPM only
 
 ## Alternatives
 

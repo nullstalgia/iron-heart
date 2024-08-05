@@ -58,6 +58,7 @@ pub struct OSCSettings {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct DummySettings {
+    // When enabled, BLE and Websockets are disabled
     pub enabled: bool,
     pub low_bpm: u16,
     pub high_bpm: u16,
@@ -65,10 +66,18 @@ pub struct DummySettings {
     pub loops_before_dc: u16,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct WebSocketSettings {
+    // Note: BLE is disabled if websockets are enabled
+    pub enabled: bool,
+    pub port: u16,
+}
+
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Settings {
     pub osc: OSCSettings,
     pub ble: BLESettings,
+    pub websocket: WebSocketSettings,
     pub misc: MiscSettings,
     pub dummy: DummySettings,
 }
@@ -113,6 +122,8 @@ impl Settings {
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?
             .set_default("ble.rr_ignore_after_empty", 0)?
+            .set_default("websocket.enabled", false)?
+            .set_default("websocket.port", 5566)?
             .set_default("misc.log_level", default_log_level)?
             .set_default("misc.write_bpm_to_file", false)?
             .set_default("misc.write_rr_to_file", false)?

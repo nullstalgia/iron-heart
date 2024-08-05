@@ -83,6 +83,7 @@ pub fn render_combined_chart(
         CHART_RR_MAX_ELEMENTS
     };
 
+    // TODO Custom Legend
     let chart = Chart::new(datasets)
         .block(Block::bordered().title("Histogram".cyan().bold()))
         .x_axis(

@@ -16,6 +16,7 @@ mod company_codes;
 mod heart_rate;
 mod heart_rate_dummy;
 mod heart_rate_measurement;
+mod heart_rate_websocket;
 mod logging;
 mod osc;
 mod panic_handler;
@@ -67,6 +68,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         app.save_settings()?;
         if app.settings.dummy.enabled {
             app.start_dummy_thread().await;
+        } else if app.settings.websocket.enabled {
+            app.start_websocket_thread().await;
         } else {
             app.start_bluetooth_event_thread().await;
             app.start_logging_thread().await;

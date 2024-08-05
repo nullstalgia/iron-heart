@@ -5,7 +5,7 @@ use ratatui::backend::Backend;
 use ratatui::layout::Alignment;
 use ratatui::style::Style;
 use ratatui::text::Span;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     Terminal,
@@ -122,6 +122,26 @@ pub async fn viewer<B: Backend>(
                 AppState::HeartRateViewNoData | AppState::HeartRateView => {
                     heart_rate_display(f, app);
                 }
+                AppState::WaitingForWebsocket => {
+                    // TODO Move out to a function
+                    let area = centered_rect(60, 60, f.size());
+                    let mut text = "Waiting for websocket connection...".to_string();
+                    if let Some(ref url) = app.websocket_url {
+                        let connection_info = if url.starts_with("0.0.0.0") {
+                            local_ip_address::local_ip()
+                                .map(|local_ip| format!("{}{}", local_ip, &url[7..]))
+                                .unwrap_or_else(|_| url.clone())
+                        } else {
+                            url.clone()
+                        };
+                        text.push_str(&format!("\nConnect to: {}", connection_info));
+                    }
+                    let connecting_block = Paragraph::new(text)
+                        .alignment(Alignment::Center)
+                        .block(Block::default().borders(Borders::ALL));
+                    f.render_widget(Clear, area);
+                    f.render_widget(connecting_block, area);
+                }
             }
 
             if app.state == AppState::ConnectingForHeartRate
@@ -180,7 +200,8 @@ pub async fn viewer<B: Backend>(
                             .borders(Borders::ALL)
                             .title("! Notification !")
                             .style(style),
-                    );
+                    )
+                    .wrap(Wrap { trim: true });
                 f.render_widget(Clear, area);
                 f.render_widget(error_block, area);
             }
@@ -384,8 +405,8 @@ pub async fn viewer<B: Backend>(
                         app.ble_scan_paused.store(false, Ordering::SeqCst);
                     }
                 }
-                // Not possible to receive this here
-                DeviceData::HeartRateStatus(_) => {}
+                // Not possible to receive these here
+                DeviceData::HeartRateStatus(_) | DeviceData::WebsocketReady(_) => {}
             }
 
             if app.table_state.selected().is_none() {
@@ -415,6 +436,9 @@ pub async fn viewer<B: Backend>(
                         app.error_message = Some(error);
                     }
                     app.osc_tx.send(HeartRateStatus::default()).unwrap();
+                }
+                DeviceData::WebsocketReady(local_addr) => {
+                    app.websocket_url = Some(local_addr.to_string());
                 }
                 _ => {}
             }
