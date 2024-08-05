@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
     fast_log::init(
         fast_log::Config::new()
-            .file(log_str)
+            .file_loop(log_str, fast_log::consts::LogSize::MB(1))
             .level(log_level)
             .format(log_format)
             .chan_len(Some(1000000)),
