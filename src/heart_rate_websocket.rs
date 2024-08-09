@@ -26,6 +26,8 @@ struct JSONHeartRate {
 // (Need to mimic an OBS instance, agh)
 // https://github.com/Curtis-VL/HeartRateOnStream-OSC/blob/main/Program.cs
 
+// TODO Twitches
+
 pub async fn websocket_thread(
     hr_tx: mpsc::UnboundedSender<DeviceData>,
     websocket_settings: WebSocketSettings,

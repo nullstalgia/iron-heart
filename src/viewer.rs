@@ -64,7 +64,7 @@ pub async fn viewer<B: Backend>(
                     ]
                     .as_ref(),
                 )
-                .split(f.size());
+                .split(f.area());
 
             let device_binding = &DeviceInfo::default();
             // Causes a borrow issue, strange.
@@ -101,7 +101,7 @@ pub async fn viewer<B: Backend>(
 
                     // Draw the inspect overlay
                     if app.state == AppState::CharacteristicView {
-                        let area = centered_rect(60, 60, f.size());
+                        let area = centered_rect(60, 60, f.area());
                         let inspect_overlay = inspect_overlay(
                             &app.selected_characteristics,
                             app.characteristic_scroll,
@@ -110,7 +110,7 @@ pub async fn viewer<B: Backend>(
                         f.render_widget(Clear, area);
                         f.render_widget(inspect_overlay, area);
                     } else if app.state == AppState::SaveDevicePrompt {
-                        let area = centered_rect(30, 30, f.size());
+                        let area = centered_rect(30, 30, f.area());
                         let save_device_prompt = save_prompt();
                         f.render_stateful_widget(
                             save_device_prompt,
@@ -124,7 +124,7 @@ pub async fn viewer<B: Backend>(
                 }
                 AppState::WaitingForWebsocket => {
                     // TODO Move out to a function
-                    let area = centered_rect(60, 60, f.size());
+                    let area = centered_rect(60, 60, f.area());
                     let mut text = "Waiting for websocket connection...".to_string();
                     if let Some(ref url) = app.websocket_url {
                         let connection_info = if url.starts_with("0.0.0.0") {
@@ -147,7 +147,7 @@ pub async fn viewer<B: Backend>(
             if app.state == AppState::ConnectingForHeartRate
                 || app.state == AppState::HeartRateViewNoData
             {
-                let area = centered_rect(50, 50, f.size());
+                let area = centered_rect(50, 50, f.area());
                 let mut border_style = Style::default();
 
                 let mut name = app
@@ -192,7 +192,7 @@ pub async fn viewer<B: Backend>(
                     }
                 };
 
-                let area = centered_rect(60, 50, f.size());
+                let area = centered_rect(60, 50, f.area());
                 let error_block = Paragraph::new(Span::from(message))
                     .alignment(Alignment::Center)
                     .block(

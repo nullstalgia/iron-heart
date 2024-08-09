@@ -5,7 +5,7 @@ use ratatui::{
 
 use crate::{
     app::App,
-    widgets::heart_rate::{charts::render_combined_chart, tables::render_table},
+    widgets::heart_rate::{charts::render_combined_chart, charts::ChartType, tables::render_table},
 };
 
 // TODO Ascii Heart Beat Animation
@@ -16,7 +16,7 @@ pub const CHART_BPM_VERT_MARGIN: f64 = 3.0;
 pub const CHART_RR_VERT_MARGIN: f64 = 0.1;
 
 pub fn heart_rate_display(frame: &mut Frame, app: &App) {
-    let area = frame.size();
+    let area = frame.area();
 
     let vertical = Layout::vertical([Constraint::Min(4), Constraint::Percentage(100)]);
     let horizontal_shared = Layout::horizontal([Constraint::Percentage(100)]);
@@ -39,13 +39,13 @@ pub fn heart_rate_display(frame: &mut Frame, app: &App) {
     let combined = app.settings.misc.charts_combine;
 
     if combined && bpm_chart && rr_chart {
-        render_combined_chart(frame, shared_chart, app, true, true);
+        render_combined_chart(frame, shared_chart, app, ChartType::Combined);
     } else if bpm_chart && rr_chart {
-        render_combined_chart(frame, bpm_history, app, true, false);
-        render_combined_chart(frame, rr_history, app, false, true);
+        render_combined_chart(frame, bpm_history, app, ChartType::BPM);
+        render_combined_chart(frame, rr_history, app, ChartType::RR);
     } else if bpm_chart {
-        render_combined_chart(frame, shared_chart, app, true, false);
+        render_combined_chart(frame, shared_chart, app, ChartType::BPM);
     } else if rr_chart {
-        render_combined_chart(frame, shared_chart, app, false, true);
+        render_combined_chart(frame, shared_chart, app, ChartType::RR);
     }
 }
