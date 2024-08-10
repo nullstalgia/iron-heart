@@ -1327,7 +1327,7 @@ dependencies = [
 
 [[package]]
 name = "null-iron-heart"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "better-panic",
  "btleplug",
