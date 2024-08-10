@@ -41,11 +41,11 @@ pub fn heart_rate_display(frame: &mut Frame, app: &App) {
     if combined && bpm_chart && rr_chart {
         render_combined_chart(frame, shared_chart, app, ChartType::Combined);
     } else if bpm_chart && rr_chart {
-        render_combined_chart(frame, bpm_history, app, ChartType::BPM);
-        render_combined_chart(frame, rr_history, app, ChartType::RR);
+        render_combined_chart(frame, bpm_history, app, ChartType::Bpm);
+        render_combined_chart(frame, rr_history, app, ChartType::Rr);
     } else if bpm_chart {
-        render_combined_chart(frame, shared_chart, app, ChartType::BPM);
+        render_combined_chart(frame, shared_chart, app, ChartType::Bpm);
     } else if rr_chart {
-        render_combined_chart(frame, shared_chart, app, ChartType::RR);
+        render_combined_chart(frame, shared_chart, app, ChartType::Rr);
     }
 }

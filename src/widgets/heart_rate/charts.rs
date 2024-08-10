@@ -15,8 +15,8 @@ use crate::{
 };
 
 pub enum ChartType {
-    BPM,
-    RR,
+    Bpm,
+    Rr,
     Combined,
 }
 
@@ -41,10 +41,10 @@ fn bpm_rr_legend(chart_type: &ChartType, graph_area: Rect) -> (Paragraph, Rect) 
                 line![span!(Color::Blue; "(RR)")],
             ]
         }
-        ChartType::BPM => {
+        ChartType::Bpm => {
             vec![line![span!(Color::Red; "BPM")]]
         }
-        ChartType::RR => {
+        ChartType::Rr => {
             vec![line![span!(Color::Blue; "(RR)")]]
         }
     };
@@ -54,11 +54,7 @@ fn bpm_rr_legend(chart_type: &ChartType, graph_area: Rect) -> (Paragraph, Rect) 
         .max()
         .unwrap_or_default();
 
-    let legend_area = legend_rect(
-        max_line_length as u16,
-        text.iter().count() as u16,
-        graph_area,
-    );
+    let legend_area = legend_rect(max_line_length as u16, text.len() as u16, graph_area);
 
     let legend_block = Paragraph::new(text)
         .block(Block::default().borders(Borders::ALL))
@@ -86,10 +82,10 @@ fn styled_label(bpm: f64, rr: f64, chart_type: &ChartType, allow_space: bool) ->
                 span!(rr_label_style; rr),
             ]
         }
-        ChartType::BPM => {
+        ChartType::Bpm => {
             line![span!(bpm_label_style; bpm)]
         }
-        ChartType::RR => {
+        ChartType::Rr => {
             line![span!(rr_label_style; rr)]
         }
     }
@@ -103,7 +99,7 @@ pub fn render_combined_chart(f: &mut Frame, area: Rect, app: &App, chart_type: C
     let bpm_bounds = [app.chart_low_bpm, app.chart_high_bpm];
     let mid_bpm = app.chart_mid_bpm;
 
-    if matches!(chart_type, ChartType::Combined) || matches!(chart_type, ChartType::RR) {
+    if matches!(chart_type, ChartType::Combined) || matches!(chart_type, ChartType::Rr) {
         datasets.push(
             Dataset::default()
                 .name("(RR)")
@@ -114,7 +110,7 @@ pub fn render_combined_chart(f: &mut Frame, area: Rect, app: &App, chart_type: C
         );
     }
 
-    if matches!(chart_type, ChartType::Combined) || matches!(chart_type, ChartType::BPM) {
+    if matches!(chart_type, ChartType::Combined) || matches!(chart_type, ChartType::Bpm) {
         datasets.push(
             Dataset::default()
                 .name("BPM")
@@ -134,14 +130,14 @@ pub fn render_combined_chart(f: &mut Frame, area: Rect, app: &App, chart_type: C
     ];
 
     let y_bounds = match chart_type {
-        ChartType::Combined | ChartType::BPM => bpm_bounds,
-        ChartType::RR => rr_bounds,
+        ChartType::Combined | ChartType::Bpm => bpm_bounds,
+        ChartType::Rr => rr_bounds,
     };
 
     let x_bound_top = match chart_type {
         ChartType::Combined => CHART_BPM_MAX_ELEMENTS.max(CHART_RR_MAX_ELEMENTS),
-        ChartType::BPM => CHART_BPM_MAX_ELEMENTS,
-        ChartType::RR => CHART_RR_MAX_ELEMENTS,
+        ChartType::Bpm => CHART_BPM_MAX_ELEMENTS,
+        ChartType::Rr => CHART_RR_MAX_ELEMENTS,
     };
 
     let chart = Chart::new(datasets)
