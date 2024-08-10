@@ -12,11 +12,12 @@ A Rust-based BLE Heart Rate Monitor bridge for OSC in Social VR, and other misce
 
 - Supports any BLE-specification-following Heart Rate Monitor! (Many by Polar, Coospo, etc.)
 - Supports receiving heart rate data via WebSockets with JSON payloads!
-- Accurate heart-beat effects: Using the monitor's reported time between heart beats (RR Interval), we can drive avatar effects that match your heart's beating!
+- Accurate per-heart-beat effects: Using the monitor's reported time between heart beats (RR Interval), we can drive avatar effects that match your heart's beating!
 - Quick reconnection to saved device on app startup
 - Terminal UI and Charts: Powered by [Ratatui](https://ratatui.rs/)
-- CSV Logging and Text File support
-- Dummy: Test avatars and prefabs without needing to put on/own a sensor
+- CSV Logging, review your past sessions!
+- Text file output, perfect for an OBS Text Source!
+- Dummy Mode: Test avatars and prefabs without needing to put on/own a sensor
 - Hide temporary disconnections (optional): In case of spotty connections, this can help mask those moments of signal loss
 
 ## How to use
