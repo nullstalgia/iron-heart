@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install Dependencies
+      - name: Install Linux Dependencies
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
       - name: Setup Rust toolchain and cache
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
