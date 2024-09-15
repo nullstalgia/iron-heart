@@ -13,6 +13,15 @@ pub enum BatteryLevel {
     Level(u8),
 }
 
+impl From<BatteryLevel> for u8 {
+    fn from(level: BatteryLevel) -> Self {
+        match level {
+            BatteryLevel::Level(battery) => battery,
+            _ => 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct HeartRateStatus {
     pub heart_rate_bpm: u16,

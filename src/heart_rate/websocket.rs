@@ -135,20 +135,18 @@ impl WebsocketActor {
             Some(Ok(msg)) => {
                 error!("Invalid message type: {:?}", msg);
                 return Ok((
-                    AppUpdate::Error(ErrorPopup::UserMustDismiss(format!(
+                    ErrorPopup::UserMustDismiss(format!(
                         "Invalid message type (expected text): {:?}",
                         msg
-                    ))),
+                    ))
+                    .into(),
                     true,
                 ));
             }
             Some(Err(e)) => {
                 error!("Error receiving message: {:?}", e);
                 return Ok((
-                    AppUpdate::Error(ErrorPopup::Intermittent(format!(
-                        "Error receiving message: {:?}",
-                        e
-                    ))),
+                    ErrorPopup::Intermittent(format!("Error receiving message: {:?}", e)).into(),
                     false,
                 ));
                 //break 'receiving;
@@ -156,9 +154,7 @@ impl WebsocketActor {
             None => {
                 info!("Websocket client disconnected");
                 return Ok((
-                    AppUpdate::Error(ErrorPopup::Intermittent(
-                        "Websocket client disconnected".to_string(),
-                    )),
+                    ErrorPopup::Intermittent("Websocket client disconnected".to_string()).into(),
                     false,
                 ));
                 //break 'receiving;
@@ -175,7 +171,7 @@ impl WebsocketActor {
                 }
                 self.hr_status.rr_intervals.push(Duration::from_millis(rr));
             }
-            return Ok((AppUpdate::HeartRateStatus(self.hr_status.clone()), true));
+            return Ok((self.hr_status.clone().into(), true));
         } else {
             error!("Invalid heart rate message: {}", message);
             return Ok((

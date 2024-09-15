@@ -1,4 +1,4 @@
-use crate::heart_rate::{BatteryLevel, HeartRateStatus};
+use crate::heart_rate::HeartRateStatus;
 use rand::Rng;
 use rosc::encoder;
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};
@@ -115,20 +115,16 @@ pub(super) fn form_bpm_bundle(
         args: vec![OscType::Bool(hiding_disconnect)],
     };
 
+    let battery_level: u8 = hr_status.battery_level.into();
+
     let battery_int_msg = OscMessage {
         addr: osc_addresses.battery_int.clone(),
-        args: vec![OscType::Int(match hr_status.battery_level {
-            BatteryLevel::Level(level) => level as i32,
-            _ => 0,
-        })],
+        args: vec![OscType::Int(battery_level as i32)],
     };
 
     let battery_float_msg = OscMessage {
         addr: osc_addresses.battery_float.clone(),
-        args: vec![OscType::Float(match hr_status.battery_level {
-            BatteryLevel::Level(level) => level as f32 / 100.0,
-            _ => 0.0,
-        })],
+        args: vec![OscType::Float(battery_level as f32 / 100.0)],
     };
 
     if hr_status.heart_rate_bpm == 0 {

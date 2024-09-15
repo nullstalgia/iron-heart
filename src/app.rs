@@ -626,7 +626,7 @@ impl App {
 
     /// Terminal interval tick
     pub fn term_tick(&mut self) {
-        self.frame_count = self.frame_count.checked_add(1).unwrap_or(0);
+        (self.frame_count, _) = self.frame_count.overflowing_add(1);
     }
 
     pub fn scroll_up(&mut self) {
@@ -796,7 +796,6 @@ impl App {
                 //self.is_loading_characteristics = false;
             }
             DeviceUpdate::ConnectedEvent(id) => {
-                info!("Connnnnnnnn");
                 if self.state == AppState::ConnectingForCharacteristics {
                     self.state = AppState::CharacteristicView;
                 } else {
