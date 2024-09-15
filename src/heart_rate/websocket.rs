@@ -1,11 +1,12 @@
 use super::{BatteryLevel, HeartRateStatus};
 use crate::app::{AppUpdate, ErrorPopup};
+use crate::broadcast;
 use crate::errors::AppError;
 use crate::settings::WebSocketSettings;
 
 use log::*;
 use serde::Deserialize;
-use std::net::SocketAddrV4;
+use std::net::{SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender as BSender;
@@ -36,7 +37,7 @@ struct WebsocketActor {
 }
 
 impl WebsocketActor {
-    async fn build(websocket_settings: WebSocketSettings) -> Result<Self, AppError> {
+    async fn build(websocket_settings: WebSocketSettings) -> Result<(Self, SocketAddr), AppError> {
         let port = websocket_settings.port;
         let host_addr = SocketAddrV4::from_str(&format!("0.0.0.0:{}", port))?;
 
@@ -47,14 +48,19 @@ impl WebsocketActor {
 
         let listener = TcpListener::bind(host_addr).await?;
 
-        Ok(Self {
-            listener,
-            hr_status,
-        })
+        let local_addr = listener.local_addr()?;
+
+        Ok((
+            Self {
+                listener,
+                hr_status,
+            },
+            local_addr,
+        ))
     }
     async fn server_loop(
         &mut self,
-        hr_tx: &BSender<AppUpdate>,
+        broadcast_tx: &BSender<AppUpdate>,
         cancel_token: CancellationToken,
     ) -> Result<(), AppError> {
         'server: loop {
@@ -66,12 +72,10 @@ impl WebsocketActor {
                             connection = conn;
                         }
                         Err(err) => {
-                            error!("Failed to accept connection: {}", err);
-                            hr_tx
-                                .send(AppUpdate::Error(ErrorPopup::UserMustDismiss(format!(
-                                    "Handshake failed: {:?}",
-                                    err
-                                )))).expect("Failed to send message");
+                            broadcast!(broadcast_tx, ErrorPopup::UserMustDismiss(format!(
+                                "Handshake failed: {:?}",
+                                err
+                            )));
                             continue 'server;
                         }
                     }
@@ -83,14 +87,12 @@ impl WebsocketActor {
             }
             let mut server = match ServerBuilder::new().accept(connection).await {
                 Ok(server) => server,
-                Err(e) => {
-                    error!("Handshake failed: {:?}", e);
-                    hr_tx
-                        .send(AppUpdate::Error(ErrorPopup::UserMustDismiss(format!(
-                            "Handshake failed: {:?}",
-                            e
-                        ))))
-                        .expect("Failed to send message");
+                Err(err) => {
+                    error!("Handshake failed: {:?}", err);
+                    broadcast!(
+                        broadcast_tx,
+                        ErrorPopup::UserMustDismiss(format!("Handshake failed: {:?}", err))
+                    );
                     continue 'server;
                 }
             };
@@ -98,7 +100,7 @@ impl WebsocketActor {
                 tokio::select! {
                     item = server.next() => {
                         let (message, keep_conn) = self.handle_ws_message(item)?;
-                        hr_tx.send(message).expect("Failed to send message");
+                        broadcast!(broadcast_tx, message);
                         if keep_conn == false {
                             break 'receiving;
                         }
@@ -188,33 +190,25 @@ impl WebsocketActor {
 }
 
 pub async fn websocket_thread(
-    hr_tx: BSender<AppUpdate>,
+    broadcast_tx: BSender<AppUpdate>,
     websocket_settings: WebSocketSettings,
     cancel_token: CancellationToken,
 ) {
-    let mut websocket = match WebsocketActor::build(websocket_settings).await {
-        Ok(ws) => ws,
+    let (mut websocket, local_addr) = match WebsocketActor::build(websocket_settings).await {
+        Ok((ws, addr)) => (ws, addr),
         Err(e) => {
             let message = format!("Failed to build websocket. {e}");
-            hr_tx
-                .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
-                .expect("Failed to send error message");
+            broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
             return;
         }
     };
 
     // Sharing the URL with the UI
-    hr_tx
-        .send(AppUpdate::WebsocketReady(
-            websocket.listener.local_addr().unwrap(),
-        ))
-        .expect("Failed to send ready message");
+    broadcast!(broadcast_tx, local_addr);
 
-    if let Err(e) = websocket.server_loop(&hr_tx, cancel_token).await {
+    if let Err(e) = websocket.server_loop(&broadcast_tx, cancel_token).await {
         error!("Websocket server error: {e}");
         let message = format!("Websocket server error: {e}");
-        hr_tx
-            .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
-            .expect("Failed to send error message");
+        broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
     }
 }

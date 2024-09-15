@@ -1,5 +1,6 @@
 use super::{rr_from_bpm, BatteryLevel, HeartRateStatus};
 use crate::app::{AppUpdate, ErrorPopup};
+use crate::broadcast;
 use crate::settings::DummySettings;
 
 use log::*;
@@ -11,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tokio::sync::broadcast::Sender as BSender;
 
 pub async fn dummy_thread(
-    hr_tx: BSender<AppUpdate>,
+    broadcast_tx: BSender<AppUpdate>,
     dummy_settings: DummySettings,
     cancel_token: CancellationToken,
 ) {
@@ -48,13 +49,11 @@ pub async fn dummy_thread(
                     }
                 }
                 if loops == loops_before_dc && loops_before_dc != 0 {
-                    hr_tx
-                        .send(AppUpdate::Error(ErrorPopup::Intermittent(
-                            "Simulating lost connection".to_string(),
-                        )))
-                        .expect("Failed to send fake error message");
+                    broadcast!(broadcast_tx, ErrorPopup::Intermittent(
+                        "Simulating lost connection".into(),
+                    ));
                 } else {
-                    hr_tx.send(AppUpdate::HeartRateStatus(hr_status.clone())).expect("Failed to send dummy message");
+                    broadcast!(broadcast_tx, hr_status.clone());
                 }
             }
             _ = cancel_token.cancelled() => {

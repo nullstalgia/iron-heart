@@ -10,6 +10,7 @@ use tokio::time::{self, interval, Duration, Instant, Interval};
 use tokio_util::sync::CancellationToken;
 
 use crate::app::{AppUpdate, ErrorPopup};
+use crate::broadcast;
 use crate::errors::AppError;
 use crate::heart_rate::{rr_from_bpm, HeartRateStatus};
 use crate::settings::OscSettings;
@@ -215,7 +216,7 @@ impl OscActor {
     }
     async fn rx_loop(
         &mut self,
-        mut osc_rx: BReceiver<AppUpdate>,
+        mut broadcast_rx: BReceiver<AppUpdate>,
         cancel_token: CancellationToken,
     ) -> Result<(), AppError> {
         self.init_params()?;
@@ -224,7 +225,7 @@ impl OscActor {
             let heart_beat = self.heart_beat_ticker.tick();
             let mimic = self.disconnect_update_interval.tick();
             tokio::select! {
-                hr_data = osc_rx.recv() => {
+                hr_data = broadcast_rx.recv() => {
                     match hr_data {
                         Ok(AppUpdate::HeartRateStatus(data)) => {
                             self.handle_data(data)?;
@@ -260,8 +261,8 @@ impl OscActor {
 }
 
 pub async fn osc_thread(
-    osc_rx: BReceiver<AppUpdate>,
-    osc_tx: BSender<AppUpdate>,
+    broadcast_rx: BReceiver<AppUpdate>,
+    broadcast_tx: BSender<AppUpdate>,
     osc_settings: OscSettings,
     cancel_token: CancellationToken,
 ) {
@@ -270,9 +271,7 @@ pub async fn osc_thread(
         Err(e) => {
             error!("Failed to set up OSC. {e}");
             let message = format!("Failed to set up OSC. {e}");
-            osc_tx
-                .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
-                .expect("Failed to send error message");
+            broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
             return;
         }
     };
@@ -281,11 +280,9 @@ pub async fn osc_thread(
     // Maybe option for twitches to be a toggle and/or pulse?
     // Current implementation is a weird mix of both, but is simple to implement
 
-    if let Err(e) = osc.rx_loop(osc_rx, cancel_token).await {
+    if let Err(e) = osc.rx_loop(broadcast_rx, cancel_token).await {
         error!("OSC Error: {e}");
         let message = format!("OSC Error: {e}");
-        osc_tx
-            .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
-            .expect("Failed to send error message");
+        broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
     }
 }

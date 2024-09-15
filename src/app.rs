@@ -22,7 +22,7 @@ use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
 use crate::widgets::save_prompt::SavePromptChoice;
-use crate::ArgConfig;
+use crate::{broadcast, ArgConfig};
 use crate::{
     heart_rate::ble::start_notification_thread,
     heart_rate::HeartRateStatus,
@@ -49,6 +49,24 @@ pub enum AppUpdate {
     HeartRateStatus(HeartRateStatus),
     WebsocketReady(std::net::SocketAddr),
     Error(ErrorPopup),
+}
+
+impl From<HeartRateStatus> for AppUpdate {
+    fn from(hr: HeartRateStatus) -> Self {
+        AppUpdate::HeartRateStatus(hr)
+    }
+}
+
+impl From<ErrorPopup> for AppUpdate {
+    fn from(error: ErrorPopup) -> Self {
+        AppUpdate::Error(error)
+    }
+}
+
+impl From<std::net::SocketAddr> for AppUpdate {
+    fn from(addr: std::net::SocketAddr) -> Self {
+        AppUpdate::WebsocketReady(addr)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -769,9 +787,11 @@ impl App {
                     || self.state == AppState::HeartRateViewNoData
                     || self.state == AppState::ConnectingForHeartRate
                 {
-                    self.broadcast_tx
-                        .send(AppUpdate::HeartRateStatus(HeartRateStatus::default()))
-                        .expect("Failed to send 0BPM on BLE Error");
+                    broadcast!(
+                        self.broadcast_tx,
+                        HeartRateStatus::default(),
+                        "Failed to send 0BPM on BLE Error"
+                    );
                 }
                 //self.is_loading_characteristics = false;
             }
@@ -808,9 +828,11 @@ impl App {
                     && id == self.get_selected_device().unwrap().id
                 {
                     debug!("Disconnected from device {:?}, resuming BLE scan", id);
-                    self.broadcast_tx
-                        .send(AppUpdate::HeartRateStatus(HeartRateStatus::default()))
-                        .expect("Failed to send 0BPM on BLE DC");
+                    broadcast!(
+                        self.broadcast_tx,
+                        HeartRateStatus::default(),
+                        "Failed to send 0BPM on BLE DC"
+                    );
                     self.ble_scan_paused.store(false, Ordering::SeqCst);
                 }
             }

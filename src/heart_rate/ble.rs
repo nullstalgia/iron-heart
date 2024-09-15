@@ -12,6 +12,8 @@ use tokio::sync::broadcast::Sender as BSender;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::broadcast;
+
 use super::measurement::parse_hrm;
 
 pub const HEART_RATE_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180d_0000_1000_8000_00805f9b34fb);
@@ -36,7 +38,7 @@ struct BleMonitorActor {
 }
 
 impl BleMonitorActor {
-    async fn connect(&mut self, hr_tx: &BSender<AppUpdate>) -> Result<(), AppError> {
+    async fn connect(&mut self, broadcast_tx: &BSender<AppUpdate>) -> Result<(), AppError> {
         let device = self
             .peripheral
             .device
@@ -94,24 +96,20 @@ impl BleMonitorActor {
                                 }
                             };
 
-                            self.notification_loop(hr_tx, notification_stream, &device).await?;
+                            self.notification_loop(broadcast_tx, notification_stream, &device).await?;
 
                             info!("Heart Rate Monitor stream closed!");
                             device.disconnect().await?;
-                            hr_tx
-                                .send(AppUpdate::Error(ErrorPopup::Intermittent(
-                                    "Connection timed out".to_string(),
-                                )))
-                                .expect("Failed to send error message");
+                            broadcast!(broadcast_tx, ErrorPopup::Intermittent(
+                                "Connection timed out".into(),
+                            ));
                         }
                         Err(e) => {
                             error!("BLE Connection error: {}", e);
-                            hr_tx
-                                .send(AppUpdate::Error(ErrorPopup::Intermittent(format!(
-                                    "BLE Connection error: {}",
-                                    e
-                                ))))
-                                .expect("Failed to send error message");
+                            broadcast!(broadcast_tx, ErrorPopup::Intermittent(format!(
+                                "BLE Connection error: {}",
+                                e
+                            )));
                         }
                     }
                 }
@@ -123,11 +121,9 @@ impl BleMonitorActor {
                 }
                 _ = tokio::time::sleep(self.no_packet_timeout) => {
                     error!("Connection timed out");
-                    hr_tx
-                        .send(AppUpdate::Error(ErrorPopup::Intermittent(
-                            "Connection timed out".to_string(),
-                        )))
-                        .expect("Failed to send error message");
+                    broadcast!(broadcast_tx, ErrorPopup::Intermittent(
+                        "Connection timed out".into(),
+                    ));
                 }
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
@@ -136,7 +132,7 @@ impl BleMonitorActor {
     }
     async fn notification_loop(
         &mut self,
-        hr_tx: &BSender<AppUpdate>,
+        broadcast_tx: &BSender<AppUpdate>,
         mut notification_stream: Pin<Box<dyn Stream<Item = ValueNotification> + Send>>,
         device: &btleplug::platform::Peripheral,
     ) -> Result<(), AppError> {
@@ -148,7 +144,7 @@ impl BleMonitorActor {
                 Some(data) = notification_stream.next() => {
                     if data.uuid == HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID {
                         let hr = self.handle_ble_hr(&data);
-                        hr_tx.send(AppUpdate::HeartRateStatus(hr)).expect("Failed to send HR data!");
+                        broadcast!(broadcast_tx, hr);
                     }
                 }
                 _ = battery_checking_interval.tick() => {
@@ -217,7 +213,7 @@ impl BleMonitorActor {
 }
 
 pub async fn start_notification_thread(
-    hr_tx: BSender<AppUpdate>,
+    broadcast_tx: BSender<AppUpdate>,
     peripheral: DeviceInfo,
     rr_cooldown_amount: usize,
     twitch_threshold: f32,
@@ -237,11 +233,9 @@ pub async fn start_notification_thread(
         rr_left_to_burn: rr_cooldown_amount,
     };
 
-    if let Err(e) = ble_monitor.connect(&hr_tx).await {
+    if let Err(e) = ble_monitor.connect(&broadcast_tx).await {
         error!("Fatal BLE Error: {e}");
         let message = format!("Fatal BLE Error: {e}");
-        hr_tx
-            .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
-            .expect("Failed to send BLE Error");
+        broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
     }
 }

@@ -1,4 +1,5 @@
 use crate::app::{AppUpdate, ErrorPopup};
+use crate::broadcast;
 use crate::errors::AppError;
 use crate::heart_rate::{BatteryLevel, HeartRateStatus};
 use crate::settings::MiscSettings;
@@ -171,9 +172,7 @@ pub async fn file_logging_thread(
         Ok(logging) => logging,
         Err(e) => {
             let message = format!("Failed to set up File Logging. {e}");
-            broadcast_tx
-                .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
-                .expect("Failed to send error message");
+            broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
             return;
         }
     };
@@ -183,8 +182,6 @@ pub async fn file_logging_thread(
     if let Err(e) = logging.rx_loop(&mut broadcast_rx).await {
         error!("File Logging error: {e}");
         let message = format!("File Logging error: {e}");
-        broadcast_tx
-            .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
-            .expect("Failed to send error message");
+        broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
     }
 }
