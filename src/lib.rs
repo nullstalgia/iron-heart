@@ -5,6 +5,7 @@ use argh::FromArgs;
 use errors::AppError;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, path::PathBuf};
+use tokio::fs::create_dir;
 
 use log::*;
 
@@ -54,8 +55,16 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
         p.canonicalize()
             .expect("Failed to build full supplied config path")
     });
-    std::env::set_current_dir(&working_directory)
-        .expect("Couldn't change working directory to \"{working_directory}\"");
+    info!("Working directory: {}", working_directory.display());
+    if !working_directory.exists() {
+        create_dir(&working_directory)
+            .await
+            .map_err(|e| AppError::CreateDir {
+                path: working_directory.clone(),
+                source: e,
+            })?;
+    }
+    std::env::set_current_dir(&working_directory).expect("Failed to change working directory");
     let mut app = App::build(arg_config);
 
     // Initialize the terminal user interface.
@@ -156,12 +165,9 @@ fn get_user_dir() -> Option<PathBuf> {
 #[cfg(not(any(debug_assertions, feature = "portable")))]
 fn get_user_dir() -> Option<PathBuf> {
     if let Some(base_dirs) = BaseDirs::new() {
-        Some(
-            base_dirs
-                .config_dir()
-                .to_owned()
-                .push(env!("CARGO_PKG_NAME")),
-        )
+        let mut config_dir = base_dirs.config_dir().to_owned();
+        config_dir.push(env!("CARGO_PKG_NAME"));
+        Some(config_dir)
     } else {
         None
     }
