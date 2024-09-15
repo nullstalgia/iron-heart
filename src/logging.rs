@@ -31,7 +31,9 @@ struct CsvData {
 struct FileLoggingActor {
     misc_settings: MiscSettings,
     csv_writer: Option<AsyncSerializer<File>>,
+    csv_path: Option<PathBuf>,
     txt_writer: Option<BufWriter<File>>,
+    txt_path: Option<PathBuf>,
     files_initialized: bool,
     // Loop-specific vars
     last_rr: Duration,
@@ -42,7 +44,9 @@ impl FileLoggingActor {
         Self {
             misc_settings,
             csv_writer: None,
+            csv_path: None,
             txt_writer: None,
+            txt_path: None,
             last_rr: Duration::from_secs(0),
             files_initialized: false,
         }
@@ -140,7 +144,10 @@ impl FileLoggingActor {
                 TwitchDown: heart_rate_status.twitch_down as u8,
             };
             csv_writer.serialize(csv_data).await?;
-            csv_writer.flush().await?;
+            csv_writer.flush().await.map_err(|e| AppError::WriteFile {
+                path: self.csv_path.as_ref().unwrap().to_owned(),
+                source: e,
+            })?;
         }
         if let Some(txt_writer) = &mut self.txt_writer {
             let txt_output = if self.misc_settings.write_rr_to_file {
@@ -152,9 +159,24 @@ impl FileLoggingActor {
             } else {
                 format!("{}\n", heart_rate_status.heart_rate_bpm)
             };
-            txt_writer.seek(tokio::io::SeekFrom::Start(0)).await?;
-            txt_writer.write_all(txt_output.as_bytes()).await?;
-            txt_writer.flush().await?;
+            txt_writer
+                .seek(tokio::io::SeekFrom::Start(0))
+                .await
+                .map_err(|e| AppError::WriteFile {
+                    path: self.txt_path.as_ref().unwrap().to_owned(),
+                    source: e,
+                })?;
+            txt_writer
+                .write_all(txt_output.as_bytes())
+                .await
+                .map_err(|e| AppError::WriteFile {
+                    path: self.txt_path.as_ref().unwrap().to_owned(),
+                    source: e,
+                })?;
+            txt_writer.flush().await.map_err(|e| AppError::WriteFile {
+                path: self.txt_path.as_ref().unwrap().to_owned(),
+                source: e,
+            })?;
         }
         self.last_rr = *reported_rr;
 
@@ -179,7 +201,7 @@ pub async fn file_logging_thread(
 
     if let Err(e) = logging.rx_loop(&mut broadcast_rx, cancel_token).await {
         error!("File Logging error: {e}");
-        let message = format!("File Logging error: {e}");
-        broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
+        let message = format!("File Logging error.");
+        broadcast!(broadcast_tx, ErrorPopup::detailed(&message, e));
     }
 }

@@ -15,11 +15,11 @@ pub enum AppError {
         path: PathBuf,
         source: std::io::Error,
     },
-    // #[error("Failed to write to file \"{path}\": {source}")]
-    // WriteFile {
-    //     path: PathBuf,
-    //     source: std::io::Error,
-    // },
+    #[error("Failed to write to file \"{path}\": {source}")]
+    WriteFile {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Error parsing IP Address: {0}")]

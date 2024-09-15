@@ -18,6 +18,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
+use crate::errors::AppError;
 use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
@@ -86,6 +87,13 @@ pub enum ErrorPopup {
     Intermittent(String),
     UserMustDismiss(String),
     Fatal(String),
+    FatalDetailed(String, String),
+}
+
+impl ErrorPopup {
+    pub fn detailed(message: &str, error: AppError) -> Self {
+        Self::FatalDetailed(message.to_owned(), error.to_string())
+    }
 }
 
 pub struct App {
@@ -163,13 +171,17 @@ impl App {
         let cancel_app = CancellationToken::new();
         let cancel_actors = cancel_app.child_token();
 
-        let settings = Settings::load(config_path.clone()).unwrap_or_else(|err| {
-            error!("Failed to load settings: {}", err);
-            error_message = Some(ErrorPopup::Fatal(
-                "Failed to load settings! Please fix file or delete to regenerate.".to_string(),
-            ));
-            Settings::default()
-        });
+        let settings = match Settings::load(config_path.clone()) {
+            Ok(settings) => settings,
+            Err(e) => {
+                error!("Failed to load settings: {}", e);
+                error_message = Some(ErrorPopup::detailed(
+                    "Failed to load settings! Please fix file or delete to regenerate.",
+                    e,
+                ));
+                Settings::default()
+            }
+        };
         Self {
             ble_tx,
             ble_rx,
@@ -447,7 +459,7 @@ impl App {
 
     pub fn try_save_settings(&mut self) {
         self.settings.save(&self.config_path).unwrap_or_else(|e| {
-            self.handle_error_update(ErrorPopup::Fatal(format!("Couldn't save settings! {e}")))
+            self.handle_error_update(ErrorPopup::detailed("Couldn't save settings!", e))
         });
     }
 
@@ -609,12 +621,13 @@ impl App {
 
     fn handle_error_update(&mut self, error: ErrorPopup) {
         // Don't override a fatal error popup
-        if matches!(self.error_message, Some(ErrorPopup::Fatal(_))) {
-            return;
+        match self.error_message {
+            Some(ErrorPopup::Fatal(_)) | Some(ErrorPopup::FatalDetailed(_, _)) => return,
+            _ => {}
         }
         match error {
-            ErrorPopup::Fatal(e) => {
-                self.error_message = Some(ErrorPopup::Fatal(e));
+            ErrorPopup::Fatal(_) | ErrorPopup::FatalDetailed(_, _) => {
+                self.error_message = Some(error);
                 // Tell actors to stop, but let user close UI
                 self.cancel_actors.cancel();
                 // Just for the UI, "stop" the scan
@@ -672,7 +685,7 @@ impl App {
                 ErrorPopup::UserMustDismiss(_) | ErrorPopup::Intermittent(_) => {
                     self.error_message = None;
                 }
-                ErrorPopup::Fatal(_) => {
+                ErrorPopup::Fatal(_) | ErrorPopup::FatalDetailed(_, _) => {
                     self.cancel_app.cancel();
                 }
             }

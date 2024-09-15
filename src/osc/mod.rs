@@ -270,8 +270,8 @@ pub async fn osc_thread(
         Ok(osc) => osc,
         Err(e) => {
             error!("Failed to set up OSC. {e}");
-            let message = format!("Failed to set up OSC. {e}");
-            broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
+            let message = format!("Failed to set up OSC.");
+            broadcast!(broadcast_tx, ErrorPopup::detailed(&message, e));
             return;
         }
     };
@@ -282,7 +282,7 @@ pub async fn osc_thread(
 
     if let Err(e) = osc.rx_loop(broadcast_rx, cancel_token).await {
         error!("OSC Error: {e}");
-        let message = format!("OSC Error: {e}");
-        broadcast!(broadcast_tx, ErrorPopup::Fatal(message));
+        let message = format!("OSC Error");
+        broadcast!(broadcast_tx, ErrorPopup::detailed(&message, e));
     }
 }

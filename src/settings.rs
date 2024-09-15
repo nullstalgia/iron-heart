@@ -165,8 +165,15 @@ impl Settings {
     pub fn save(&self, config_path: &PathBuf) -> Result<(), AppError> {
         let toml_config = toml::to_string(self)?;
 
-        let mut file = File::create(config_path)?;
-        file.write_all(toml_config.as_bytes())?;
+        let mut file = File::create(config_path).map_err(|e| AppError::CreateFile {
+            path: PathBuf::from(config_path),
+            source: e,
+        })?;
+        file.write_all(toml_config.as_bytes())
+            .map_err(|e| AppError::WriteFile {
+                path: PathBuf::from(config_path),
+                source: e,
+            })?;
 
         Ok(())
     }

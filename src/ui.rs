@@ -1,6 +1,7 @@
 use ratatui::{
     layout::Alignment,
     style::Style,
+    text::Text,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
@@ -15,7 +16,6 @@ use crate::widgets::heart_rate_display::heart_rate_display;
 use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
 use crate::widgets::save_prompt::save_prompt;
-use ratatui::text::Span;
 
 use ratatui::layout::{Constraint, Direction, Layout};
 
@@ -143,35 +143,76 @@ pub fn render(app: &mut App, f: &mut Frame) {
 
     // Draw the error overlay if the string is not empty
     if let Some(error_message_clone) = app.error_message.clone() {
-        let (style, message, title) = match error_message_clone.clone() {
+        let (style, message, error_message, title) = match error_message_clone.clone() {
+            ErrorPopup::FatalDetailed(msg, error) => (
+                Style::default().fg(ratatui::style::Color::Red),
+                msg,
+                Some(error),
+                "!! Error !!",
+            ),
             ErrorPopup::Fatal(msg) => (
                 Style::default().fg(ratatui::style::Color::Red),
                 msg,
+                None,
                 "!! Error !!",
             ),
             ErrorPopup::Intermittent(msg) => (
                 Style::default().fg(ratatui::style::Color::Yellow),
                 msg,
+                None,
                 "Warning",
             ),
             ErrorPopup::UserMustDismiss(msg) => (
                 Style::default().fg(ratatui::style::Color::Blue),
                 msg,
+                None,
                 "!! Notification !!",
             ),
         };
 
         let area = centered_rect(60, 50, f.area());
-        let error_block = Paragraph::new(Span::from(message))
-            .alignment(Alignment::Center)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(title)
-                    .style(style),
-            )
-            .wrap(Wrap { trim: true });
+
+        // Create the outer block with borders and title
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .style(style);
+
+        // Draw the block
         f.render_widget(Clear, area);
-        f.render_widget(error_block, area);
+        f.render_widget(&block, area);
+
+        // Get the inner area of the block
+        let inner_area = block.inner(area);
+
+        // Check for special character and split message
+        if let Some(error_message) = error_message {
+            // Split the inner_area vertically into two
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Fill(1), Constraint::Fill(3)].as_ref())
+                .split(inner_area);
+
+            // Create the centered paragraph with first_part
+            let first_paragraph = Paragraph::new(Text::from(message))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+
+            // Create the left-aligned paragraph with second_part
+            let second_paragraph = Paragraph::new(Text::from(error_message))
+                .alignment(Alignment::Left)
+                .wrap(Wrap { trim: false });
+
+            // Render the paragraphs
+            f.render_widget(first_paragraph, chunks[0]);
+            f.render_widget(second_paragraph, chunks[1]);
+        } else {
+            // No special character found, proceed as before
+            let error_paragraph = Paragraph::new(Text::from(message))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(error_paragraph, inner_area);
+        }
     }
 }
