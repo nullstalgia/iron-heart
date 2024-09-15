@@ -47,3 +47,6 @@ local-ip-address = "0.6.1"
 ratatui-macros = "0.4.3"
 directories = "5.0.1"
 argh = "0.1.12"
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "1.4"
