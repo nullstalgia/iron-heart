@@ -1,5 +1,5 @@
-use crate::app::{AppUpdate, DeviceUpdate, ErrorPopup};
-use crate::heart_rate::{rr_from_bpm, BatteryLevel, HeartRateStatus};
+use super::{rr_from_bpm, BatteryLevel, HeartRateStatus};
+use crate::app::{AppUpdate, ErrorPopup};
 use crate::settings::DummySettings;
 
 use log::*;

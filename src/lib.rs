@@ -4,18 +4,17 @@ extern crate lazy_static;
 use argh::FromArgs;
 use errors::AppError;
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::{error::Error, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
 use log::*;
 
 use crate::app::App;
 use event::{Event, EventHandler};
 use handler::handle_key_events;
-use ratatui::prelude::Backend;
 use std::error;
 use tui::Tui;
 
-#[cfg(not(any(feature = "portable")))]
+#[cfg(not(any(debug_assertions, feature = "portable")))]
 use directories::BaseDirs;
 
 mod activities;
@@ -23,20 +22,14 @@ mod app;
 mod company_codes;
 mod errors;
 mod heart_rate;
-mod heart_rate_ble;
-mod heart_rate_dummy;
-mod heart_rate_measurement;
-mod heart_rate_websocket;
 mod logging;
 mod macros;
 mod osc;
-mod osc_util;
 mod panic_handler;
 mod scan;
 mod settings;
 mod structs;
 mod utils;
-mod viewer;
 mod widgets;
 
 mod event;
@@ -45,7 +38,7 @@ mod tui;
 mod ui;
 
 #[derive(FromArgs)]
-/// Optional options for optional people
+/// Optional command line arguments
 pub struct ArgConfig {
     /// specify config file path
     #[argh(option, short = 'c')]
@@ -55,9 +48,6 @@ pub struct ArgConfig {
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
-// async fn run_tui<B>(tui: &mut Tui<B>) -> AppResult<()>
-// where
-//     B: Backend,
 pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
     let working_directory = determine_working_directory().ok_or(AppError::WorkDir)?;
     arg_config.config_override = arg_config.config_override.map(|p| {
@@ -66,7 +56,7 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
     });
     std::env::set_current_dir(&working_directory)
         .expect("Couldn't change working directory to \"{working_directory}\"");
-    let mut app = App::build(&working_directory, arg_config);
+    let mut app = App::build(arg_config);
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stdout());
@@ -110,8 +100,6 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
         match tui.events.next().await? {
             Event::Tick => app.term_tick(),
             Event::Key(key_event) => handle_key_events(&mut app, key_event)?,
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
         }
         // Dispatch BLE/HR/OSC messages
         app.main_loop().await;
@@ -122,7 +110,7 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
     info!("Shutting down gracefully...");
     log::logger().flush();
 
-    // Exit the user interface.
+    // Reset the terminal.
     tui.exit()?;
     Ok(())
 }

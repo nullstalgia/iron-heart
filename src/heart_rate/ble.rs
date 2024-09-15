@@ -1,19 +1,18 @@
-use crate::app::{AppUpdate, DeviceUpdate, ErrorPopup};
+use super::{BatteryLevel, HeartRateStatus};
+use crate::app::{AppUpdate, ErrorPopup};
 use crate::errors::AppError;
-use crate::heart_rate::{BatteryLevel, HeartRateStatus};
-use crate::heart_rate_measurement::parse_hrm;
 use crate::structs::DeviceInfo;
 
 use btleplug::api::{Characteristic, Peripheral, ValueNotification};
 use futures::{Stream, StreamExt};
 use log::*;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast::{Receiver as BReceiver, Sender as BSender};
-use tokio::sync::mpsc;
+use tokio::sync::broadcast::Sender as BSender;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+
+use super::measurement::parse_hrm;
 
 pub const HEART_RATE_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180d_0000_1000_8000_00805f9b34fb);
 pub const HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID: Uuid =
@@ -241,6 +240,8 @@ pub async fn start_notification_thread(
     if let Err(e) = ble_monitor.connect(&hr_tx).await {
         error!("Fatal BLE Error: {e}");
         let message = format!("Fatal BLE Error: {e}");
-        hr_tx.send(AppUpdate::Error(ErrorPopup::Fatal(message)));
+        hr_tx
+            .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
+            .expect("Failed to send BLE Error");
     }
 }

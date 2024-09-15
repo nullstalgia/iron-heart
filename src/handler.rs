@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use crate::app::{App, AppState, ErrorPopup};
+use crate::app::{App, ErrorPopup};
 use crate::AppResult;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 

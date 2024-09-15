@@ -5,7 +5,6 @@ use crate::ui;
 use crate::AppResult;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
-use log::*;
 use ratatui::backend::Backend;
 use ratatui::Terminal;
 use std::io;

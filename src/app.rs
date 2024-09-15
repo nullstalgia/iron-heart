@@ -4,7 +4,6 @@ use ratatui::widgets::TableState;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::{
-    error,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -19,16 +18,14 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
-use crate::errors::AppError;
-use crate::heart_rate_ble::HEART_RATE_SERVICE_UUID;
-use crate::heart_rate_dummy::dummy_thread;
-use crate::heart_rate_websocket::websocket_thread;
+use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
+use crate::heart_rate::dummy::dummy_thread;
+use crate::heart_rate::websocket::websocket_thread;
 use crate::widgets::save_prompt::SavePromptChoice;
-use crate::AppResult;
 use crate::ArgConfig;
 use crate::{
+    heart_rate::ble::start_notification_thread,
     heart_rate::HeartRateStatus,
-    heart_rate_ble::start_notification_thread,
     logging::file_logging_thread,
     osc::osc_thread,
     scan::{bluetooth_event_thread, get_characteristics},
@@ -120,13 +117,11 @@ pub struct App {
     pub chart_mid_rr: f64,
     pub chart_low_rr: f64,
     pub websocket_url: Option<String>,
-    pub working_directory: PathBuf,
     pub config_path: PathBuf,
 }
 
 impl App {
-    pub fn build(working_directory: &PathBuf, arg_config: ArgConfig) -> Self {
-        let working_directory = working_directory.clone();
+    pub fn build(arg_config: ArgConfig) -> Self {
         let (ble_tx, ble_rx) = mpsc::channel(50);
         let (broadcast_tx, broadcast_rx) = broadcast::channel::<AppUpdate>(50);
 
@@ -196,7 +191,6 @@ impl App {
             chart_low_rr: 0.0,
             chart_mid_rr: 0.0,
             websocket_url: None,
-            working_directory,
             config_path,
         }
     }
@@ -230,7 +224,6 @@ impl App {
         }
 
         // HR Notification Updates
-        // TODO change to BroadcastReceiver
         if let Ok(hr_data) = self.broadcast_rx.try_recv() {
             match hr_data {
                 AppUpdate::HeartRateStatus(data) => {

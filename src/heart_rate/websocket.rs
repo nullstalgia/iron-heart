@@ -1,21 +1,19 @@
+use super::{BatteryLevel, HeartRateStatus};
 use crate::app::{AppUpdate, ErrorPopup};
 use crate::errors::AppError;
-use crate::heart_rate::{BatteryLevel, HeartRateStatus};
 use crate::settings::WebSocketSettings;
 
 use log::*;
 use serde::Deserialize;
-use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
+use std::net::SocketAddrV4;
 use std::str::FromStr;
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::broadcast::Sender as BSender;
-use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
-use tokio_websockets::{Message, ServerBuilder, WebSocketStream};
+use tokio_websockets::{Message, ServerBuilder};
 
 #[derive(Debug, Deserialize)]
 struct JSONHeartRate {

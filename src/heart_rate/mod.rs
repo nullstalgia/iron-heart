@@ -1,17 +1,9 @@
-use crate::app::{AppUpdate, DeviceUpdate, ErrorPopup};
-use crate::errors::AppError;
-use crate::heart_rate_measurement::parse_hrm;
-use crate::structs::DeviceInfo;
+pub mod ble;
+pub mod dummy;
+pub mod measurement;
+pub mod websocket;
 
-use btleplug::api::Peripheral;
-use futures::StreamExt;
-use log::*;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast::{Receiver as BReceiver, Sender as BSender};
-use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BatteryLevel {

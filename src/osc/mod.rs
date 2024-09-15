@@ -1,24 +1,21 @@
+use addresses::OscAddresses;
+use hr::{make_mimic_data, send_raw_beat_params, send_raw_hr_status};
 use log::*;
-use rand::Rng;
-use ratatui::widgets::Dataset;
-use rosc::address::verify_address;
-use rosc::{encoder, OscError};
-use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
-use std::f32;
+use rosc::OscTime;
 use std::net::{SocketAddrV4, UdpSocket};
 use std::str::FromStr;
-use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{Receiver as BReceiver, Sender as BSender};
-use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, Mutex};
 use tokio::time::{self, interval, Duration, Instant, Interval};
 use tokio_util::sync::CancellationToken;
 
-use crate::app::{AppUpdate, DeviceUpdate, ErrorPopup};
+use crate::app::{AppUpdate, ErrorPopup};
 use crate::errors::AppError;
-use crate::heart_rate::{rr_from_bpm, BatteryLevel, HeartRateStatus};
+use crate::heart_rate::{rr_from_bpm, HeartRateStatus};
 use crate::settings::OscSettings;
+
+mod addresses;
+mod hr;
 
 const OSC_NOW: OscTime = OscTime {
     seconds: 0,
@@ -28,7 +25,6 @@ const OSC_NOW: OscTime = OscTime {
 struct OscActor {
     // I/O and current data
     target_addr: SocketAddrV4,
-    host_addr: SocketAddrV4,
     hr_status: HeartRateStatus,
     //
     osc_settings: OscSettings,
@@ -76,7 +72,6 @@ impl OscActor {
 
         Ok(OscActor {
             target_addr,
-            host_addr,
             delay_sending_connected: true,
             positive_float_bpm,
             use_real_rr: false,
@@ -159,7 +154,7 @@ impl OscActor {
             &self.osc_addresses,
             &self.socket,
             self.target_addr,
-        );
+        )?;
         // Check after sending, otherwise it's pointless
         if self.delay_sending_connected && (self.hr_status.heart_rate_bpm > 0) {
             self.delay_sending_connected = false;
@@ -293,271 +288,4 @@ pub async fn osc_thread(
             .send(AppUpdate::Error(ErrorPopup::Fatal(message)))
             .expect("Failed to send error message");
     }
-}
-
-fn send_raw_hr_status(
-    hr_status: &HeartRateStatus,
-    hiding_disconnect: bool,
-    delay_sending_connected: bool,
-    positive_float_bpm: bool,
-    osc_addresses: &OscAddresses,
-    socket: &UdpSocket,
-    target_addr: SocketAddrV4,
-) -> Result<(), AppError> {
-    let bundle = form_bpm_bundle(
-        hr_status,
-        hiding_disconnect,
-        delay_sending_connected,
-        positive_float_bpm,
-        osc_addresses,
-    );
-    let msg_buf = encoder::encode(&OscPacket::Bundle(bundle))?;
-    socket.send_to(&msg_buf, target_addr)?;
-    Ok(())
-}
-
-fn send_raw_beat_params(
-    pulse_edge: bool,
-    toggle_beat: bool,
-    osc_addresses: &OscAddresses,
-    socket: &UdpSocket,
-    target_addr: SocketAddrV4,
-) -> Result<(), AppError> {
-    let mut bundle = OscBundle {
-        timetag: OSC_NOW,
-        content: vec![],
-    };
-
-    let pulse_msg = OscMessage {
-        addr: osc_addresses.beat_pulse.clone(),
-        args: vec![OscType::Bool(pulse_edge)],
-    };
-
-    let toggle_msg = OscMessage {
-        addr: osc_addresses.beat_toggle.clone(),
-        args: vec![OscType::Bool(toggle_beat)],
-    };
-
-    bundle.content.push(OscPacket::Message(pulse_msg));
-    bundle.content.push(OscPacket::Message(toggle_msg));
-
-    let msg_buf = encoder::encode(&OscPacket::Bundle(bundle))?;
-    socket.send_to(&msg_buf, target_addr)?;
-    Ok(())
-}
-
-struct OscAddresses {
-    beat_toggle: String,
-    beat_pulse: String,
-    bpm_int: String,
-    bpm_float: String,
-    connected: String,
-    hiding_disconnect: String,
-    latest_rr: String,
-    battery_int: String,
-    battery_float: String,
-    rr_twitch_up: String,
-    rr_twitch_down: String,
-}
-
-// Not sure if rosc has a function for this already
-fn remove_double_slashes(address: &mut String) {
-    while let Some(pos) = address.find("//") {
-        address.replace_range(pos..pos + 2, "/");
-    }
-}
-
-fn remove_trailing_char(s: &mut String, ch: char) {
-    if s.ends_with(ch) {
-        s.pop();
-    }
-}
-
-fn format_prefix(prefix: &str) -> Result<String, OscError> {
-    let mut address = String::from("/");
-    address.push_str(prefix);
-    remove_double_slashes(&mut address);
-    remove_trailing_char(&mut address, '/');
-    if verify_address(&address).is_ok() {
-        Ok(address)
-    } else {
-        Err(OscError::BadAddress(format!(
-            "Invalid OSC Prefix: \"{prefix}\""
-        )))
-    }
-}
-
-fn format_address(prefix: &str, param: &str, param_name: &str) -> Result<String, OscError> {
-    let mut address = format!("{}/{}", prefix, param);
-    remove_double_slashes(&mut address);
-    remove_trailing_char(&mut address, '/');
-    if verify_address(&address).is_ok() {
-        Ok(address)
-    } else {
-        Err(OscError::BadAddress(format!(
-            "Invalid OSC Address: \"{param_name}\": \"{param}\""
-        )))
-    }
-}
-
-impl OscAddresses {
-    fn build(osc_settings: &OscSettings) -> Result<Self, OscError> {
-        let prefix = format_prefix(&osc_settings.address_prefix)?;
-        Ok(OscAddresses {
-            beat_toggle: format_address(
-                &prefix,
-                &osc_settings.param_beat_toggle,
-                "param_beat_toggle",
-            )?,
-            beat_pulse: format_address(
-                &prefix,
-                &osc_settings.param_beat_pulse,
-                "param_beat_pulse",
-            )?,
-            bpm_int: format_address(&prefix, &osc_settings.param_bpm_int, "param_bpm_int")?,
-            bpm_float: format_address(&prefix, &osc_settings.param_bpm_float, "param_bpm_float")?,
-            connected: format_address(
-                &prefix,
-                &osc_settings.param_hrm_connected,
-                "param_hrm_connected",
-            )?,
-            hiding_disconnect: format_address(
-                &prefix,
-                &osc_settings.param_hiding_disconnect,
-                "param_hiding_disconnect",
-            )?,
-            latest_rr: format_address(
-                &prefix,
-                &osc_settings.param_latest_rr_int,
-                "param_latest_rr_int",
-            )?,
-            battery_int: format_address(
-                &prefix,
-                &osc_settings.param_hrm_battery_int,
-                "param_hrm_battery_int",
-            )?,
-            battery_float: format_address(
-                &prefix,
-                &osc_settings.param_hrm_battery_float,
-                "param_hrm_battery_float",
-            )?,
-            rr_twitch_up: format_address(
-                &prefix,
-                &osc_settings.param_rr_twitch_up,
-                "param_rr_twitch_up",
-            )?,
-            rr_twitch_down: format_address(
-                &prefix,
-                &osc_settings.param_rr_twitch_down,
-                "param_rr_twitch_down",
-            )?,
-        })
-    }
-}
-
-fn make_mimic_data(hr_status: &HeartRateStatus) -> HeartRateStatus {
-    let mut mimic = HeartRateStatus::default();
-    let jitter = rand::thread_rng().gen_range(-3..3);
-    mimic.heart_rate_bpm = hr_status.heart_rate_bpm.saturating_add_signed(jitter);
-    mimic.battery_level = hr_status.battery_level;
-    // Add chance to fake a twitch
-    mimic.twitch_up = (rand::thread_rng().gen_range(0..5)) == 0;
-    mimic.twitch_down = (rand::thread_rng().gen_range(0..5)) == 0;
-    mimic
-}
-
-fn form_bpm_bundle(
-    hr_status: &HeartRateStatus,
-    hiding_disconnect: bool,
-    delay_sending_connected: bool,
-    positive_float_bpm: bool,
-    osc_addresses: &OscAddresses,
-) -> OscBundle {
-    let mut bundle = OscBundle {
-        timetag: OSC_NOW,
-        content: vec![],
-    };
-
-    let bpm_int_msg = OscMessage {
-        addr: osc_addresses.bpm_int.clone(),
-        args: vec![OscType::Int(hr_status.heart_rate_bpm as i32)],
-    };
-
-    let bpm_float_msg = OscMessage {
-        addr: osc_addresses.bpm_float.clone(),
-        args: vec![OscType::Float(if positive_float_bpm {
-            hr_status.heart_rate_bpm as f32 / 255.0
-        } else {
-            (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0
-        })],
-    };
-
-    let connected = if delay_sending_connected {
-        false
-    } else {
-        hr_status.heart_rate_bpm > 0
-    };
-
-    let connected_msg = OscMessage {
-        addr: osc_addresses.connected.clone(),
-        args: vec![OscType::Bool(connected)],
-    };
-
-    let hiding_disconnect_msg = OscMessage {
-        addr: osc_addresses.hiding_disconnect.clone(),
-        args: vec![OscType::Bool(hiding_disconnect)],
-    };
-
-    let battery_int_msg = OscMessage {
-        addr: osc_addresses.battery_int.clone(),
-        args: vec![OscType::Int(match hr_status.battery_level {
-            BatteryLevel::Level(level) => level as i32,
-            _ => 0,
-        })],
-    };
-
-    let battery_float_msg = OscMessage {
-        addr: osc_addresses.battery_float.clone(),
-        args: vec![OscType::Float(match hr_status.battery_level {
-            BatteryLevel::Level(level) => level as f32 / 100.0,
-            _ => 0.0,
-        })],
-    };
-
-    if hr_status.heart_rate_bpm == 0 {
-        let rr_msg = OscMessage {
-            addr: osc_addresses.latest_rr.clone(),
-            args: vec![OscType::Int(0)],
-        };
-        bundle.content.push(OscPacket::Message(rr_msg));
-    } else if let Some(&latest_rr) = hr_status.rr_intervals.last() {
-        let rr_msg = OscMessage {
-            addr: osc_addresses.latest_rr.clone(),
-            args: vec![OscType::Int((latest_rr.as_secs_f32() * 1000.0) as i32)],
-        };
-        bundle.content.push(OscPacket::Message(rr_msg));
-    }
-
-    let twitch_up_msg = OscMessage {
-        addr: osc_addresses.rr_twitch_up.clone(),
-        args: vec![OscType::Bool(hr_status.twitch_up)],
-    };
-
-    let twitch_down_msg = OscMessage {
-        addr: osc_addresses.rr_twitch_down.clone(),
-        args: vec![OscType::Bool(hr_status.twitch_down)],
-    };
-
-    bundle.content.push(OscPacket::Message(bpm_int_msg));
-    bundle.content.push(OscPacket::Message(bpm_float_msg));
-    bundle.content.push(OscPacket::Message(connected_msg));
-    bundle
-        .content
-        .push(OscPacket::Message(hiding_disconnect_msg));
-    bundle.content.push(OscPacket::Message(battery_int_msg));
-    bundle.content.push(OscPacket::Message(battery_float_msg));
-    bundle.content.push(OscPacket::Message(twitch_up_msg));
-    bundle.content.push(OscPacket::Message(twitch_down_msg));
-
-    bundle
 }

@@ -1,11 +1,11 @@
 use ratatui::{
     layout::Alignment,
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
 
-use crate::app::{App, AppState, DeviceUpdate, ErrorPopup};
+use crate::app::{App, AppState, ErrorPopup};
 
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
@@ -17,10 +17,7 @@ use crate::widgets::inspect_overlay::inspect_overlay;
 use crate::widgets::save_prompt::save_prompt;
 use ratatui::text::Span;
 
-use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    Terminal,
-};
+use ratatui::layout::{Constraint, Direction, Layout};
 
 use std::sync::atomic::Ordering;
 
@@ -146,14 +143,22 @@ pub fn render(app: &mut App, f: &mut Frame) {
 
     // Draw the error overlay if the string is not empty
     if let Some(error_message_clone) = app.error_message.clone() {
-        let (style, message) = match error_message_clone.clone() {
-            ErrorPopup::Fatal(msg) => (Style::default().fg(ratatui::style::Color::Red), msg),
-            ErrorPopup::Intermittent(msg) => {
-                (Style::default().fg(ratatui::style::Color::Yellow), msg)
-            }
-            ErrorPopup::UserMustDismiss(msg) => {
-                (Style::default().fg(ratatui::style::Color::Blue), msg)
-            }
+        let (style, message, title) = match error_message_clone.clone() {
+            ErrorPopup::Fatal(msg) => (
+                Style::default().fg(ratatui::style::Color::Red),
+                msg,
+                "!! Error !!",
+            ),
+            ErrorPopup::Intermittent(msg) => (
+                Style::default().fg(ratatui::style::Color::Yellow),
+                msg,
+                "Warning",
+            ),
+            ErrorPopup::UserMustDismiss(msg) => (
+                Style::default().fg(ratatui::style::Color::Blue),
+                msg,
+                "!! Notification !!",
+            ),
         };
 
         let area = centered_rect(60, 50, f.area());
@@ -162,7 +167,7 @@ pub fn render(app: &mut App, f: &mut Frame) {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("! Notification !")
+                    .title(title)
                     .style(style),
             )
             .wrap(Wrap { trim: true });

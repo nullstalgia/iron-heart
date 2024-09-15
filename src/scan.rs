@@ -135,16 +135,25 @@ pub async fn bluetooth_event_thread(
                                 );
 
                                 // Send a clone of the accumulated device information so far
-                                tx.send(DeviceUpdate::DeviceInfo(device)).await.expect("Couldn't send device info update!");
+                                if tx.send(DeviceUpdate::DeviceInfo(device)).await.is_err() {
+                                    error!("Couldn't send device info update!");
+                                    break 'adapter;
+                                }
                             }
                         }
                         CentralEvent::DeviceDisconnected(id) => {
                             warn!("Device disconnected: {}", id);
-                            tx.send(DeviceUpdate::DisconnectedEvent(id.to_string())).await;
+                            if tx.send(DeviceUpdate::DisconnectedEvent(id.to_string())).await.is_err() {
+                                error!("Couldn't send DisconnectedEvent!");
+                                break 'adapter;
+                            }
                         }
                         CentralEvent::DeviceConnected(id) => {
                             info!("Device connected: {}", id);
-                            tx.send(DeviceUpdate::ConnectedEvent(id.to_string())).await;
+                            if tx.send(DeviceUpdate::ConnectedEvent(id.to_string())).await.is_err() {
+                                error!("Couldn't send ConnectedEvent!");
+                                break 'adapter;
+                            }
                         }
                         _ => {}
                     }

@@ -1,7 +1,6 @@
-use config::{Config, ConfigError, File as ConfigFile};
+use config::{Config, File as ConfigFile};
 use log::LevelFilter;
 use serde_derive::{Deserialize, Serialize};
-use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -94,14 +93,19 @@ impl Settings {
     pub fn load(config_path: PathBuf) -> Result<Self, AppError> {
         let default_log_level;
         let default_session_log_path;
+        let default_bpm_txt_path;
 
-        if cfg!(debug_assertions) {
-            default_log_level = "debug";
-            // but check
-            default_session_log_path = "../session_logs";
-        } else {
+        if !cfg!(debug_assertions) {
+            // Release build default params
             default_log_level = "info";
             default_session_log_path = "session_logs";
+            default_bpm_txt_path = "bpm.txt"
+        } else {
+            // Debug build default params
+            default_log_level = "debug";
+            // (assuming it's in target/debug/)
+            default_session_log_path = "../../session_logs";
+            default_bpm_txt_path = "../../bpm.txt"
         };
 
         let settings = Config::builder()
@@ -137,9 +141,9 @@ impl Settings {
             .set_default("misc.log_level", default_log_level)?
             .set_default("misc.write_bpm_to_file", false)?
             .set_default("misc.write_rr_to_file", false)?
-            .set_default("misc.bpm_file_path", "bpm.txt")?
+            .set_default("misc.bpm_file_path", default_bpm_txt_path)?
             .set_default("misc.log_sessions_to_csv", false)?
-            .set_default("misc.log_sessions_csv_path", "session_logs")?
+            .set_default("misc.log_sessions_csv_path", default_session_log_path)?
             .set_default("misc.session_stats_use_12hr", true)?
             .set_default("misc.chart_bpm_enabled", true)?
             .set_default("misc.chart_rr_enabled", true)?
