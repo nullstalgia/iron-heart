@@ -235,7 +235,7 @@ pub async fn start_notification_thread(
 
     if let Err(e) = ble_monitor.connect(&broadcast_tx).await {
         error!("Fatal BLE Error: {e}");
-        let message = format!("Fatal BLE Error");
-        broadcast!(broadcast_tx, ErrorPopup::detailed(&message, e));
+        let message = "Fatal BLE Error";
+        broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
     }
 }

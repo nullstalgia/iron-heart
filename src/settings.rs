@@ -90,6 +90,7 @@ pub struct Settings {
 }
 
 impl Settings {
+    #[allow(clippy::needless_late_init)]
     pub fn load(config_path: PathBuf) -> Result<Self, AppError> {
         let default_log_level;
         let default_session_log_path;

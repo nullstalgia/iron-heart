@@ -36,10 +36,12 @@ pub async fn bluetooth_event_thread(
             Ok(manager) => manager,
             Err(e) => {
                 error!("Failed to create manager: {}", e);
-                let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
+                tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                     "Failed to create manager: {}",
                     e
-                ))));
+                ))))
+                .await
+                .expect("Failed to send error message");
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue 'adapter;
             }
@@ -53,10 +55,12 @@ pub async fn bluetooth_event_thread(
             Ok(central) => central,
             Err(_) => {
                 error!("No Bluetooth adapters found!");
-                let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(
+                tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(
                     "No Bluetooth adapters found! Make sure it's plugged in and enabled."
                         .to_string(),
-                )));
+                )))
+                .await
+                .expect("Failed to send error message");
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue 'adapter;
             }
@@ -64,10 +68,12 @@ pub async fn bluetooth_event_thread(
 
         if let Err(e) = central.start_scan(ScanFilter::default()).await {
             error!("Scanning failure: {}", e);
-            let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
+            tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                 "Scanning failure: {}",
                 e
-            ))));
+            ))))
+            .await
+            .expect("Failed to send error message");
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue 'adapter;
         }
@@ -75,10 +81,12 @@ pub async fn bluetooth_event_thread(
             Ok(e) => e,
             Err(e) => {
                 error!("BLE failure: {}", e);
-                let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
+                tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                     "BLE failure: {}",
                     e
-                ))));
+                ))))
+                .await
+                .expect("Failed to send error message");
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue 'adapter;
             }
@@ -97,10 +105,12 @@ pub async fn bluetooth_event_thread(
                 info!("Resuming scan");
                 if let Err(e) = central.start_scan(ScanFilter::default()).await {
                     error!("Failed to resume scanning: {}", e);
-                    let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
+                    tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                         "Failed to resume scanning: {}",
                         e
-                    ))));
+                    ))))
+                    .await
+                    .expect("Failed to send error message");
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     continue 'events;
                 }
@@ -197,7 +207,9 @@ pub async fn get_characteristics(tx: mpsc::Sender<DeviceUpdate>, peripheral: Dev
                             service: characteristic.service_uuid,
                         });
                     }
-                    let _ = tx.send(DeviceUpdate::Characteristics(result));
+                    tx.send(DeviceUpdate::Characteristics(result))
+                        .await
+                        .expect("Failed to send error message");
                 }
             }
             Ok(Err(e)) => {

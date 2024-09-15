@@ -101,7 +101,7 @@ impl WebsocketActor {
                     item = server.next() => {
                         let (message, keep_conn) = self.handle_ws_message(item)?;
                         broadcast!(broadcast_tx, message);
-                        if keep_conn == false {
+                        if !keep_conn {
                             break 'receiving;
                         }
                     }
@@ -171,16 +171,18 @@ impl WebsocketActor {
                 }
                 self.hr_status.rr_intervals.push(Duration::from_millis(rr));
             }
-            return Ok((self.hr_status.clone().into(), true));
+
+            Ok((self.hr_status.clone().into(), true))
         } else {
             error!("Invalid heart rate message: {}", message);
-            return Ok((
+
+            Ok((
                 AppUpdate::Error(ErrorPopup::Intermittent(format!(
                     "Invalid heart rate message: {}",
                     message
                 ))),
                 true,
-            ));
+            ))
         }
     }
 }
@@ -193,8 +195,8 @@ pub async fn websocket_thread(
     let (mut websocket, local_addr) = match WebsocketActor::build(websocket_settings).await {
         Ok((ws, addr)) => (ws, addr),
         Err(e) => {
-            let message = format!("Failed to build websocket.");
-            broadcast!(broadcast_tx, ErrorPopup::detailed(&message, e));
+            let message = "Failed to build websocket.";
+            broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
             return;
         }
     };
@@ -204,7 +206,7 @@ pub async fn websocket_thread(
 
     if let Err(e) = websocket.server_loop(&broadcast_tx, cancel_token).await {
         error!("Websocket server error: {e}");
-        let message = format!("Websocket server error");
-        broadcast!(broadcast_tx, ErrorPopup::detailed(&message, e));
+        let message = "Websocket server error";
+        broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
     }
 }

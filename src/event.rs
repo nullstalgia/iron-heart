@@ -99,7 +99,7 @@ impl EventHandler {
     /// During shutdown, close and drain the receiver so no stray events make it on the way out
     pub fn close(&mut self) {
         self.receiver.close();
-        while let Ok(_) = self.receiver.try_recv() {
+        while self.receiver.try_recv().is_ok() {
             continue;
         }
     }

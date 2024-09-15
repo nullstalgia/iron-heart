@@ -123,7 +123,7 @@ impl FileLoggingActor {
         Ok(())
     }
     async fn handle_data(&mut self, heart_rate_status: HeartRateStatus) -> Result<(), AppError> {
-        if heart_rate_status.heart_rate_bpm <= 0 {
+        if heart_rate_status.heart_rate_bpm == 0 {
             return Ok(());
         }
         if !self.files_initialized {
@@ -201,7 +201,7 @@ pub async fn file_logging_thread(
 
     if let Err(e) = logging.rx_loop(&mut broadcast_rx, cancel_token).await {
         error!("File Logging error: {e}");
-        let message = format!("File Logging error.");
-        broadcast!(broadcast_tx, ErrorPopup::detailed(&message, e));
+        let message = "File Logging error.";
+        broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
     }
 }
