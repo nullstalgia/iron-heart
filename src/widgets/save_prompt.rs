@@ -5,6 +5,23 @@ use ratatui::{
     widgets::{Block, Borders, Row, Table},
 };
 
+pub enum SavePromptChoice {
+    Yes,
+    No,
+    Never,
+}
+
+impl From<usize> for SavePromptChoice {
+    fn from(index: usize) -> Self {
+        match index {
+            0 => SavePromptChoice::Yes,
+            1 => SavePromptChoice::No,
+            2 => SavePromptChoice::Never,
+            _ => SavePromptChoice::No,
+        }
+    }
+}
+
 /// Creates a pop-up asking if the user wants to save the device for faster connection in the future.
 pub fn save_prompt() -> Table<'static> {
     // let normal_style

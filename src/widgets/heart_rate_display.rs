@@ -15,7 +15,7 @@ pub const CHART_RR_MAX_ELEMENTS: usize = 120;
 pub const CHART_BPM_VERT_MARGIN: f64 = 3.0;
 pub const CHART_RR_VERT_MARGIN: f64 = 0.1;
 
-pub fn heart_rate_display(frame: &mut Frame, app: &App) {
+pub fn heart_rate_display(app: &App, frame: &mut Frame) {
     let area = frame.area();
 
     let vertical = Layout::vertical([Constraint::Min(4), Constraint::Percentage(100)]);

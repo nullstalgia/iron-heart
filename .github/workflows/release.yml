@@ -28,7 +28,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          bin: null-iron-heart
+          bin: iron-heart
           target: ${{ matrix.target }}
           include: LICENSE,README.md
           tar: unix

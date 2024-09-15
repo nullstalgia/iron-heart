@@ -20,8 +20,9 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
         .into_hooks();
     eyre_hook.install()?;
     std::panic::set_hook(Box::new(move |panic_info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        disable_raw_mode().expect("Couldn't reset terminal!");
+        execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture)
+            .expect("Couldn't reset terminal!");
 
         error!("Panic! {:?}", panic_info);
         let msg = format!("{}", panic_hook.panic_report(panic_info));

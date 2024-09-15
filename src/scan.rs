@@ -1,4 +1,4 @@
-use crate::app::{DeviceData, ErrorPopup};
+use crate::app::{DeviceUpdate, ErrorPopup};
 use crate::structs::{Characteristic, DeviceInfo};
 // TODO See if this weird manager shadowing is normal
 use btleplug::api::{
@@ -17,18 +17,18 @@ use tokio_util::sync::CancellationToken;
 /// Scans for Bluetooth devices and sends the information to the provided `mpsc::Sender`.
 /// The scan can be paused by setting the `pause_signal` to `true`.
 pub async fn bluetooth_event_thread(
-    tx: mpsc::UnboundedSender<DeviceData>,
+    tx: mpsc::Sender<DeviceUpdate>,
     pause_signal: Arc<AtomicBool>,
-    shutdown_token: CancellationToken,
+    cancel_token: CancellationToken,
 ) {
     // If no event is heard in this period,
     // the manager and adapter will be recreated
-    // if we're not paused
+    // (if the scan isn't paused)
     let duration = Duration::from_secs(30);
 
     'adapter: loop {
         info!("Bluetooth CentralEvent thread started!");
-        if shutdown_token.is_cancelled() {
+        if cancel_token.is_cancelled() {
             info!("Shutting down Bluetooth CentralEvent thread!");
             break 'adapter;
         }
@@ -36,7 +36,7 @@ pub async fn bluetooth_event_thread(
             Ok(manager) => manager,
             Err(e) => {
                 error!("Failed to create manager: {}", e);
-                let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
+                let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                     "Failed to create manager: {}",
                     e
                 ))));
@@ -53,7 +53,7 @@ pub async fn bluetooth_event_thread(
             Ok(central) => central,
             Err(_) => {
                 error!("No Bluetooth adapters found!");
-                let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(
+                let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(
                     "No Bluetooth adapters found! Make sure it's plugged in and enabled."
                         .to_string(),
                 )));
@@ -64,7 +64,7 @@ pub async fn bluetooth_event_thread(
 
         if let Err(e) = central.start_scan(ScanFilter::default()).await {
             error!("Scanning failure: {}", e);
-            let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
+            let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                 "Scanning failure: {}",
                 e
             ))));
@@ -75,7 +75,7 @@ pub async fn bluetooth_event_thread(
             Ok(e) => e,
             Err(e) => {
                 error!("BLE failure: {}", e);
-                let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
+                let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                     "BLE failure: {}",
                     e
                 ))));
@@ -97,7 +97,7 @@ pub async fn bluetooth_event_thread(
                 info!("Resuming scan");
                 if let Err(e) = central.start_scan(ScanFilter::default()).await {
                     error!("Failed to resume scanning: {}", e);
-                    let _ = tx.send(DeviceData::Error(ErrorPopup::UserMustDismiss(format!(
+                    let _ = tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
                         "Failed to resume scanning: {}",
                         e
                     ))));
@@ -121,7 +121,7 @@ pub async fn bluetooth_event_thread(
                                     continue 'events;
                                 }
 
-                                // Add the device's information to the accumulated list
+                                // Add the device's information to the discovered list
                                 let device = DeviceInfo::new(
                                     device.id().to_string(),
                                     properties.local_name,
@@ -135,21 +135,21 @@ pub async fn bluetooth_event_thread(
                                 );
 
                                 // Send a clone of the accumulated device information so far
-                                let _ = tx.send(DeviceData::DeviceInfo(device));
+                                tx.send(DeviceUpdate::DeviceInfo(device)).await.expect("Couldn't send device info update!");
                             }
                         }
                         CentralEvent::DeviceDisconnected(id) => {
                             warn!("Device disconnected: {}", id);
-                            let _ = tx.send(DeviceData::DisconnectedEvent(id.to_string()));
+                            tx.send(DeviceUpdate::DisconnectedEvent(id.to_string())).await;
                         }
                         CentralEvent::DeviceConnected(id) => {
                             info!("Device connected: {}", id);
-                            let _ = tx.send(DeviceData::ConnectedEvent(id.to_string()));
+                            tx.send(DeviceUpdate::ConnectedEvent(id.to_string())).await;
                         }
                         _ => {}
                     }
                 }
-                _ = shutdown_token.cancelled() => {
+                _ = cancel_token.cancelled() => {
                     info!("Shutting down Bluetooth CentralEvent thread!");
                     break 'adapter;
                 }
@@ -167,10 +167,7 @@ pub async fn bluetooth_event_thread(
 
 /// Gets the characteristics of a Bluetooth device and returns them as a `Vec<Characteristic>`.
 /// The device is identified by its address or UUID.
-pub async fn get_characteristics(
-    tx: mpsc::UnboundedSender<DeviceData>,
-    peripheral: Arc<DeviceInfo>,
-) {
+pub async fn get_characteristics(tx: mpsc::Sender<DeviceUpdate>, peripheral: DeviceInfo) {
     let duration = Duration::from_secs(10);
     match &peripheral.device {
         Some(device) => match timeout(duration, device.connect()).await {
@@ -191,30 +188,33 @@ pub async fn get_characteristics(
                             service: characteristic.service_uuid,
                         });
                     }
-                    let _ = tx.send(DeviceData::Characteristics(result));
+                    let _ = tx.send(DeviceUpdate::Characteristics(result));
                 }
             }
             Ok(Err(e)) => {
                 error!("Characteristics: connection error: {}", e);
-                tx.send(DeviceData::Error(ErrorPopup::Intermittent(format!(
+                tx.send(DeviceUpdate::Error(ErrorPopup::Intermittent(format!(
                     "Connection error: {}",
                     e
                 ))))
+                .await
                 .expect("Failed to send error message");
             }
             Err(_) => {
                 error!("Characteristics: connection timed out");
-                tx.send(DeviceData::Error(ErrorPopup::Intermittent(
+                tx.send(DeviceUpdate::Error(ErrorPopup::Intermittent(
                     "Connection timed out".to_string(),
                 )))
+                .await
                 .expect("Failed to send error message");
             }
         },
         None => {
             error!("Characteristics: device not found");
-            tx.send(DeviceData::Error(ErrorPopup::Fatal(
+            tx.send(DeviceUpdate::Error(ErrorPopup::Fatal(
                 "Device not found".to_string(),
             )))
+            .await
             .expect("Failed to send error message");
         }
     }

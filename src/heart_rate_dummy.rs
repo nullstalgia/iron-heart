@@ -1,18 +1,19 @@
-use crate::app::{DeviceData, ErrorPopup};
-use crate::heart_rate::{BatteryLevel, HeartRateStatus};
-use crate::osc::rr_from_bpm;
+use crate::app::{AppUpdate, DeviceUpdate, ErrorPopup};
+use crate::heart_rate::{rr_from_bpm, BatteryLevel, HeartRateStatus};
 use crate::settings::DummySettings;
 
 use log::*;
 use std::time::Duration;
-use tokio::sync::mpsc;
+
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 
+use tokio::sync::broadcast::Sender as BSender;
+
 pub async fn dummy_thread(
-    hr_tx: mpsc::UnboundedSender<DeviceData>,
+    hr_tx: BSender<AppUpdate>,
     dummy_settings: DummySettings,
-    shutdown_token: CancellationToken,
+    cancel_token: CancellationToken,
 ) {
     let bpm_update_per_sec = Duration::from_secs_f32(1.0 / (dummy_settings.bpm_speed));
     let mut bpm_update_interval = time::interval(bpm_update_per_sec);
@@ -48,15 +49,15 @@ pub async fn dummy_thread(
                 }
                 if loops == loops_before_dc && loops_before_dc != 0 {
                     hr_tx
-                        .send(DeviceData::Error(ErrorPopup::Intermittent(
+                        .send(AppUpdate::Error(ErrorPopup::Intermittent(
                             "Simulating lost connection".to_string(),
                         )))
-                        .expect("Failed to send error message");
+                        .expect("Failed to send fake error message");
                 } else {
-                    hr_tx.send(DeviceData::HeartRateStatus(hr_status.clone())).expect("Failed to send dummy message");
+                    hr_tx.send(AppUpdate::HeartRateStatus(hr_status.clone())).expect("Failed to send dummy message");
                 }
             }
-            _ = shutdown_token.cancelled() => {
+            _ = cancel_token.cancelled() => {
                 info!("Shutting down Dummy thread!");
                 break;
             }

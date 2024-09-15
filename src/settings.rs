@@ -4,6 +4,10 @@ use serde_derive::{Deserialize, Serialize};
 use std::env;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
+use std::str::FromStr;
+
+use crate::errors::AppError;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MiscSettings {
@@ -30,9 +34,13 @@ pub struct BLESettings {
     pub rr_ignore_after_empty: u16,
 }
 
+// TODO Async get for osc settings due to oscquery
+// and find some way to deal with the dc's/osc restarts?
+// oscquery is gonna suuuck
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-pub struct OSCSettings {
-    // enabled: bool,
+pub struct OscSettings {
+    pub enabled: bool,
     pub host_ip: String,
     pub target_ip: String,
     pub port: u16,
@@ -75,7 +83,7 @@ pub struct WebSocketSettings {
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Settings {
-    pub osc: OSCSettings,
+    pub osc: OscSettings,
     pub ble: BLESettings,
     pub websocket: WebSocketSettings,
     pub misc: MiscSettings,
@@ -83,21 +91,23 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
-        // TODO Maybe not use exe path so people can install to path?
-        // Not sure about the use case amount though...
-        let exe_path = env::current_exe().expect("Failed to get executable path");
-        let config_path = exe_path.with_extension("toml");
+    pub fn load(config_path: PathBuf) -> Result<Self, AppError> {
+        let default_log_level;
+        let default_session_log_path;
 
-        let default_log_level = if cfg!(debug_assertions) {
-            "debug"
+        if cfg!(debug_assertions) {
+            default_log_level = "debug";
+            // but check
+            default_session_log_path = "../session_logs";
         } else {
-            "info"
+            default_log_level = "info";
+            default_session_log_path = "session_logs";
         };
 
-        let s = Config::builder()
+        let settings = Config::builder()
             // Start off by merging in the "default" configuration file
             .add_source(ConfigFile::from(config_path).required(false))
+            .set_default("osc.enabled", true)?
             .set_default("osc.host_ip", "0.0.0.0")?
             .set_default("osc.target_ip", "127.0.0.1")?
             .set_default("osc.port", 9000)?
@@ -142,31 +152,21 @@ impl Settings {
             .set_default("dummy.high_bpm", 120)?
             .set_default("dummy.bpm_speed", 1.5)?
             .set_default("dummy.loops_before_dc", 2)?
-            .build()?;
+            .build()?
+            .try_deserialize()?;
 
-        s.try_deserialize()
+        Ok(settings)
     }
-    pub fn save(&self) -> Result<(), std::io::Error> {
-        let exe_path = env::current_exe().expect("Failed to get executable path");
-        let config_path = exe_path.with_extension("toml");
 
-        let toml_string = toml::to_string(self).expect("Failed to serialize config");
+    pub fn save(&self, config_path: &PathBuf) -> Result<(), AppError> {
+        let toml_config = toml::to_string(self)?;
 
-        let mut file = File::create(config_path).expect("Failed to create config file");
-        file.write_all(toml_string.as_bytes())
-            .expect("Failed to write to config file");
+        let mut file = File::create(config_path)?;
+        file.write_all(toml_config.as_bytes())?;
 
         Ok(())
     }
     pub fn get_log_level(&self) -> LevelFilter {
-        match self.misc.log_level.to_lowercase().as_str() {
-            "off" => LevelFilter::Off,
-            "error" => LevelFilter::Error,
-            "warn" => LevelFilter::Warn,
-            "info" => LevelFilter::Info,
-            "debug" => LevelFilter::Debug,
-            "trace" => LevelFilter::Trace,
-            _ => LevelFilter::Info,
-        }
+        LevelFilter::from_str(&self.misc.log_level).unwrap_or(LevelFilter::Info)
     }
 }

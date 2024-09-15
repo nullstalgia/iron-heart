@@ -2,7 +2,9 @@ use chrono::{DateTime, Local};
 use log::*;
 use ratatui::widgets::TableState;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::{
+    error,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -10,17 +12,24 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{
-    mpsc::{self, UnboundedReceiver, UnboundedSender},
-    Mutex,
+    broadcast::{self, Receiver as BReceiver, Sender as BSender},
+    mpsc::{self, Receiver, Sender},
 };
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
+use crate::errors::AppError;
+use crate::heart_rate_ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate_dummy::dummy_thread;
 use crate::heart_rate_websocket::websocket_thread;
+use crate::widgets::save_prompt::SavePromptChoice;
+use crate::AppResult;
+use crate::ArgConfig;
 use crate::{
-    heart_rate::{start_notification_thread, HeartRateStatus},
-    logging::logging_thread,
+    heart_rate::HeartRateStatus,
+    heart_rate_ble::start_notification_thread,
+    logging::file_logging_thread,
     osc::osc_thread,
     scan::{bluetooth_event_thread, get_characteristics},
     settings::Settings,
@@ -30,11 +39,16 @@ use crate::{
     },
 };
 
-pub enum DeviceData {
+pub enum DeviceUpdate {
     ConnectedEvent(String),
     DisconnectedEvent(String),
     DeviceInfo(DeviceInfo),
     Characteristics(Vec<Characteristic>),
+    Error(ErrorPopup),
+}
+
+#[derive(Debug, Clone)]
+pub enum AppUpdate {
     HeartRateStatus(HeartRateStatus),
     WebsocketReady(std::net::SocketAddr),
     Error(ErrorPopup),
@@ -52,7 +66,7 @@ pub enum AppState {
     HeartRateViewNoData,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ErrorPopup {
     Intermittent(String),
     UserMustDismiss(String),
@@ -61,17 +75,13 @@ pub enum ErrorPopup {
 
 pub struct App {
     // Devices as found by the BLE thread
-    pub ble_rx: UnboundedReceiver<DeviceData>,
-    pub ble_tx: UnboundedSender<DeviceData>,
-    // BLE Notifications from the heart rate monitor
-    pub hr_rx: UnboundedReceiver<DeviceData>,
-    pub hr_tx: UnboundedSender<DeviceData>,
-    // Sending data to the OSC thread
-    pub osc_rx: Arc<Mutex<UnboundedReceiver<HeartRateStatus>>>,
-    pub osc_tx: UnboundedSender<HeartRateStatus>,
-    // Sending data to the logging thread
-    pub log_rx: Arc<Mutex<UnboundedReceiver<HeartRateStatus>>>,
-    pub log_tx: UnboundedSender<HeartRateStatus>,
+    pub ble_rx: Receiver<DeviceUpdate>,
+    pub ble_tx: Sender<DeviceUpdate>,
+    // (Usually) Status updates from the heart rate monitor
+    // Can also be errors from other actors
+    pub broadcast_rx: BReceiver<AppUpdate>,
+    pub broadcast_tx: BSender<AppUpdate>,
+    pub error_message: Option<ErrorPopup>,
     pub ble_scan_paused: Arc<AtomicBool>,
     pub state: AppState,
     pub table_state: TableState,
@@ -84,16 +94,16 @@ pub struct App {
     pub characteristic_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
     pub frame_count: usize,
-    pub error_message: Option<ErrorPopup>,
     pub settings: Settings,
     pub heart_rate_status: HeartRateStatus,
-    pub shutdown_requested: CancellationToken,
-    pub ble_thread_handle: Option<tokio::task::JoinHandle<()>>,
-    pub hr_thread_handle: Option<tokio::task::JoinHandle<()>>,
-    pub osc_thread_handle: Option<tokio::task::JoinHandle<()>>,
-    pub logging_thread_handle: Option<tokio::task::JoinHandle<()>>,
-    pub dummy_thread_handle: Option<tokio::task::JoinHandle<()>>,
-    pub websocket_thread_handle: Option<tokio::task::JoinHandle<()>>,
+    pub cancel_app: CancellationToken,
+    pub cancel_actors: CancellationToken,
+    pub ble_thread_handle: Option<JoinHandle<()>>,
+    pub hr_thread_handle: Option<JoinHandle<()>>,
+    pub osc_thread_handle: Option<JoinHandle<()>>,
+    pub logging_thread_handle: Option<JoinHandle<()>>,
+    pub dummy_thread_handle: Option<JoinHandle<()>>,
+    pub websocket_thread_handle: Option<JoinHandle<()>>,
     // Raw histories
     pub heart_rate_history: VecDeque<f64>,
     pub rr_history: VecDeque<f64>,
@@ -109,37 +119,53 @@ pub struct App {
     pub chart_high_rr: f64,
     pub chart_mid_rr: f64,
     pub chart_low_rr: f64,
-
     pub websocket_url: Option<String>,
+    pub working_directory: PathBuf,
+    pub config_path: PathBuf,
 }
 
 impl App {
-    pub fn new() -> Self {
-        let (app_tx, app_rx) = mpsc::unbounded_channel();
-        let (hr_tx, hr_rx) = mpsc::unbounded_channel();
-        let (osc_tx, osc_rx) = mpsc::unbounded_channel();
-        let (log_tx, log_rx) = mpsc::unbounded_channel();
+    pub fn build(working_directory: &PathBuf, arg_config: ArgConfig) -> Self {
+        let working_directory = working_directory.clone();
+        let (ble_tx, ble_rx) = mpsc::channel(50);
+        let (broadcast_tx, broadcast_rx) = broadcast::channel::<AppUpdate>(50);
+
         let mut error_message = None;
-        let settings = Settings::new().unwrap_or_else(|err| {
-            warn!("Failed to load settings: {}", err);
+
+        let exe_path = std::env::current_exe().expect("Failed to get executable path");
+
+        let config_path = arg_config.config_override.unwrap_or_else(|| {
+            let config_name = exe_path.with_extension("toml");
+            let config_name = config_name
+                .file_name()
+                .expect("Failed to build config name");
+            PathBuf::from(config_name)
+        });
+
+        let mut table_state = TableState::default();
+        let mut save_prompt_state = TableState::default();
+        table_state.select(Some(0));
+        save_prompt_state.select(Some(0));
+
+        let cancel_app = CancellationToken::new();
+        let cancel_actors = cancel_app.child_token();
+
+        let settings = Settings::load(config_path.clone()).unwrap_or_else(|err| {
+            error!("Failed to load settings: {}", err);
             error_message = Some(ErrorPopup::Fatal(
                 "Failed to load settings! Please fix file or delete to regenerate.".to_string(),
             ));
             Settings::default()
         });
         Self {
-            ble_tx: app_tx,
-            ble_rx: app_rx,
-            hr_tx,
-            hr_rx,
-            osc_tx,
-            osc_rx: Arc::new(Mutex::new(osc_rx)),
-            log_tx,
-            log_rx: Arc::new(Mutex::new(log_rx)),
+            ble_tx,
+            ble_rx,
+            broadcast_rx,
+            broadcast_tx,
             ble_scan_paused: Arc::new(AtomicBool::default()),
             state: AppState::MainMenu,
-            table_state: TableState::default(),
-            save_prompt_state: TableState::default(),
+            table_state,
+            save_prompt_state,
             allow_saving: false,
             discovered_devices: Vec::new(),
             quick_connect_ui: false,
@@ -153,7 +179,8 @@ impl App {
             rr_history: VecDeque::with_capacity(CHART_RR_MAX_ELEMENTS),
             bpm_dataset: Vec::with_capacity(CHART_BPM_MAX_ELEMENTS),
             rr_dataset: Vec::with_capacity(CHART_RR_MAX_ELEMENTS),
-            shutdown_requested: CancellationToken::new(),
+            cancel_app,
+            cancel_actors,
             ble_thread_handle: None,
             hr_thread_handle: None,
             osc_thread_handle: None,
@@ -169,39 +196,91 @@ impl App {
             chart_low_rr: 0.0,
             chart_mid_rr: 0.0,
             websocket_url: None,
+            working_directory,
+            config_path,
         }
     }
 
-    pub async fn start_bluetooth_event_thread(&mut self) {
+    pub fn init(&mut self) {
+        if let Some(error) = self.error_message.take() {
+            self.handle_error_update(error);
+            return;
+        }
+        if self.settings.save(&self.config_path).is_ok() {
+            self.start_logging_thread();
+            // HR source selection
+            if self.settings.dummy.enabled {
+                self.start_dummy_thread();
+            } else if self.settings.websocket.enabled {
+                self.start_websocket_thread();
+            } else {
+                self.start_bluetooth_event_thread();
+            }
+
+            if self.settings.osc.enabled {
+                self.start_osc_thread();
+            }
+        }
+    }
+
+    pub async fn main_loop(&mut self) {
+        // Check for updates from BLE Thread
+        if let Ok(new_device_info) = self.ble_rx.try_recv() {
+            self.device_info_callback(new_device_info)
+        }
+
+        // HR Notification Updates
+        // TODO change to BroadcastReceiver
+        if let Ok(hr_data) = self.broadcast_rx.try_recv() {
+            match hr_data {
+                AppUpdate::HeartRateStatus(data) => {
+                    // Assume we have proper data now
+                    self.state = AppState::HeartRateView;
+                    // Dismiss intermittent errors if we just got a notification packet
+                    if let Some(ErrorPopup::Intermittent(_)) = self.error_message {
+                        self.error_message = None;
+                    }
+                    self.append_to_history(&data);
+                    self.heart_rate_status = data;
+                }
+                AppUpdate::Error(error) => self.handle_error_update(error),
+                AppUpdate::WebsocketReady(local_addr) => {
+                    self.websocket_url = Some(local_addr.to_string());
+                }
+            }
+        }
+    }
+
+    // TODO Proper actor/handle structures for threads
+    // This is a bit much
+    pub fn start_bluetooth_event_thread(&mut self) {
         let pause_signal_clone = Arc::clone(&self.ble_scan_paused);
         let app_tx_clone = self.ble_tx.clone();
-        let shutdown_requested_clone = self.shutdown_requested.clone();
+        let shutdown_requested_clone = self.cancel_actors.clone();
         debug!("Spawning Bluetooth CentralEvent thread");
         self.ble_thread_handle = Some(tokio::spawn(async move {
             bluetooth_event_thread(app_tx_clone, pause_signal_clone, shutdown_requested_clone).await
         }));
     }
 
-    pub async fn connect_for_characteristics(&mut self) {
-        if self.discovered_devices.is_empty() {
+    pub fn connect_for_characteristics(&mut self) {
+        let Some(selected_device) = self.get_selected_device() else {
             return;
-        }
-        let selected_device = self
-            .get_selected_device()
-            .expect("This crash is expected if discovered_devices is empty");
+        };
 
         debug!("(C) Pausing BLE scan");
         self.ble_scan_paused.store(true, Ordering::SeqCst);
 
-        let device = Arc::new(selected_device.clone());
+        let device = selected_device.clone();
         let app_tx_clone = self.ble_tx.clone();
 
         debug!("Spawning characteristics thread");
         self.state = AppState::ConnectingForCharacteristics;
+        // TODO make this not another thread maybe
         tokio::spawn(async move { get_characteristics(app_tx_clone, device).await });
     }
 
-    pub async fn connect_for_hr(&mut self, quick_connect_device: Option<&DeviceInfo>) {
+    pub fn connect_for_hr(&mut self, quick_connect_device: Option<&DeviceInfo>) {
         let selected_device = if let Some(device) = quick_connect_device {
             self.state = AppState::ConnectingForHeartRate;
             device
@@ -223,9 +302,9 @@ impl App {
         debug!("(HR) Pausing BLE scan");
         self.ble_scan_paused.store(true, Ordering::SeqCst);
 
-        let device = Arc::new(selected_device.clone());
-        let hr_tx_clone = self.hr_tx.clone();
-        let shutdown_requested_clone = self.shutdown_requested.clone();
+        let device = selected_device.clone();
+        let hr_tx_clone = self.broadcast_tx.clone();
+        let shutdown_requested_clone = self.cancel_actors.clone();
         // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
@@ -243,26 +322,35 @@ impl App {
         }));
     }
 
-    pub async fn start_osc_thread(&mut self) {
-        let osc_rx_clone = Arc::clone(&self.osc_rx);
+    pub fn start_osc_thread(&mut self) {
         let osc_settings = self.settings.osc.clone();
-        let shutdown_requested_clone = self.shutdown_requested.clone();
+        let broadcast_rx = self.broadcast_tx.subscribe();
+        let broadcast_tx = self.broadcast_tx.clone();
+        let shutdown_requested_clone = self.cancel_actors.clone();
 
         debug!("Spawning OSC thread");
         self.osc_thread_handle = Some(tokio::spawn(async move {
-            osc_thread(osc_rx_clone, osc_settings, shutdown_requested_clone).await
+            osc_thread(
+                broadcast_rx,
+                broadcast_tx,
+                osc_settings,
+                shutdown_requested_clone,
+            )
+            .await
         }));
     }
 
-    pub async fn start_logging_thread(&mut self) {
-        let logging_rx_clone = Arc::clone(&self.log_rx);
+    pub fn start_logging_thread(&mut self) {
         let misc_settings_clone = self.settings.misc.clone();
-        let shutdown_requested_clone = self.shutdown_requested.clone();
+        let shutdown_requested_clone = self.cancel_actors.clone();
+        let broadcast_rx = self.broadcast_tx.subscribe();
+        let broadcast_tx = self.broadcast_tx.clone();
 
         debug!("Spawning Data Logging thread");
         self.logging_thread_handle = Some(tokio::spawn(async move {
-            logging_thread(
-                logging_rx_clone,
+            file_logging_thread(
+                broadcast_rx,
+                broadcast_tx,
                 misc_settings_clone,
                 shutdown_requested_clone,
             )
@@ -270,27 +358,27 @@ impl App {
         }));
     }
 
-    pub async fn start_dummy_thread(&mut self) {
-        let hr_tx_clone = self.hr_tx.clone();
-        let shutdown_requested_clone = self.shutdown_requested.clone();
+    pub fn start_dummy_thread(&mut self) {
+        let broadcast_tx = self.broadcast_tx.clone();
+        let shutdown_requested_clone = self.cancel_actors.clone();
         let dummy_settings_clone = self.settings.dummy.clone();
         debug!("Spawning Dummy thread");
         self.state = AppState::HeartRateView;
         self.chart_high_rr = self.settings.misc.chart_rr_max;
         self.dummy_thread_handle = Some(tokio::spawn(async move {
-            dummy_thread(hr_tx_clone, dummy_settings_clone, shutdown_requested_clone).await
+            dummy_thread(broadcast_tx, dummy_settings_clone, shutdown_requested_clone).await
         }));
     }
 
-    pub async fn start_websocket_thread(&mut self) {
-        let hr_tx_clone = self.hr_tx.clone();
-        let shutdown_requested_clone = self.shutdown_requested.clone();
+    pub fn start_websocket_thread(&mut self) {
+        let broadcast_tx = self.broadcast_tx.clone();
+        let shutdown_requested_clone = self.cancel_actors.clone();
         let websocket_settings_clone = self.settings.websocket.clone();
         debug!("Spawning Websocket thread");
         self.state = AppState::WaitingForWebsocket;
         self.websocket_thread_handle = Some(tokio::spawn(async move {
             websocket_thread(
-                hr_tx_clone,
+                broadcast_tx,
                 websocket_settings_clone,
                 shutdown_requested_clone,
             )
@@ -301,7 +389,7 @@ impl App {
     pub async fn join_threads(&mut self) {
         let duration = Duration::from_secs(3);
         info!("Sending shutdown signal to threads!");
-        self.shutdown_requested.cancel();
+        self.cancel_app.cancel();
 
         if let Some(handle) = self.ble_thread_handle.take() {
             debug!("Joining BLE thread");
@@ -346,8 +434,10 @@ impl App {
         }
     }
 
-    pub fn save_settings(&mut self) -> Result<(), std::io::Error> {
-        self.settings.save()
+    pub fn try_save_settings(&mut self) {
+        self.settings.save(&self.config_path).unwrap_or_else(|e| {
+            self.handle_error_update(ErrorPopup::Fatal(format!("Couldn't save settings! {e}")))
+        });
     }
 
     pub fn try_save_device(&mut self, given_device: Option<&DeviceInfo>) {
@@ -368,7 +458,7 @@ impl App {
                 self.settings.ble.saved_address.clone_from(&new_id);
                 self.settings.ble.saved_name.clone_from(&new_name);
                 info!("Updating saved device! Name: {} MAC: {}", new_name, new_id);
-                self.save_settings().expect("Failed to save settings");
+                self.try_save_settings();
             }
         }
     }
@@ -506,23 +596,26 @@ impl App {
         state.select(Some(next));
     }
 
-    pub fn scroll_down(&mut self) {
-        match self.state {
-            AppState::CharacteristicView => {
-                self.characteristic_scroll = self.characteristic_scroll.wrapping_add(1);
-            }
-            AppState::MainMenu => {
-                Self::table_state_scroll(
-                    false,
-                    &mut self.table_state,
-                    self.discovered_devices.len(),
-                );
-            }
-            AppState::SaveDevicePrompt => {
-                Self::table_state_scroll(false, &mut self.save_prompt_state, 3);
-            }
-            _ => {}
+    fn handle_error_update(&mut self, error: ErrorPopup) {
+        // Don't override a fatal error popup
+        if matches!(self.error_message, Some(ErrorPopup::Fatal(_))) {
+            return;
         }
+        match error {
+            ErrorPopup::Fatal(e) => {
+                self.error_message = Some(ErrorPopup::Fatal(e));
+                // Tell actors to stop, but let user close UI
+                self.cancel_actors.cancel();
+                // Just for the UI, "stop" the scan
+                self.ble_scan_paused.store(true, Ordering::SeqCst);
+            }
+            _ => self.error_message = Some(error),
+        }
+    }
+
+    /// Terminal interval tick
+    pub fn term_tick(&mut self) {
+        self.frame_count = self.frame_count.checked_add(1).unwrap_or(0);
     }
 
     pub fn scroll_up(&mut self) {
@@ -541,6 +634,197 @@ impl App {
                 Self::table_state_scroll(true, &mut self.save_prompt_state, 3);
             }
             _ => {}
+        }
+    }
+    pub fn scroll_down(&mut self) {
+        match self.state {
+            AppState::CharacteristicView => {
+                self.characteristic_scroll = self.characteristic_scroll.wrapping_add(1);
+            }
+            AppState::MainMenu => {
+                Self::table_state_scroll(
+                    false,
+                    &mut self.table_state,
+                    self.discovered_devices.len(),
+                );
+            }
+            AppState::SaveDevicePrompt => {
+                Self::table_state_scroll(false, &mut self.save_prompt_state, 3);
+            }
+            _ => {}
+        }
+    }
+    pub fn enter_pressed(&mut self) {
+        // Dismiss error message if present
+        if self.error_message.is_some() {
+            match self.error_message.as_ref().unwrap() {
+                ErrorPopup::UserMustDismiss(_) | ErrorPopup::Intermittent(_) => {
+                    self.error_message = None;
+                }
+                ErrorPopup::Fatal(_) => {
+                    self.cancel_app.cancel();
+                }
+            }
+            // Skip other checks if we dismissed an error.
+            return;
+        }
+
+        match self.state {
+            AppState::CharacteristicView => self.state = AppState::MainMenu,
+            AppState::SaveDevicePrompt => {
+                let chosen_option = self.save_prompt_state.selected().unwrap_or(0);
+                match SavePromptChoice::from(chosen_option) {
+                    SavePromptChoice::Yes => {
+                        self.allow_saving = true;
+                        self.try_save_settings();
+                    }
+                    SavePromptChoice::No => {}
+                    SavePromptChoice::Never => {
+                        self.settings.ble.never_ask_to_save = true;
+                        self.try_save_settings();
+                    }
+                }
+                debug!(
+                    "Connecting from save prompt | Chosen option: {}",
+                    chosen_option
+                );
+                self.connect_for_hr(None);
+            }
+            AppState::MainMenu => {
+                // app_state changed by method
+                debug!("Connecting from main menu");
+                self.connect_for_hr(None);
+            }
+            _ => {}
+        }
+    }
+
+    /// Callback to handle new/updated devices found by the BLE scan thread
+    pub fn device_info_callback(&mut self, new_device_info: DeviceUpdate) {
+        match new_device_info {
+            DeviceUpdate::DeviceInfo(device) => {
+                // If the device is already in the list, update it
+                if let Some(existing_device) = self
+                    .discovered_devices
+                    .iter_mut()
+                    .find(|d| d.id == device.id)
+                {
+                    *existing_device = device.clone();
+                    //self.discovered_devices[existing_device_index] = device.clone();
+                } else {
+                    // If the device is not in the list, add it
+                    // but only if it has the heart rate service
+                    // (We don't use the ScanFilter from btleplug to allow quicker connection to saved devices,
+                    // and since it reports only "Unknown" names for some reason)
+                    // TODO: Raise issue about it
+                    if device
+                        .services
+                        .iter()
+                        .any(|service| *service == HEART_RATE_SERVICE_UUID)
+                    {
+                        self.discovered_devices.push(device.clone());
+                    }
+                    // This filter used to be in scan.rs, but doing it here
+                    // lets us connect to saved devices without checking their services (i.e. quicker)
+                }
+
+                // If the device is saved, connect to it
+                if (device.id == self.settings.ble.saved_address
+                    || device.name == self.settings.ble.saved_name)
+                    && self.is_idle_on_main_menu()
+                {
+                    self.quick_connect_ui = true;
+                    // I'm going to assume that if we find a set saved device,
+                    // they're always going to want to update the value in case Name/MAC changes,
+                    // even if they're weird and have set `never_ask_to_save` to true
+                    self.allow_saving = true;
+                    // Adding device to UI list so other parts of the app that check the selected device
+                    // get the expected result
+                    if !self.discovered_devices.iter().any(|d| d.id == device.id) {
+                        self.discovered_devices.push(device.clone());
+                    }
+                    self.table_state.select(
+                        self.discovered_devices
+                            .iter()
+                            .position(|d| d.id == device.id),
+                    );
+                    self.try_save_device(Some(&device));
+                    debug!("Connecting to saved device, AppState: {:?}", self.state);
+                    // app_state changed by method
+                    self.connect_for_hr(Some(&device));
+                } else {
+                    self.try_save_device(None);
+                }
+            }
+            DeviceUpdate::Characteristics(characteristics) => {
+                self.selected_characteristics = characteristics;
+                self.state = AppState::CharacteristicView
+            }
+            DeviceUpdate::Error(error) => {
+                error!("BLE Thread Error: {:?}", error.clone());
+                if self.state == AppState::HeartRateViewNoData
+                    && matches!(error, ErrorPopup::Intermittent(_))
+                {
+                    // Ignoring the intermittent ones when we're in the inbetween state
+                } else {
+                    // Don't override a fatal error
+                    if !matches!(self.error_message, Some(ErrorPopup::Fatal(_))) {
+                        self.error_message = Some(error);
+                    }
+                }
+                if self.state == AppState::HeartRateView
+                    || self.state == AppState::HeartRateViewNoData
+                    || self.state == AppState::ConnectingForHeartRate
+                {
+                    self.broadcast_tx
+                        .send(AppUpdate::HeartRateStatus(HeartRateStatus::default()))
+                        .expect("Failed to send 0BPM on BLE Error");
+                }
+                //self.is_loading_characteristics = false;
+            }
+            DeviceUpdate::ConnectedEvent(id) => {
+                info!("Connnnnnnnn");
+                if self.state == AppState::ConnectingForCharacteristics {
+                    self.state = AppState::CharacteristicView;
+                } else {
+                    self.state = if self.heart_rate_status.heart_rate_bpm > 0 {
+                        AppState::HeartRateView
+                    } else {
+                        AppState::HeartRateViewNoData
+                    };
+                }
+
+                if self.state == AppState::HeartRateView
+                    || self.state == AppState::HeartRateViewNoData
+                    || self.state == AppState::ConnectingForHeartRate
+                {
+                    if id == self.get_selected_device().unwrap().id {
+                        debug!("Connected to device {:?}, stopping BLE scan", id);
+                        self.ble_scan_paused.store(true, Ordering::SeqCst);
+                    }
+                    self.try_save_device(None);
+                }
+            }
+            DeviceUpdate::DisconnectedEvent(id) => {
+                self.error_message = Some(ErrorPopup::Intermittent(
+                    "Disconnected from device!".to_string(),
+                ));
+                if (self.state == AppState::HeartRateView
+                    || self.state == AppState::HeartRateViewNoData
+                    || self.state == AppState::MainMenu)
+                    && id == self.get_selected_device().unwrap().id
+                {
+                    debug!("Disconnected from device {:?}, resuming BLE scan", id);
+                    self.broadcast_tx
+                        .send(AppUpdate::HeartRateStatus(HeartRateStatus::default()))
+                        .expect("Failed to send 0BPM on BLE DC");
+                    self.ble_scan_paused.store(false, Ordering::SeqCst);
+                }
+            }
+        }
+
+        if self.table_state.selected().is_none() {
+            self.table_state.select(Some(0));
         }
     }
 }

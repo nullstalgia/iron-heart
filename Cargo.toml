@@ -1,15 +1,18 @@
 [package]
-name = "null-iron-heart"
+name = "iron-heart"
 repository = "https://github.com/nullstalgia/null-iron-heart"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
-default-run = "null-iron-heart"
+default-run = "iron-heart"
+
+[features]
+portable = []
 
 [dependencies]
 btleplug = "0.11"
 ratatui = "0.28"
 tokio = { version = "1", features = ["full"] }
-crossterm = "0.28"
+crossterm = { version = "0.28", features = ["event-stream"] }
 futures = "0.3"
 chrono = "0.4"
 uuid = "1.6"
@@ -42,3 +45,5 @@ futures-util = "0.3.30"
 serde_json = "1.0.122"
 local-ip-address = "0.6.1"
 ratatui-macros = "0.4.3"
+directories = "5.0.1"
+argh = "0.1.12"
