@@ -47,10 +47,10 @@ pub struct ArgConfig {
     #[argh(option, short = 'c')]
     pub config_override: Option<PathBuf>,
     /// config file must exist, including "config_override" files
-    #[argh(option, short = 'r')]
+    #[argh(switch, short = 'r')]
     pub config_required: bool,
     /// use config file as-is (don't save over it)
-    #[argh(option, short = 'n')]
+    #[argh(switch, short = 'n')]
     pub no_save: bool,
 }
 
