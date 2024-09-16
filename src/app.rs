@@ -82,7 +82,7 @@ pub enum AppState {
     HeartRateViewNoData,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorPopup {
     Intermittent(String),
     UserMustDismiss(String),
@@ -93,6 +93,9 @@ pub enum ErrorPopup {
 impl ErrorPopup {
     pub fn detailed(message: &str, error: AppError) -> Self {
         Self::FatalDetailed(message.to_owned(), error.to_string())
+    }
+    pub fn detailed_str(message: &str, error: &str) -> Self {
+        Self::FatalDetailed(message.to_owned(), error.to_owned())
     }
 }
 
@@ -109,7 +112,8 @@ pub struct App {
     pub state: AppState,
     pub table_state: TableState,
     pub save_prompt_state: TableState,
-    pub allow_saving: bool,
+    pub should_save_ble_device: bool,
+    pub allow_modifying_config: bool,
     // devices with the heart rate service
     // UI references this using table_state as the index
     pub discovered_devices: Vec<DeviceInfo>,
@@ -147,7 +151,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn build(arg_config: ArgConfig) -> Self {
+    pub fn build(arg_config: ArgConfig, parent_token: Option<CancellationToken>) -> Self {
         let (ble_tx, ble_rx) = mpsc::channel(50);
         let (broadcast_tx, broadcast_rx) = broadcast::channel::<AppUpdate>(50);
 
@@ -168,10 +172,11 @@ impl App {
         table_state.select(Some(0));
         save_prompt_state.select(Some(0));
 
-        let cancel_app = CancellationToken::new();
+        let cancel_app = parent_token.unwrap_or(CancellationToken::new());
         let cancel_actors = cancel_app.child_token();
 
-        let settings = match Settings::load(config_path.clone()) {
+        let allow_modifying_config = !arg_config.no_save;
+        let settings = match Settings::load(config_path.clone(), arg_config.config_required) {
             Ok(settings) => settings,
             Err(e) => {
                 error!("Failed to load settings: {}", e);
@@ -191,7 +196,8 @@ impl App {
             state: AppState::MainMenu,
             table_state,
             save_prompt_state,
-            allow_saving: false,
+            should_save_ble_device: false,
+            allow_modifying_config,
             discovered_devices: Vec::new(),
             quick_connect_ui: false,
             characteristic_scroll: 0,
@@ -226,24 +232,28 @@ impl App {
     }
 
     pub fn init(&mut self) {
+        // Return early if error is present
         if let Some(error) = self.error_message.take() {
             self.handle_error_update(error);
             return;
         }
-        if self.settings.save(&self.config_path).is_ok() {
-            self.start_logging_thread();
-            // HR source selection
-            if self.settings.dummy.enabled {
-                self.start_dummy_thread();
-            } else if self.settings.websocket.enabled {
-                self.start_websocket_thread();
-            } else {
-                self.start_bluetooth_event_thread();
-            }
+        // Or if initial config save failed
+        if !self.try_save_settings() {
+            return;
+        }
 
-            if self.settings.osc.enabled {
-                self.start_osc_thread();
-            }
+        self.start_logging_thread();
+        // HR source selection
+        if self.settings.dummy.enabled {
+            self.start_dummy_thread();
+        } else if self.settings.websocket.enabled {
+            self.start_websocket_thread();
+        } else {
+            self.start_bluetooth_event_thread();
+        }
+
+        if self.settings.osc.enabled {
+            self.start_osc_thread();
         }
     }
 
@@ -312,7 +322,10 @@ impl App {
                 return;
             }
             // Let's check if we're okay asking to saving this device
-            if !self.settings.ble.never_ask_to_save && self.state != AppState::SaveDevicePrompt {
+            if !self.settings.ble.never_ask_to_save
+                && self.allow_modifying_config
+                && self.state != AppState::SaveDevicePrompt
+            {
                 debug!("Asking to save device");
                 self.state = AppState::SaveDevicePrompt;
                 return;
@@ -457,14 +470,26 @@ impl App {
         }
     }
 
-    pub fn try_save_settings(&mut self) {
-        self.settings.save(&self.config_path).unwrap_or_else(|e| {
-            self.handle_error_update(ErrorPopup::detailed("Couldn't save settings!", e))
-        });
+    pub fn try_save_settings(&mut self) -> bool {
+        if let Err(e) = self.save_settings() {
+            self.handle_error_update(ErrorPopup::detailed("Couldn't save settings!", e));
+
+            false
+        } else {
+            true
+        }
+    }
+
+    fn save_settings(&mut self) -> Result<(), AppError> {
+        if self.allow_modifying_config {
+            self.settings.save(&self.config_path)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn try_save_device(&mut self, given_device: Option<&DeviceInfo>) {
-        if self.allow_saving {
+        if self.should_save_ble_device && self.allow_modifying_config {
             let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
 
             let new_id = device.get_id();
@@ -699,7 +724,7 @@ impl App {
                 let chosen_option = self.save_prompt_state.selected().unwrap_or(0);
                 match SavePromptChoice::from(chosen_option) {
                     SavePromptChoice::Yes => {
-                        self.allow_saving = true;
+                        self.should_save_ble_device = true;
                         self.try_save_settings();
                     }
                     SavePromptChoice::No => {}
@@ -761,7 +786,7 @@ impl App {
                     // I'm going to assume that if we find a set saved device,
                     // they're always going to want to update the value in case Name/MAC changes,
                     // even if they're weird and have set `never_ask_to_save` to true
-                    self.allow_saving = true;
+                    self.should_save_ble_device = true;
                     // Adding device to UI list so other parts of the app that check the selected device
                     // get the expected result
                     if !self.discovered_devices.iter().any(|d| d.id == device.id) {

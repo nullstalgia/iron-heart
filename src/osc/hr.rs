@@ -90,13 +90,14 @@ pub(super) fn form_bpm_bundle(
         args: vec![OscType::Int(hr_status.heart_rate_bpm as i32)],
     };
 
+    let hr_float = if positive_float_bpm {
+        hr_status.heart_rate_bpm as f32 / 255.0
+    } else {
+        (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0
+    };
     let bpm_float_msg = OscMessage {
         addr: osc_addresses.bpm_float.clone(),
-        args: vec![OscType::Float(if positive_float_bpm {
-            hr_status.heart_rate_bpm as f32 / 255.0
-        } else {
-            (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0
-        })],
+        args: vec![OscType::Float(hr_float)],
     };
 
     let connected = if delay_sending_connected {

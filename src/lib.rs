@@ -3,9 +3,11 @@ extern crate lazy_static;
 
 use argh::FromArgs;
 use errors::AppError;
+use fast_log::FastLogFormat;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, path::PathBuf};
 use tokio::fs::create_dir;
+use tokio_util::sync::CancellationToken;
 
 use log::*;
 
@@ -21,7 +23,7 @@ use directories::BaseDirs;
 mod activities;
 mod app;
 mod company_codes;
-mod errors;
+pub mod errors;
 mod heart_rate;
 mod logging;
 mod macros;
@@ -41,12 +43,19 @@ mod ui;
 #[derive(FromArgs)]
 /// Optional command line arguments
 pub struct ArgConfig {
-    /// specify config file path
+    /// specify config file path, creates file if it doesn't exist
     #[argh(option, short = 'c')]
-    config_override: Option<PathBuf>,
+    pub config_override: Option<PathBuf>,
+    /// config file must exist, including "config_override" files
+    #[argh(option, short = 'r')]
+    pub config_required: bool,
+    /// use config file as-is (don't save over it)
+    #[argh(option, short = 'n')]
+    pub no_save: bool,
 }
 
 /// Application result type.
+//pub type AppResult<T> = color_eyre::eyre::Result<T>;
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
@@ -54,6 +63,7 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
     arg_config.config_override = arg_config.config_override.map(|p| {
         p.canonicalize()
             .expect("Failed to build full supplied config path")
+        // Can also fail if doesn't exist. Need to decide how to handle.
     });
     info!("Working directory: {}", working_directory.display());
     if !working_directory.exists() {
@@ -65,7 +75,7 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
             })?;
     }
     std::env::set_current_dir(&working_directory).expect("Failed to change working directory");
-    let mut app = App::build(arg_config);
+    let mut app = App::build(arg_config, None);
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stdout());
@@ -74,20 +84,10 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
     let mut tui = Tui::new(terminal, events);
     tui.init()?;
 
-    let had_error = app.error_message.is_some();
-    let log_name = std::env::current_exe()?.with_extension("log");
-    let log_path = working_directory.with_file_name(&log_name);
+    let (log_path, log_level, log_format) = log_config(&app, &working_directory)?;
     let log_path = log_path
         .to_str()
         .expect("Failed to convert log path to &str");
-    let log_level = app.settings.get_log_level();
-    let log_format = if log_level <= LevelFilter::Info || had_error {
-        // Default format
-        fast_log::FastLogFormat::new()
-    } else {
-        // Show line number
-        fast_log::FastLogFormat::new().set_display_line_level(LevelFilter::Trace)
-    };
     fast_log::init(
         fast_log::Config::new()
             .file_loop(log_path, fast_log::consts::LogSize::MB(1))
@@ -122,6 +122,76 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
     // Reset the terminal.
     tui.exit()?;
     Ok(())
+}
+
+pub async fn run_headless(
+    arg_config: ArgConfig,
+    parent_token: CancellationToken,
+) -> Result<(), AppError> {
+    let working_directory = determine_working_directory().ok_or(AppError::WorkDir)?;
+
+    let mut app = App::build(arg_config, Some(parent_token));
+
+    let (log_path, log_level, log_format) = log_config(&app, &working_directory)?;
+
+    // assert_eq!("a", std::env::current_dir().unwrap().to_str().unwrap());
+
+    fast_log::init(
+        fast_log::Config::new()
+            .console()
+            .level(log_level)
+            .format(log_format)
+            .chan_len(Some(1000000)),
+    )
+    .expect("Failed to initialize fast_log");
+
+    assert_eq!(app.error_message, None);
+
+    info!("Loaded config from: {}", app.config_path.display());
+
+    info!("Starting app...");
+
+    app.init();
+
+    // Start the main loop.
+    while !app.cancel_app.is_cancelled() {
+        assert_eq!(app.error_message, None);
+        // Dispatch BLE/HR/OSC messages
+        app.main_loop().await;
+        // Since there's no UI to dismiss errors, just close the app
+        // if the actors aren't happy
+        if app.cancel_actors.is_cancelled() {
+            info!("Actors cancelled!");
+            app.cancel_app.cancel();
+        }
+    }
+    info!("Joining...");
+    // After while loop closes
+    app.join_threads().await;
+
+    info!("Shutting down gracefully...");
+    log::logger().flush();
+
+    Ok(())
+}
+
+fn log_config(
+    app: &App,
+    working_directory: &PathBuf,
+) -> Result<(PathBuf, LevelFilter, FastLogFormat), AppError> {
+    let had_error = app.error_message.is_some();
+    let log_name = std::env::current_exe()?.with_extension("log");
+    let log_path = working_directory.with_file_name(&log_name);
+    let log_level = app.settings.get_log_level();
+    let log_format = if log_level <= LevelFilter::Info || had_error {
+        // Default format
+        fast_log::FastLogFormat::new()
+    } else {
+        // Show line number
+        fast_log::FastLogFormat::new().set_display_line_level(LevelFilter::Trace)
+    };
+
+    Ok((log_path, log_level, log_format))
 }
 
 /// Returns the directory that logs, config, and other files should be placed in by default.

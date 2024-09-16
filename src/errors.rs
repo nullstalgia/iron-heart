@@ -36,6 +36,8 @@ pub enum AppError {
     TomlSer(#[from] toml::ser::Error),
     #[error("CSV Error: {0}")]
     Csv(#[from] csv_async::Error),
+    #[error("Parse Int Error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
     // My errors
     #[error("Failed to get working directory")]
     WorkDir,
@@ -43,4 +45,6 @@ pub enum AppError {
     OscPrefix(String),
     #[error("Invalid OSC Address: \"{0}\" - \"{1}\"")]
     OscAddress(String, String),
+    #[error("Failed to get event")]
+    NoEvent,
 }

@@ -6,6 +6,7 @@ edition = "2021"
 default-run = "iron-heart"
 
 [features]
+# Ignores user dotfiles/AppData, using the current directory instead
 portable = []
 
 [dependencies]
@@ -50,3 +51,7 @@ argh = "0.1.12"
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "1.4"
+
+[dev-dependencies]
+tokio-tungstenite = "*"
+ntest = "*"

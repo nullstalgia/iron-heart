@@ -11,6 +11,16 @@ struct JSONHeartRate {
     battery: u8,
 }
 
+impl From<u16> for JSONHeartRate {
+    fn from(hr: u16) -> Self {
+        Self {
+            heartRate: hr,
+            latest_rr_ms: 60000 / hr as u64,
+            battery: 100,
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let addr = std::env::args()
@@ -32,11 +42,7 @@ async fn main() {
     println!("Connected to websocket server!");
     let bpm_min = 70;
     let bpm_max = 120;
-    let mut hr = JSONHeartRate {
-        heartRate: bpm_min,
-        latest_rr_ms: 0,
-        battery: 100,
-    };
+    let mut hr: JSONHeartRate = bpm_min.into();
     //let rr = 0.0;
 
     loop {

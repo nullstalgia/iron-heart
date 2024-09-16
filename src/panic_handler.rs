@@ -4,12 +4,12 @@ use crossterm::{
     terminal::{disable_raw_mode, LeaveAlternateScreen},
 };
 
+use color_eyre::eyre::Result;
+use log::*;
 use std::error::Error;
 
-use log::*;
-
 // https://ratatui.rs/recipes/apps/better-panic/
-pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
+pub fn initialize_panic_handler() -> Result<()> {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
         .panic_section(format!(
             "This is a bug. Consider reporting it at {}",

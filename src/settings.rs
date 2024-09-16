@@ -91,7 +91,7 @@ pub struct Settings {
 
 impl Settings {
     #[allow(clippy::needless_late_init)]
-    pub fn load(config_path: PathBuf) -> Result<Self, AppError> {
+    pub fn load(config_path: PathBuf, required: bool) -> Result<Self, AppError> {
         let default_log_level;
         let default_session_log_path;
         let default_bpm_txt_path;
@@ -111,7 +111,7 @@ impl Settings {
 
         let settings = Config::builder()
             // Start off by merging in the "default" configuration file
-            .add_source(ConfigFile::from(config_path).required(false))
+            .add_source(ConfigFile::from(config_path).required(required))
             .set_default("osc.enabled", true)?
             .set_default("osc.host_ip", "0.0.0.0")?
             .set_default("osc.target_ip", "127.0.0.1")?
