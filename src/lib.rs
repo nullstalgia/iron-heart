@@ -132,7 +132,7 @@ pub async fn run_headless(
 
     let mut app = App::build(arg_config, Some(parent_token));
 
-    let (log_path, log_level, log_format) = log_config(&app, &working_directory)?;
+    let (_, log_level, log_format) = log_config(&app, &working_directory)?;
 
     // assert_eq!("a", std::env::current_dir().unwrap().to_str().unwrap());
 

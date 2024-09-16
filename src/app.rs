@@ -94,9 +94,9 @@ impl ErrorPopup {
     pub fn detailed(message: &str, error: AppError) -> Self {
         Self::FatalDetailed(message.to_owned(), error.to_string())
     }
-    pub fn detailed_str(message: &str, error: &str) -> Self {
-        Self::FatalDetailed(message.to_owned(), error.to_owned())
-    }
+    // pub fn detailed_str(message: &str, error: &str) -> Self {
+    //     Self::FatalDetailed(message.to_owned(), error.to_owned())
+    // }
 }
 
 pub struct App {

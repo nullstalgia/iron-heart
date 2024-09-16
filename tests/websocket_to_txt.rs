@@ -1,6 +1,6 @@
 use std::{thread::sleep, time::Duration};
 
-use iron_heart::{run_headless, ArgConfig};
+use iron_heart::ArgConfig;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::sync::CancellationToken;
 
@@ -12,6 +12,9 @@ use tokio_websockets::{ClientBuilder, Message};
 use tokio::fs::File;
 
 use ntest::timeout;
+
+use common::headless_thread;
+mod common;
 
 #[derive(Serialize)]
 #[allow(non_snake_case)]
@@ -35,7 +38,7 @@ impl From<u16> for JSONHeartRate {
 #[tokio::test]
 #[ignore = "can't be concurrent"]
 #[timeout(10000)] // 10s timeout
-async fn main() -> Result<(), iron_heart::errors::AppError> {
+async fn websocket_to_txt() -> Result<(), iron_heart::errors::AppError> {
     let parent_token = CancellationToken::new();
 
     let arg_config = ArgConfig {
@@ -106,23 +109,4 @@ async fn main() -> Result<(), iron_heart::errors::AppError> {
     parent_token.cancel();
     let _ = app_thread.join();
     Ok(())
-}
-
-// I have to spawn a tokio runtime for the app
-// as #[tokio::test], even with "multi_thread" flavor
-// will only spawn one of the child tasks.
-// Not sure why!
-fn headless_thread(
-    arg_config: ArgConfig,
-    parent_token: CancellationToken,
-) -> Result<(), iron_heart::errors::AppError> {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async move {
-            run_headless(arg_config, parent_token).await?;
-            Ok(())
-        })
 }

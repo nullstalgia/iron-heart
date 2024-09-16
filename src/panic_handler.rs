@@ -6,7 +6,7 @@ use crossterm::{
 
 use color_eyre::eyre::Result;
 use log::*;
-use std::error::Error;
+// use std::error::Error;
 
 // https://ratatui.rs/recipes/apps/better-panic/
 pub fn initialize_panic_handler() -> Result<()> {

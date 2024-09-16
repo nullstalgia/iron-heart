@@ -1,0 +1,41 @@
+use iron_heart::ArgConfig;
+
+use tokio_util::sync::CancellationToken;
+
+use ntest::timeout;
+
+#[tokio::test]
+#[ignore = "can't be concurrent"]
+#[timeout(10000)] // 10s timeout
+#[should_panic]
+async fn misspelled_bool() {
+    let parent_token = CancellationToken::new();
+
+    let arg_config = ArgConfig {
+        config_override: Some("tests/test_configs/misspelled_bool.toml".into()),
+        config_required: true,
+        no_save: true,
+    };
+
+    iron_heart::run_headless(arg_config, parent_token)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "can't be concurrent"]
+#[timeout(10000)] // 10s timeout
+#[should_panic]
+async fn missing_end_quote() {
+    let parent_token = CancellationToken::new();
+
+    let arg_config = ArgConfig {
+        config_override: Some("tests/test_configs/missing_end_quote.toml".into()),
+        config_required: true,
+        no_save: true,
+    };
+
+    iron_heart::run_headless(arg_config, parent_token)
+        .await
+        .unwrap();
+}

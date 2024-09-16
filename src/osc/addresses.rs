@@ -24,7 +24,7 @@ fn remove_double_slashes(address: &mut String) {
 }
 
 fn remove_trailing_char(s: &mut String, ch: char) {
-    if s.ends_with(ch) {
+    if s.len() > 1 && s.ends_with(ch) {
         s.pop();
     }
 }
@@ -34,7 +34,7 @@ fn format_prefix(prefix: &str) -> Result<String, AppError> {
     address.push_str(prefix);
     remove_double_slashes(&mut address);
     remove_trailing_char(&mut address, '/');
-    if verify_address(&address).is_ok() {
+    if verify_address(&address).is_ok() || address == "/" {
         Ok(address)
     } else {
         Err(AppError::OscPrefix(prefix.to_owned()))
@@ -42,7 +42,14 @@ fn format_prefix(prefix: &str) -> Result<String, AppError> {
 }
 
 fn format_address(prefix: &str, param: &str, param_name: &str) -> Result<String, AppError> {
-    let mut address = format!("{}/{}", prefix, param);
+    // Don't allow empty/blank addresses
+    if param.len() == 0 || param == "/" {
+        return Err(AppError::OscAddress(
+            param_name.to_owned(),
+            param.to_owned(),
+        ));
+    }
+    let mut address = format!("{prefix}/{param}");
     remove_double_slashes(&mut address);
     remove_trailing_char(&mut address, '/');
     if verify_address(&address).is_ok() {
@@ -107,5 +114,151 @@ impl OscAddresses {
                 "param_rr_twitch_down",
             )?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prefix_missing_leading_slash() -> Result<(), AppError> {
+        let potential_input = "avatar/parameters";
+        let ideal_output = "/avatar/parameters";
+        let test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+    #[test]
+    fn prefix_extra_proceeding_slash() -> Result<(), AppError> {
+        let potential_input = "/avatar/parameters/";
+        let ideal_output = "/avatar/parameters";
+        let test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+    #[test]
+    fn prefix_malformed_slashes() -> Result<(), AppError> {
+        let potential_input = "avatar///parameters/";
+        let ideal_output = "/avatar/parameters";
+        let test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+    #[test]
+    fn prefix_empty() -> Result<(), AppError> {
+        let potential_input = "";
+        let ideal_output = "/";
+        let test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+    #[test]
+    fn prefix_slash() -> Result<(), AppError> {
+        let potential_input = "/";
+        let ideal_output = "/";
+        let test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+    #[test]
+    fn prefix_many_slashes() -> Result<(), AppError> {
+        let ideal_output = "/";
+        let mut potential_input = "//";
+        let mut test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+
+        potential_input = "///";
+        test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+
+        potential_input = "////";
+        test = format_prefix(potential_input)?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+
+    #[test]
+    fn address_extra_leading_slash() -> Result<(), AppError> {
+        let healthy_prefix = "/avatar/parameters";
+        let potential_addr = "/hr";
+
+        let ideal_output = "/avatar/parameters/hr";
+        let test = format_address(
+            healthy_prefix,
+            potential_addr,
+            "address_extra_leading_slash",
+        )?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+    #[test]
+    fn address_extra_proceeding_slash() -> Result<(), AppError> {
+        let healthy_prefix = "/avatar/parameters";
+        let potential_addr = "hr/test/";
+
+        let ideal_output = "/avatar/parameters/hr/test";
+        let test = format_address(
+            healthy_prefix,
+            potential_addr,
+            "address_extra_proceeding_slash",
+        )?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+    #[test]
+    fn address_malformed_slashes() -> Result<(), AppError> {
+        let healthy_prefix = "/avatar/parameters";
+        let potential_addr = "/hr//test///";
+
+        let ideal_output = "/avatar/parameters/hr/test";
+        let test = format_address(healthy_prefix, potential_addr, "address_malformed_slashes")?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+
+    #[test]
+    fn both_malformed_slashes() -> Result<(), AppError> {
+        let potential_prefix = "avatar//parameters///";
+        let potential_addr = "//hr//test///";
+
+        let ideal_output = "/avatar/parameters/hr/test";
+        let prefix = format_prefix(potential_prefix);
+        let test = format_address(&prefix?, potential_addr, "both_malformed_slashes")?;
+        assert_eq!(test, ideal_output);
+        Ok(())
+    }
+
+    #[test]
+    #[should_panic(expected = "OscPrefix")]
+    fn prefix_bad_character() {
+        let potential_input = "/avatar/[]";
+
+        format_prefix(potential_input).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "address_bad_character")] // should echo name of bad param
+    fn address_bad_character() {
+        let healthy_prefix = "/avatar/parameters";
+        let potential_addr = "/h*";
+
+        format_address(healthy_prefix, potential_addr, "address_bad_character").unwrap();
+    }
+    #[test]
+    #[should_panic(expected = "address_empty")]
+    fn address_empty() {
+        let healthy_prefix = "/avatar/parameters";
+        let potential_addr = "";
+
+        format_address(healthy_prefix, potential_addr, "address_empty").unwrap();
+    }
+    #[test]
+    #[should_panic(expected = "address_just_slash")]
+    fn address_just_slash() {
+        let healthy_prefix = "/avatar/parameters";
+        let potential_addr = "/";
+
+        format_address(healthy_prefix, potential_addr, "address_just_slash").unwrap();
     }
 }
