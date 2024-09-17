@@ -5,7 +5,10 @@ use argh::FromArgs;
 use errors::AppError;
 use fast_log::FastLogFormat;
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 use tokio::fs::create_dir;
 use tokio_util::sync::CancellationToken;
 
@@ -177,7 +180,7 @@ pub async fn run_headless(
 
 fn log_config(
     app: &App,
-    working_directory: &PathBuf,
+    working_directory: &Path,
 ) -> Result<(PathBuf, LevelFilter, FastLogFormat), AppError> {
     let had_error = app.error_message.is_some();
     let log_name = std::env::current_exe()?.with_extension("log");

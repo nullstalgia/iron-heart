@@ -27,14 +27,14 @@ impl Twitcher {
     /// twitch_up - RR has increased (BPM has *lowered*)
     ///
     /// twitch_down - RR has decreased (BPM has *raised*)
-    pub fn handle(&mut self, bpm: u16, rr_intervals: &Vec<Duration>) -> (bool, bool) {
+    pub fn handle(&mut self, bpm: u16, rr_intervals: &[Duration]) -> (bool, bool) {
         if !rr_intervals.is_empty() {
             self.use_real_rr = true;
         }
         let mut twitch_up = false;
         let mut twitch_down = false;
         let rr_intervals = if self.use_real_rr {
-            rr_intervals.iter().cloned().collect()
+            rr_intervals.to_vec()
         } else {
             vec![rr_from_bpm(bpm)]
         };

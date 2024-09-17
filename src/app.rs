@@ -172,7 +172,7 @@ impl App {
         table_state.select(Some(0));
         save_prompt_state.select(Some(0));
 
-        let cancel_app = parent_token.unwrap_or(CancellationToken::new());
+        let cancel_app = parent_token.unwrap_or_default();
         let cancel_actors = cancel_app.child_token();
 
         let allow_modifying_config = !arg_config.no_save;

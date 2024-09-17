@@ -43,7 +43,7 @@ fn format_prefix(prefix: &str) -> Result<String, AppError> {
 
 fn format_address(prefix: &str, param: &str, param_name: &str) -> Result<String, AppError> {
     // Don't allow empty/blank addresses
-    if param.len() == 0 || param == "/" {
+    if param.is_empty() || param == "/" {
         return Err(AppError::OscAddress(
             param_name.to_owned(),
             param.to_owned(),
