@@ -99,7 +99,9 @@ pub fn render_combined_chart(f: &mut Frame, area: Rect, app: &App, chart_type: C
     let bpm_bounds = [app.chart_low_bpm, app.chart_high_bpm];
     let mid_bpm = app.chart_mid_bpm;
 
-    if matches!(chart_type, ChartType::Combined) || matches!(chart_type, ChartType::Rr) {
+    if (matches!(chart_type, ChartType::Combined) && !app.rr_dataset.is_empty())
+        || matches!(chart_type, ChartType::Rr)
+    {
         datasets.push(
             Dataset::default()
                 .name("(RR)")
