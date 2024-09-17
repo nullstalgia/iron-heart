@@ -32,11 +32,11 @@ pub fn heart_rate_display(app: &App, frame: &mut Frame) {
         &app.heart_rate_status,
         &app.session_high_bpm,
         &app.session_low_bpm,
-        app.settings.misc.session_stats_use_12hr,
+        app.settings.tui.session_stats_use_12hr,
     );
-    let bpm_chart = app.settings.misc.chart_bpm_enabled;
-    let rr_chart = app.settings.misc.chart_rr_enabled;
-    let combined = app.settings.misc.charts_combine;
+    let bpm_chart = app.settings.tui.chart_bpm_enabled;
+    let rr_chart = app.settings.tui.chart_rr_enabled;
+    let combined = app.settings.tui.charts_combine;
 
     if combined && bpm_chart && rr_chart {
         render_combined_chart(frame, shared_chart, app, ChartType::Combined);

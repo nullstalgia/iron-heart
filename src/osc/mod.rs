@@ -54,7 +54,7 @@ struct OscActor {
 
 impl OscActor {
     fn build(osc_settings: OscSettings) -> Result<Self, AppError> {
-        let osc_addresses = OscAddresses::build(&osc_settings)?;
+        let osc_addresses = OscAddresses::build(&osc_settings.addresses)?;
 
         let host_addr = SocketAddrV4::from_str(&format!("{}:{}", osc_settings.host_ip, 0))?;
 

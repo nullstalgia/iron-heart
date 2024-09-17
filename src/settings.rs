@@ -16,6 +16,10 @@ pub struct MiscSettings {
     pub bpm_file_path: String,
     pub log_sessions_to_csv: bool,
     pub log_sessions_csv_path: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct TuiSettings {
     pub session_stats_use_12hr: bool,
     pub chart_bpm_enabled: bool,
     pub chart_rr_enabled: bool,
@@ -47,6 +51,12 @@ pub struct OscSettings {
     pub only_positive_float_bpm: bool,
     pub hide_disconnections: bool,
     pub max_hide_disconnection_sec: u16,
+    pub twitch_rr_threshold_ms: u16,
+    pub addresses: OscAddrConf,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct OscAddrConf {
     pub address_prefix: String,
     pub param_hrm_connected: String,
     pub param_hiding_disconnect: String,
@@ -57,7 +67,6 @@ pub struct OscSettings {
     pub param_bpm_int: String,
     pub param_bpm_float: String,
     pub param_latest_rr_int: String,
-    pub twitch_rr_threshold_ms: u16,
     pub param_rr_twitch_up: String,
     pub param_rr_twitch_down: String,
     // TODO Session Max/Min/Avg Params?
@@ -87,6 +96,7 @@ pub struct Settings {
     pub websocket: WebSocketSettings,
     pub misc: MiscSettings,
     pub dummy: DummySettings,
+    pub tui: TuiSettings,
 }
 
 impl Settings {
@@ -118,21 +128,21 @@ impl Settings {
             .set_default("osc.port", 9000)?
             .set_default("osc.pulse_length_ms", 100)?
             .set_default("osc.only_positive_float_bpm", false)?
-            .set_default("osc.address_prefix", "/avatar/parameters/")?
             .set_default("osc.hide_disconnections", false)?
             .set_default("osc.max_hide_disconnection_sec", 60)?
-            .set_default("osc.param_hrm_connected", "isHRConnected")?
-            .set_default("osc.param_hiding_disconnect", "isHRReconnecting")?
-            .set_default("osc.param_hrm_battery_int", "HRBattery")?
-            .set_default("osc.param_hrm_battery_float", "HRBatteryFloat")?
-            .set_default("osc.param_beat_toggle", "HeartBeatToggle")?
-            .set_default("osc.param_beat_pulse", "isHRBeat")?
-            .set_default("osc.param_bpm_int", "HR")?
-            .set_default("osc.param_bpm_float", "floatHR")?
-            .set_default("osc.param_latest_rr_int", "RRInterval")?
             .set_default("osc.twitch_rr_threshold_ms", 50)?
-            .set_default("osc.param_rr_twitch_up", "HRTwitchUp")?
-            .set_default("osc.param_rr_twitch_down", "HRTwitchDown")?
+            .set_default("osc.addresses.address_prefix", "/avatar/parameters/")?
+            .set_default("osc.addresses.param_hrm_connected", "isHRConnected")?
+            .set_default("osc.addresses.param_hiding_disconnect", "isHRReconnecting")?
+            .set_default("osc.addresses.param_hrm_battery_int", "HRBattery")?
+            .set_default("osc.addresses.param_hrm_battery_float", "HRBatteryFloat")?
+            .set_default("osc.addresses.param_beat_toggle", "HeartBeatToggle")?
+            .set_default("osc.addresses.param_beat_pulse", "isHRBeat")?
+            .set_default("osc.addresses.param_bpm_int", "HR")?
+            .set_default("osc.addresses.param_bpm_float", "floatHR")?
+            .set_default("osc.addresses.param_latest_rr_int", "RRInterval")?
+            .set_default("osc.addresses.param_rr_twitch_up", "HRTwitchUp")?
+            .set_default("osc.addresses.param_rr_twitch_down", "HRTwitchDown")?
             .set_default("ble.never_ask_to_save", false)?
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?
@@ -145,13 +155,13 @@ impl Settings {
             .set_default("misc.bpm_file_path", default_bpm_txt_path)?
             .set_default("misc.log_sessions_to_csv", false)?
             .set_default("misc.log_sessions_csv_path", default_session_log_path)?
-            .set_default("misc.session_stats_use_12hr", true)?
-            .set_default("misc.chart_bpm_enabled", true)?
-            .set_default("misc.chart_rr_enabled", true)?
-            .set_default("misc.chart_rr_max", 2.0)?
-            .set_default("misc.chart_rr_clamp_high", true)?
-            .set_default("misc.chart_rr_clamp_low", false)?
-            .set_default("misc.charts_combine", true)?
+            .set_default("tui.session_stats_use_12hr", true)?
+            .set_default("tui.chart_bpm_enabled", true)?
+            .set_default("tui.chart_rr_enabled", true)?
+            .set_default("tui.chart_rr_max", 2.0)?
+            .set_default("tui.chart_rr_clamp_high", true)?
+            .set_default("tui.chart_rr_clamp_low", false)?
+            .set_default("tui.charts_combine", true)?
             .set_default("dummy.enabled", false)?
             .set_default("dummy.low_bpm", 50)?
             .set_default("dummy.high_bpm", 120)?

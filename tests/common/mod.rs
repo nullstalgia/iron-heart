@@ -10,6 +10,7 @@ pub fn headless_thread(
     arg_config: ArgConfig,
     parent_token: CancellationToken,
 ) -> Result<(), iron_heart::errors::AppError> {
+    // TODO: Supply an mpsc for notifications?
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()

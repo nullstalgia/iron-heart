@@ -400,7 +400,7 @@ impl App {
         let dummy_settings_clone = self.settings.dummy.clone();
         debug!("Spawning Dummy thread");
         self.state = AppState::HeartRateView;
-        self.chart_high_rr = self.settings.misc.chart_rr_max;
+        self.chart_high_rr = self.settings.tui.chart_rr_max;
         self.dummy_thread_handle = Some(tokio::spawn(async move {
             dummy_thread(broadcast_tx, dummy_settings_clone, shutdown_requested_clone).await
         }));
@@ -544,12 +544,12 @@ impl App {
 
         if let Some(rr) = new_rr {
             let rr_secs = rr.as_secs_f64();
-            let rr_max = self.settings.misc.chart_rr_max;
+            let rr_max = self.settings.tui.chart_rr_max;
             if self.chart_high_rr == 0.0 {
                 self.chart_low_rr = (rr_secs - CHART_RR_VERT_MARGIN).max(rr_secs);
                 self.chart_high_rr = (rr_secs + CHART_RR_VERT_MARGIN).min(rr_max);
             }
-            if self.settings.misc.chart_rr_clamp_high && !self.settings.dummy.enabled {
+            if self.settings.tui.chart_rr_clamp_high && !self.settings.dummy.enabled {
                 self.chart_high_rr = *self
                     .rr_history
                     .iter()
@@ -558,7 +558,7 @@ impl App {
             } else {
                 self.chart_high_rr = self.chart_high_rr.max(rr_secs);
             }
-            if self.settings.misc.chart_rr_clamp_low {
+            if self.settings.tui.chart_rr_clamp_low {
                 self.chart_high_rr = *self
                     .rr_history
                     .iter()
@@ -573,9 +573,9 @@ impl App {
     }
 
     fn update_chart_data(&mut self) {
-        let bpm_enabled = self.settings.misc.chart_bpm_enabled;
-        let rr_enabled = self.settings.misc.chart_rr_enabled;
-        let combine = self.settings.misc.charts_combine;
+        let bpm_enabled = self.settings.tui.chart_bpm_enabled;
+        let rr_enabled = self.settings.tui.chart_rr_enabled;
+        let combine = self.settings.tui.charts_combine;
         if rr_enabled {
             self.rr_dataset = self
                 .rr_history
@@ -609,7 +609,7 @@ impl App {
 
     pub fn append_to_history(&mut self, hr_data: &HeartRateStatus) {
         let bpm = hr_data.heart_rate_bpm as f64;
-        let rr_max = self.settings.misc.chart_rr_max;
+        let rr_max = self.settings.tui.chart_rr_max;
         if bpm > 0.0 {
             self.update_session_stats(bpm, hr_data.rr_intervals.last());
 
