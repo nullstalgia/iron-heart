@@ -1,3 +1,4 @@
+use super::twitcher::Twitcher;
 use super::{BatteryLevel, HeartRateStatus};
 use crate::app::{AppUpdate, ErrorPopup};
 use crate::broadcast;
@@ -29,15 +30,17 @@ struct JSONHeartRate {
 // (Need to mimic an OBS instance, agh)
 // https://github.com/Curtis-VL/HeartRateOnStream-OSC/blob/main/Program.cs
 
-// TODO Twitches
-
 struct WebsocketActor {
     listener: TcpListener,
     hr_status: HeartRateStatus,
+    twitcher: Twitcher,
 }
 
 impl WebsocketActor {
-    async fn build(websocket_settings: WebSocketSettings) -> Result<(Self, SocketAddr), AppError> {
+    async fn build(
+        websocket_settings: WebSocketSettings,
+        rr_twitch_threshold: f32,
+    ) -> Result<(Self, SocketAddr), AppError> {
         let port = websocket_settings.port;
         let host_addr = SocketAddrV4::from_str(&format!("0.0.0.0:{}", port))?;
 
@@ -54,6 +57,7 @@ impl WebsocketActor {
             Self {
                 listener,
                 hr_status,
+                twitcher: Twitcher::new(rr_twitch_threshold),
             },
             local_addr,
         ))
@@ -172,6 +176,12 @@ impl WebsocketActor {
                 self.hr_status.rr_intervals.push(Duration::from_millis(rr));
             }
 
+            let (twitch_up, twitch_down) = self
+                .twitcher
+                .handle(new_status.bpm, &self.hr_status.rr_intervals);
+            self.hr_status.twitch_up = twitch_up;
+            self.hr_status.twitch_down = twitch_down;
+
             Ok((self.hr_status.clone().into(), true))
         } else {
             error!("Invalid heart rate message: {}", message);
@@ -190,16 +200,18 @@ impl WebsocketActor {
 pub async fn websocket_thread(
     broadcast_tx: BSender<AppUpdate>,
     websocket_settings: WebSocketSettings,
+    rr_twitch_threshold: f32,
     cancel_token: CancellationToken,
 ) {
-    let (mut websocket, local_addr) = match WebsocketActor::build(websocket_settings).await {
-        Ok((ws, addr)) => (ws, addr),
-        Err(e) => {
-            let message = "Failed to build websocket.";
-            broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
-            return;
-        }
-    };
+    let (mut websocket, local_addr) =
+        match WebsocketActor::build(websocket_settings, rr_twitch_threshold).await {
+            Ok((ws, addr)) => (ws, addr),
+            Err(e) => {
+                let message = "Failed to build websocket.";
+                broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
+                return;
+            }
+        };
 
     // Sharing the URL with the UI
     broadcast!(broadcast_tx, local_addr);

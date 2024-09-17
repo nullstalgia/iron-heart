@@ -3,6 +3,8 @@ pub mod dummy;
 pub mod measurement;
 pub mod websocket;
 
+mod twitcher;
+
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

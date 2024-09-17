@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::broadcast;
 
 use super::measurement::parse_hrm;
+use super::twitcher::Twitcher;
 
 pub const HEART_RATE_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180d_0000_1000_8000_00805f9b34fb);
 pub const HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID: Uuid =
@@ -27,13 +28,12 @@ pub const BATTERY_LEVEL_CHARACTERISTIC_UUID: Uuid =
 struct BleMonitorActor {
     peripheral: DeviceInfo,
     rr_cooldown_amount: usize,
-    twitch_threshold: f32,
     no_packet_timeout: Duration,
     battery_characteristic: Option<Characteristic>,
     cancel_token: CancellationToken,
 
     battery_level: BatteryLevel,
-    latest_rr: Duration,
+    twitcher: Twitcher,
     rr_left_to_burn: usize,
 }
 
@@ -178,19 +178,8 @@ impl BleMonitorActor {
         } else {
             self.rr_left_to_burn.saturating_sub(new_interval_count)
         };
-        let mut twitch_up = false;
-        let mut twitch_down = false;
-        for new_rr in rr_intervals.iter() {
-            // Duration.abs_diff() is nightly only for now, agh
-            if (new_rr.as_secs_f32() - self.latest_rr.as_secs_f32()).abs() > self.twitch_threshold {
-                if *new_rr > self.latest_rr {
-                    twitch_up = true;
-                } else {
-                    twitch_down = true;
-                }
-            }
-            self.latest_rr = *new_rr;
-        }
+        let (twitch_up, twitch_down) = self.twitcher.handle(new_hr_status.bpm, &rr_intervals);
+
         HeartRateStatus {
             heart_rate_bpm: new_hr_status.bpm,
             rr_intervals,
@@ -223,12 +212,11 @@ pub async fn start_notification_thread(
     let battery_level = BatteryLevel::NotReported;
     let mut ble_monitor = BleMonitorActor {
         peripheral,
-        twitch_threshold,
         no_packet_timeout,
         battery_characteristic: None,
         cancel_token,
         battery_level,
-        latest_rr: Duration::from_secs(1),
+        twitcher: Twitcher::new(twitch_threshold),
         rr_cooldown_amount,
         rr_left_to_burn: rr_cooldown_amount,
     };

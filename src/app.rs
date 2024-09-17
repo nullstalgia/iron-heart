@@ -410,12 +410,16 @@ impl App {
         let broadcast_tx = self.broadcast_tx.clone();
         let shutdown_requested_clone = self.cancel_actors.clone();
         let websocket_settings_clone = self.settings.websocket.clone();
+        // Not leaving as Duration as it's being used to check an abs difference
+        let rr_twitch_threshold =
+            Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
         debug!("Spawning Websocket thread");
         self.state = AppState::WaitingForWebsocket;
         self.websocket_thread_handle = Some(tokio::spawn(async move {
             websocket_thread(
                 broadcast_tx,
                 websocket_settings_clone,
+                rr_twitch_threshold,
                 shutdown_requested_clone,
             )
             .await
