@@ -39,6 +39,8 @@ pub struct HeartRateStatus {
 // sending RR intervals
 // (Or when mimicking)
 pub fn rr_from_bpm(bpm: u16) -> Duration {
+    // Make sure it's at least 1 to prevent a potential divide by zero
+    let bpm = bpm.max(1);
     Duration::from_secs_f32(60.0 / bpm as f32)
 }
 
