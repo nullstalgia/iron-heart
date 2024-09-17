@@ -91,7 +91,7 @@ fn styled_label(bpm: f64, rr: f64, chart_type: &ChartType, allow_space: bool) ->
     }
 }
 
-pub fn render_combined_chart(f: &mut Frame, area: Rect, app: &App, chart_type: ChartType) {
+pub fn render_combined_chart(f: &mut Frame, area: Rect, app: &App, mut chart_type: ChartType) {
     let mut datasets = Vec::new();
 
     let rr_bounds = [app.chart_low_rr, app.chart_high_rr];
@@ -99,9 +99,12 @@ pub fn render_combined_chart(f: &mut Frame, area: Rect, app: &App, chart_type: C
     let bpm_bounds = [app.chart_low_bpm, app.chart_high_bpm];
     let mid_bpm = app.chart_mid_bpm;
 
-    if (matches!(chart_type, ChartType::Combined) && !app.rr_dataset.is_empty())
-        || matches!(chart_type, ChartType::Rr)
-    {
+    // Don't render combined chart if we don't have RR data.
+    if matches!(chart_type, ChartType::Combined) && app.rr_dataset.is_empty() {
+        chart_type = ChartType::Bpm;
+    }
+
+    if (matches!(chart_type, ChartType::Combined)) || matches!(chart_type, ChartType::Rr) {
         datasets.push(
             Dataset::default()
                 .name("(RR)")
