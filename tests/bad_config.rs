@@ -6,8 +6,8 @@ use ntest::timeout;
 
 #[tokio::test]
 #[ignore = "can't be concurrent"]
-#[timeout(10000)] // 10s timeout
-#[should_panic]
+#[timeout(3000)] // 3s timeout
+#[should_panic(expected = "explicit panic")]
 async fn misspelled_bool() {
     let parent_token = CancellationToken::new();
 
@@ -24,8 +24,8 @@ async fn misspelled_bool() {
 
 #[tokio::test]
 #[ignore = "can't be concurrent"]
-#[timeout(10000)] // 10s timeout
-#[should_panic]
+#[timeout(3000)] // 3s timeout
+#[should_panic(expected = "explicit panic")]
 async fn missing_end_quote() {
     let parent_token = CancellationToken::new();
 

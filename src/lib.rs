@@ -110,7 +110,7 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
             Event::Tick => app.term_tick(),
             Event::Key(key_event) => handle_key_events(&mut app, key_event)?,
         }
-        // Dispatch BLE/HR/OSC messages
+        // Handle BLE Manager Events/Update UI with HR info
         app.main_loop().await;
     }
     // After while loop closes
@@ -156,7 +156,7 @@ pub async fn run_headless(
     // Start the main loop.
     while !app.cancel_app.is_cancelled() {
         assert_eq!(app.error_message, None);
-        // Dispatch BLE/HR/OSC messages
+        // Handle BLE Manager Events
         app.main_loop().await;
         // Since there's no UI to dismiss errors, just close the app
         // if the actors aren't happy
