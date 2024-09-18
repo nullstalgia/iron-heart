@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use argh::FromArgs;
+use args::TopLevelCmd;
 use errors::AppError;
 use fast_log::FastLogFormat;
 use ratatui::{backend::CrosstermBackend, Terminal};
@@ -23,10 +23,12 @@ use tui::Tui;
 #[cfg(not(any(debug_assertions, feature = "portable")))]
 use directories::BaseDirs;
 
+pub mod args;
+pub mod errors;
+
 mod activities;
 mod app;
 mod company_codes;
-pub mod errors;
 mod heart_rate;
 mod logging;
 mod macros;
@@ -43,25 +45,11 @@ mod handler;
 mod tui;
 mod ui;
 
-#[derive(FromArgs)]
-/// Optional command line arguments
-pub struct ArgConfig {
-    /// specify config file path, creates file if it doesn't exist
-    #[argh(option, short = 'c')]
-    pub config_override: Option<PathBuf>,
-    /// config file must exist, including "config_override" files
-    #[argh(switch, short = 'r')]
-    pub config_required: bool,
-    /// use config file as-is (don't save over it)
-    #[argh(switch, short = 'n')]
-    pub no_save: bool,
-}
-
 /// Application result type.
 //pub type AppResult<T> = color_eyre::eyre::Result<T>;
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
-pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
+pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     let working_directory = determine_working_directory().ok_or(AppError::WorkDir)?;
     arg_config.config_override = arg_config.config_override.map(|p| {
         p.canonicalize()
@@ -78,7 +66,7 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
             })?;
     }
     std::env::set_current_dir(&working_directory).expect("Failed to change working directory");
-    let mut app = App::build(arg_config, None);
+    let mut app = App::build(&arg_config, None);
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stdout());
@@ -102,7 +90,7 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
 
     info!("Starting app...");
 
-    app.init();
+    app.init(&arg_config);
 
     // Start the main loop.
     while !app.cancel_app.is_cancelled() {
@@ -128,12 +116,12 @@ pub async fn run_tui(mut arg_config: ArgConfig) -> AppResult<()> {
 }
 
 pub async fn run_headless(
-    arg_config: ArgConfig,
+    arg_config: TopLevelCmd,
     parent_token: CancellationToken,
 ) -> Result<(), AppError> {
     let working_directory = determine_working_directory().ok_or(AppError::WorkDir)?;
 
-    let mut app = App::build(arg_config, Some(parent_token));
+    let mut app = App::build(&arg_config, Some(parent_token));
 
     let (_, log_level, log_format) = log_config(&app, &working_directory)?;
 
@@ -154,7 +142,7 @@ pub async fn run_headless(
 
     info!("Starting app...");
 
-    app.init();
+    app.init(&arg_config);
 
     // Start the main loop.
     while !app.cancel_app.is_cancelled() {

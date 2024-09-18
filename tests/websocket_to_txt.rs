@@ -1,6 +1,6 @@
 use std::{thread::sleep, time::Duration};
 
-use iron_heart::ArgConfig;
+use iron_heart::args::TopLevelCmd;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::sync::CancellationToken;
 
@@ -41,10 +41,11 @@ impl From<u16> for JSONHeartRate {
 async fn websocket_to_txt() -> Result<(), iron_heart::errors::AppError> {
     let parent_token = CancellationToken::new();
 
-    let arg_config = ArgConfig {
+    let arg_config = TopLevelCmd {
         config_override: Some("tests/test_configs/websocket_to_txt.toml".into()),
         config_required: true,
         no_save: true,
+        subcommands: None,
     };
 
     let parent_clone = parent_token.clone();

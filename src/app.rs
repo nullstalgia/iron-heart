@@ -18,12 +18,13 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
+use crate::args::{SubCommands, TopLevelCmd};
+use crate::broadcast;
 use crate::errors::AppError;
 use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
 use crate::widgets::save_prompt::SavePromptChoice;
-use crate::{broadcast, ArgConfig};
 use crate::{
     heart_rate::ble::start_notification_thread,
     heart_rate::HeartRateStatus,
@@ -151,7 +152,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn build(arg_config: ArgConfig, parent_token: Option<CancellationToken>) -> Self {
+    pub fn build(arg_config: &TopLevelCmd, parent_token: Option<CancellationToken>) -> Self {
         let (ble_tx, ble_rx) = mpsc::channel(50);
         let (broadcast_tx, broadcast_rx) = broadcast::channel::<AppUpdate>(50);
 
@@ -159,13 +160,16 @@ impl App {
 
         let exe_path = std::env::current_exe().expect("Failed to get executable path");
 
-        let config_path = arg_config.config_override.unwrap_or_else(|| {
-            let config_name = exe_path.with_extension("toml");
-            let config_name = config_name
-                .file_name()
-                .expect("Failed to build config name");
-            PathBuf::from(config_name)
-        });
+        let config_path: PathBuf = match arg_config.config_override.as_ref() {
+            Some(path) => path.to_owned(),
+            None => {
+                let config_name = exe_path.with_extension("toml");
+                let config_name = config_name
+                    .file_name()
+                    .expect("Failed to build config name");
+                PathBuf::from(config_name)
+            }
+        };
 
         let mut table_state = TableState::default();
         let mut save_prompt_state = TableState::default();
@@ -231,7 +235,7 @@ impl App {
         }
     }
 
-    pub fn init(&mut self) {
+    pub fn init(&mut self, arg_config: &TopLevelCmd) {
         // Return early if error is present
         if let Some(error) = self.error_message.take() {
             self.handle_error_update(error);
@@ -241,19 +245,29 @@ impl App {
         if !self.try_save_settings() {
             return;
         }
-
+        if self.settings.osc.enabled {
+            self.start_osc_thread();
+        }
         self.start_logging_thread();
         // HR source selection
+        // let mut ble_subcmd = false;
+        // let mut websocket_subcmd = false;
+        // let mut dummy_subcmd = false;
+        if let Some(subcommands) = arg_config.subcommands.as_ref() {
+            match subcommands {
+                SubCommands::Ble(_) => self.start_bluetooth_event_thread(),
+                SubCommands::Dummy(_) => self.start_dummy_thread(),
+                SubCommands::WebSocket(ws) => self.start_websocket_thread(ws.port),
+            }
+            return;
+        }
+
         if self.settings.dummy.enabled {
             self.start_dummy_thread();
         } else if self.settings.websocket.enabled {
-            self.start_websocket_thread();
+            self.start_websocket_thread(None);
         } else {
             self.start_bluetooth_event_thread();
-        }
-
-        if self.settings.osc.enabled {
-            self.start_osc_thread();
         }
     }
 
@@ -406,7 +420,7 @@ impl App {
         }));
     }
 
-    pub fn start_websocket_thread(&mut self) {
+    pub fn start_websocket_thread(&mut self, port_override: Option<u16>) {
         let broadcast_tx = self.broadcast_tx.clone();
         let shutdown_requested_clone = self.cancel_actors.clone();
         let websocket_settings_clone = self.settings.websocket.clone();
@@ -419,6 +433,7 @@ impl App {
             websocket_thread(
                 broadcast_tx,
                 websocket_settings_clone,
+                port_override,
                 rr_twitch_threshold,
                 shutdown_requested_clone,
             )

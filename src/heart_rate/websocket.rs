@@ -39,9 +39,10 @@ struct WebsocketActor {
 impl WebsocketActor {
     async fn build(
         websocket_settings: WebSocketSettings,
+        port_override: Option<u16>,
         rr_twitch_threshold: f32,
     ) -> Result<(Self, SocketAddr), AppError> {
-        let port = websocket_settings.port;
+        let port = port_override.unwrap_or(websocket_settings.port);
         let host_addr = SocketAddrV4::from_str(&format!("0.0.0.0:{}", port))?;
 
         let hr_status = HeartRateStatus {
@@ -200,11 +201,12 @@ impl WebsocketActor {
 pub async fn websocket_thread(
     broadcast_tx: BSender<AppUpdate>,
     websocket_settings: WebSocketSettings,
+    port_override: Option<u16>,
     rr_twitch_threshold: f32,
     cancel_token: CancellationToken,
 ) {
     let (mut websocket, local_addr) =
-        match WebsocketActor::build(websocket_settings, rr_twitch_threshold).await {
+        match WebsocketActor::build(websocket_settings, port_override, rr_twitch_threshold).await {
             Ok((ws, addr)) => (ws, addr),
             Err(e) => {
                 let message = "Failed to build websocket.";

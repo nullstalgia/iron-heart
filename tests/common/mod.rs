@@ -1,4 +1,4 @@
-use iron_heart::{run_headless, ArgConfig};
+use iron_heart::{args::TopLevelCmd, run_headless};
 use tokio_util::sync::CancellationToken;
 
 // I have to spawn a tokio runtime for the app
@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 // Not sure why!
 #[allow(dead_code)]
 pub fn headless_thread(
-    arg_config: ArgConfig,
+    arg_config: TopLevelCmd,
     parent_token: CancellationToken,
 ) -> Result<(), iron_heart::errors::AppError> {
     // TODO: Supply an mpsc for notifications?
