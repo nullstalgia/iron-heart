@@ -15,7 +15,7 @@ use crate::widgets::device_table::device_table;
 use crate::widgets::heart_rate_display::heart_rate_display;
 use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
-use crate::widgets::save_prompt::save_prompt;
+use crate::widgets::prompts::save_prompt;
 
 use ratatui::layout::{Constraint, Direction, Layout};
 

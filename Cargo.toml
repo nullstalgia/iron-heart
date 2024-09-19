@@ -49,6 +49,11 @@ ratatui-macros = "0.4.3"
 directories = "5.0.1"
 argh = "0.1.12"
 
+[target.'cfg(windows)'.dependencies]
+# Using fork until lilopkins/lnk-rs's #25 and #26 resolve
+# https://github.com/lilopkins/lnk-rs/issues/25
+lnk = { git = "https://github.com/isma-xnm/lnk-rs", rev = "0a3d44d" }
+
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "1.4"
 

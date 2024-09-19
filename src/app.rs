@@ -24,7 +24,7 @@ use crate::errors::AppError;
 use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
-use crate::widgets::save_prompt::SavePromptChoice;
+use crate::widgets::prompts::SavePromptChoice;
 use crate::{
     heart_rate::ble::start_notification_thread,
     heart_rate::HeartRateStatus,

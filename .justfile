@@ -4,6 +4,7 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 alias r := run
 alias b := build
 alias br := build-release
+alias rr := release
 alias rel := release
 alias t := test
 alias ti := test-integration
@@ -12,11 +13,11 @@ alias d := dummy
 alias ws := websocket
 alias wsd := websocket-dummy
 
-run:
-  cargo run
+run *ARGS:
+  cargo run {{ARGS}}
 
-build:
-  cargo build
+build *ARGS:
+  cargo build {{ARGS}}
 
 release:
   cargo run --release --features portable
@@ -35,11 +36,14 @@ clippy:
 
 # Shortcuts for subcommands
 
+ble:
+  cargo run -- ble
+
 dummy:
   cargo run -- dummy
 
-websocket:
-  cargo run -- ws
+websocket *ARGS:
+  cargo run -- ws {{ARGS}}
 
-websocket-dummy:
-  cargo run --example websocket_dummy
+websocket-dummy *ARGS:
+  cargo run --example websocket_dummy -- {{ARGS}}
