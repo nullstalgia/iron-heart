@@ -57,18 +57,18 @@ pub struct OscSettings {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct OscAddrConf {
-    pub address_prefix: String,
-    pub param_hrm_connected: String,
-    pub param_hiding_disconnect: String,
-    pub param_hrm_battery_int: String,
-    pub param_hrm_battery_float: String,
-    pub param_beat_toggle: String,
-    pub param_beat_pulse: String,
-    pub param_bpm_int: String,
-    pub param_bpm_float: String,
-    pub param_latest_rr_int: String,
-    pub param_rr_twitch_up: String,
-    pub param_rr_twitch_down: String,
+    pub prefix: String,
+    pub hrm_connected: String,
+    pub hiding_disconnect: String,
+    pub hrm_battery_int: String,
+    pub hrm_battery_float: String,
+    pub beat_toggle: String,
+    pub beat_pulse: String,
+    pub bpm_int: String,
+    pub bpm_float: String,
+    pub latest_rr_int: String,
+    pub rr_twitch_up: String,
+    pub rr_twitch_down: String,
     // TODO Session Max/Min/Avg Params?
 }
 
@@ -87,6 +87,30 @@ pub struct WebSocketSettings {
     // Note: BLE is disabled if websockets are enabled
     pub enabled: bool,
     pub port: u16,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct ActivitiesSettings {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct PrometheusSettings {
+    pub enabled: bool,
+    pub url: String,
+    pub target_table: String,
+    pub auth_type: String, // none, header, user, auth
+    pub header: String,
+    pub user: String,
+    pub pass: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct NagSettings {
+    pub update_check_prompt: bool,
+    pub vrcx_shortcut_prompt: bool,
+    pub allow_checking_for_updates: bool,
+    pub version_skipped: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -131,18 +155,18 @@ impl Settings {
             .set_default("osc.hide_disconnections", false)?
             .set_default("osc.max_hide_disconnection_sec", 60)?
             .set_default("osc.twitch_rr_threshold_ms", 50)?
-            .set_default("osc.addresses.address_prefix", "/avatar/parameters/")?
-            .set_default("osc.addresses.param_hrm_connected", "isHRConnected")?
-            .set_default("osc.addresses.param_hiding_disconnect", "isHRReconnecting")?
-            .set_default("osc.addresses.param_hrm_battery_int", "HRBattery")?
-            .set_default("osc.addresses.param_hrm_battery_float", "HRBatteryFloat")?
-            .set_default("osc.addresses.param_beat_toggle", "HeartBeatToggle")?
-            .set_default("osc.addresses.param_beat_pulse", "isHRBeat")?
-            .set_default("osc.addresses.param_bpm_int", "HR")?
-            .set_default("osc.addresses.param_bpm_float", "floatHR")?
-            .set_default("osc.addresses.param_latest_rr_int", "RRInterval")?
-            .set_default("osc.addresses.param_rr_twitch_up", "HRTwitchUp")?
-            .set_default("osc.addresses.param_rr_twitch_down", "HRTwitchDown")?
+            .set_default("osc.addresses.prefix", "/avatar/parameters/")?
+            .set_default("osc.addresses.hrm_connected", "isHRConnected")?
+            .set_default("osc.addresses.hiding_disconnect", "isHRReconnecting")?
+            .set_default("osc.addresses.hrm_battery_int", "HRBattery")?
+            .set_default("osc.addresses.hrm_battery_float", "HRBatteryFloat")?
+            .set_default("osc.addresses.beat_toggle", "HeartBeatToggle")?
+            .set_default("osc.addresses.beat_pulse", "isHRBeat")?
+            .set_default("osc.addresses.bpm_int", "HR")?
+            .set_default("osc.addresses.bpm_float", "floatHR")?
+            .set_default("osc.addresses.latest_rr_int", "RRInterval")?
+            .set_default("osc.addresses.rr_twitch_up", "HRTwitchUp")?
+            .set_default("osc.addresses.rr_twitch_down", "HRTwitchDown")?
             .set_default("ble.never_ask_to_save", false)?
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?

@@ -64,51 +64,27 @@ fn format_address(prefix: &str, param: &str, param_name: &str) -> Result<String,
 
 impl OscAddresses {
     pub fn build(osc_params: &OscAddrConf) -> Result<Self, AppError> {
-        let prefix = format_prefix(&osc_params.address_prefix)?;
+        let prefix = format_prefix(&osc_params.prefix)?;
         Ok(OscAddresses {
-            beat_toggle: format_address(
-                &prefix,
-                &osc_params.param_beat_toggle,
-                "param_beat_toggle",
-            )?,
-            beat_pulse: format_address(&prefix, &osc_params.param_beat_pulse, "param_beat_pulse")?,
-            bpm_int: format_address(&prefix, &osc_params.param_bpm_int, "param_bpm_int")?,
-            bpm_float: format_address(&prefix, &osc_params.param_bpm_float, "param_bpm_float")?,
-            connected: format_address(
-                &prefix,
-                &osc_params.param_hrm_connected,
-                "param_hrm_connected",
-            )?,
+            beat_toggle: format_address(&prefix, &osc_params.beat_toggle, "beat_toggle")?,
+            beat_pulse: format_address(&prefix, &osc_params.beat_pulse, "beat_pulse")?,
+            bpm_int: format_address(&prefix, &osc_params.bpm_int, "bpm_int")?,
+            bpm_float: format_address(&prefix, &osc_params.bpm_float, "bpm_float")?,
+            connected: format_address(&prefix, &osc_params.hrm_connected, "hrm_connected")?,
             hiding_disconnect: format_address(
                 &prefix,
-                &osc_params.param_hiding_disconnect,
-                "param_hiding_disconnect",
+                &osc_params.hiding_disconnect,
+                "hiding_disconnect",
             )?,
-            latest_rr: format_address(
-                &prefix,
-                &osc_params.param_latest_rr_int,
-                "param_latest_rr_int",
-            )?,
-            battery_int: format_address(
-                &prefix,
-                &osc_params.param_hrm_battery_int,
-                "param_hrm_battery_int",
-            )?,
+            latest_rr: format_address(&prefix, &osc_params.latest_rr_int, "latest_rr_int")?,
+            battery_int: format_address(&prefix, &osc_params.hrm_battery_int, "hrm_battery_int")?,
             battery_float: format_address(
                 &prefix,
-                &osc_params.param_hrm_battery_float,
-                "param_hrm_battery_float",
+                &osc_params.hrm_battery_float,
+                "hrm_battery_float",
             )?,
-            rr_twitch_up: format_address(
-                &prefix,
-                &osc_params.param_rr_twitch_up,
-                "param_rr_twitch_up",
-            )?,
-            rr_twitch_down: format_address(
-                &prefix,
-                &osc_params.param_rr_twitch_down,
-                "param_rr_twitch_down",
-            )?,
+            rr_twitch_up: format_address(&prefix, &osc_params.rr_twitch_up, "rr_twitch_up")?,
+            rr_twitch_down: format_address(&prefix, &osc_params.rr_twitch_down, "rr_twitch_down")?,
         })
     }
 }
