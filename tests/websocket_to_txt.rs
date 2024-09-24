@@ -103,11 +103,11 @@ async fn websocket_to_txt() -> Result<(), iron_heart::errors::AppError> {
         assert_eq!(file_contents.trim().parse::<u16>()?, hr);
     }
 
-    std::fs::remove_file(file_dir)?;
-
     println!("Shutting down, all ok");
 
     parent_token.cancel();
+    std::fs::remove_file(file_dir)?;
+    client.close().await?;
     let _ = app_thread.join();
     Ok(())
 }
