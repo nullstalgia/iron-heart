@@ -13,6 +13,9 @@ pub struct TopLevelCmd {
     /// use config file as-is (don't save over it)
     #[argh(switch, short = 'n')]
     pub no_save: bool,
+    /// skip vrcx and auto-update prompts
+    #[argh(switch)]
+    pub skip_prompts: bool,
     #[argh(subcommand)]
     pub subcommands: Option<SubCommands>,
 }

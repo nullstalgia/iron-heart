@@ -46,6 +46,7 @@ async fn websocket_to_txt() -> Result<(), iron_heart::errors::AppError> {
         config_required: true,
         no_save: true,
         subcommands: None,
+        skip_prompts: true,
     };
 
     let parent_clone = parent_token.clone();

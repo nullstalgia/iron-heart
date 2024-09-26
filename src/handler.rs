@@ -9,23 +9,23 @@ use log::*;
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
     match key_event.code {
-        KeyCode::Char('e') if app.is_idle_on_main_menu() => {
+        KeyCode::Char('e') if app.is_idle_on_ble_selection() => {
             app.error_message = Some(ErrorPopup::UserMustDismiss(
                 "This is a test error message".to_string(),
             ));
             error!("This is a test error message");
         }
-        KeyCode::Char('q') if app.is_idle_on_main_menu() => {
+        KeyCode::Char('q') if app.is_idle_on_ble_selection() => {
             app.cancel_app.cancel();
         }
         KeyCode::Char('c') | KeyCode::Char('C') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
                 app.cancel_app.cancel();
-            } else if app.is_idle_on_main_menu() {
+            } else if app.is_idle_on_ble_selection() {
                 app.connect_for_characteristics();
             }
         }
-        KeyCode::Char('s') if app.is_idle_on_main_menu() => {
+        KeyCode::Char('s') if app.is_idle_on_ble_selection() => {
             let current_state = app.ble_scan_paused.load(Ordering::SeqCst);
             app.ble_scan_paused.store(!current_state, Ordering::SeqCst);
             debug!("(S) Pausing BLE scan");

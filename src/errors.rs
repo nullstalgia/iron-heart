@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
-use thiserror::Error;
-
 /// Represents all possible errors that can occur during the app's lifecycle
-#[derive(Error, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("Failed to create directory \"{path}\": {source}")]
     CreateDir {
@@ -47,4 +45,7 @@ pub enum AppError {
     OscAddress(String, String),
     #[error("Failed to get event")]
     NoEvent,
+    // Because lnk::Error doesn't impl Display yet
+    #[error("Error parsing shortcut: {0}")]
+    Lnk(String),
 }

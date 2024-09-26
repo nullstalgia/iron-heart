@@ -24,6 +24,9 @@ use crate::errors::AppError;
 use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
+use crate::ui::table_state_scroll;
+use crate::vrcx::tui::VrcxPromptChoice;
+use crate::vrcx::VrcxStartup;
 use crate::widgets::prompts::SavePromptChoice;
 use crate::{
     heart_rate::ble::start_notification_thread,
@@ -72,15 +75,21 @@ impl From<std::net::SocketAddr> for AppUpdate {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum AppState {
-    MainMenu,
-    CharacteristicView,
-    SaveDevicePrompt,
-    ConnectingForHeartRate,
-    ConnectingForCharacteristics,
+pub enum AppView {
+    BleDeviceSelection,
     WaitingForWebsocket,
     HeartRateView,
-    HeartRateViewNoData,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+pub enum SubState {
+    #[default]
+    None,
+    CharacteristicView,
+    SaveDevicePrompt,
+    ConnectingForCharacteristics,
+    ConnectingForHeartRate,
+    VrcxAutostartPrompt,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,9 +119,10 @@ pub struct App {
     pub broadcast_tx: BSender<AppUpdate>,
     pub error_message: Option<ErrorPopup>,
     pub ble_scan_paused: Arc<AtomicBool>,
-    pub state: AppState,
+    pub view: AppView,
+    pub sub_state: SubState,
     pub table_state: TableState,
-    pub save_prompt_state: TableState,
+    pub prompt_state: TableState,
     pub should_save_ble_device: bool,
     pub allow_modifying_config: bool,
     // devices with the heart rate service
@@ -149,6 +159,7 @@ pub struct App {
     pub chart_low_rr: f64,
     pub websocket_url: Option<String>,
     pub config_path: PathBuf,
+    vrcx: VrcxStartup,
 }
 
 impl App {
@@ -172,9 +183,9 @@ impl App {
         };
 
         let mut table_state = TableState::default();
-        let mut save_prompt_state = TableState::default();
+        let mut prompt_state = TableState::default();
         table_state.select(Some(0));
-        save_prompt_state.select(Some(0));
+        prompt_state.select(Some(0));
 
         let cancel_app = parent_token.unwrap_or_default();
         let cancel_actors = cancel_app.child_token();
@@ -197,9 +208,10 @@ impl App {
             broadcast_rx,
             broadcast_tx,
             ble_scan_paused: Arc::new(AtomicBool::default()),
-            state: AppState::MainMenu,
+            view: AppView::BleDeviceSelection,
+            sub_state: SubState::None,
             table_state,
-            save_prompt_state,
+            prompt_state,
             should_save_ble_device: false,
             allow_modifying_config,
             discovered_devices: Vec::new(),
@@ -232,6 +244,7 @@ impl App {
             chart_mid_rr: 0.0,
             websocket_url: None,
             config_path,
+            vrcx: VrcxStartup::default(),
         }
     }
 
@@ -250,9 +263,6 @@ impl App {
         }
         self.start_logging_thread();
         // HR source selection
-        // let mut ble_subcmd = false;
-        // let mut websocket_subcmd = false;
-        // let mut dummy_subcmd = false;
         if let Some(subcommands) = arg_config.subcommands.as_ref() {
             match subcommands {
                 SubCommands::Ble(_) => self.start_bluetooth_event_thread(),
@@ -282,7 +292,8 @@ impl App {
             match hr_data {
                 AppUpdate::HeartRateStatus(data) => {
                     // Assume we have proper data now
-                    self.state = AppState::HeartRateView;
+                    self.view = AppView::HeartRateView;
+                    self.sub_state = SubState::None;
                     // Dismiss intermittent errors if we just got a notification packet
                     if let Some(ErrorPopup::Intermittent(_)) = self.error_message {
                         self.error_message = None;
@@ -296,6 +307,46 @@ impl App {
                 }
             }
         }
+    }
+
+    pub async fn first_time_setup(&mut self, arg_config: &TopLevelCmd) {
+        // Return early if init() had an issue/is a Dummy right now
+        // (Not using is_idle_on_ble since I want this to work for WS and BLE users)
+        if self.error_message.is_some()
+            || self.sub_state != SubState::None
+            || self.view == AppView::HeartRateView
+        {
+            return;
+        }
+        if !self.allow_modifying_config {
+            return;
+        }
+        if arg_config.skip_prompts {
+            return;
+        }
+        if let Err(e) = self.vrcx.init().await {
+            self.handle_error_update(ErrorPopup::Intermittent(format!(
+                "VRCX Shortcut Error: {e}"
+            )));
+            return;
+        }
+        if self.vrcx.shortcut_exists() {
+            self.auto_update_prompt();
+        } else if self.vrcx.vrcx_installed() {
+            self.vrcx_prompt();
+        }
+    }
+
+    fn vrcx_prompt(&mut self) {
+        if self.settings.misc.vrcx_shortcut_prompt {
+            self.prompt_state.select(Some(0));
+            self.sub_state = SubState::VrcxAutostartPrompt;
+        }
+    }
+
+    fn auto_update_prompt(&mut self) {
+        //todo!()
+        self.sub_state = SubState::None;
     }
 
     // TODO Proper actor/handle structures for threads
@@ -322,14 +373,16 @@ impl App {
         let app_tx_clone = self.ble_tx.clone();
 
         debug!("Spawning characteristics thread");
-        self.state = AppState::ConnectingForCharacteristics;
+        self.sub_state = SubState::ConnectingForCharacteristics;
         // TODO make this not another thread maybe
         tokio::spawn(async move { get_characteristics(app_tx_clone, device).await });
     }
 
     pub fn connect_for_hr(&mut self, quick_connect_device: Option<&DeviceInfo>) {
+        if !self.is_idle_on_ble_selection() {
+            return;
+        }
         let selected_device = if let Some(device) = quick_connect_device {
-            self.state = AppState::ConnectingForHeartRate;
             device
         } else {
             if self.discovered_devices.is_empty() {
@@ -338,19 +391,26 @@ impl App {
             // Let's check if we're okay asking to saving this device
             if !self.settings.ble.never_ask_to_save
                 && self.allow_modifying_config
-                && self.state != AppState::SaveDevicePrompt
+                && self.sub_state != SubState::SaveDevicePrompt
+                // Skip the prompt if we know the device
+                && !self.is_device_saved(None)
             {
                 debug!("Asking to save device");
-                self.state = AppState::SaveDevicePrompt;
+                self.sub_state = SubState::SaveDevicePrompt;
                 return;
             }
 
-            self.state = AppState::ConnectingForHeartRate;
-            self.get_selected_device().unwrap()
+            if let Some(selected_index) = self.table_state.selected() {
+                self.discovered_devices.get(selected_index)
+            } else {
+                None
+            }
+            .unwrap()
         };
 
         debug!("(HR) Pausing BLE scan");
         self.ble_scan_paused.store(true, Ordering::SeqCst);
+        self.sub_state = SubState::ConnectingForHeartRate;
 
         let device = selected_device.clone();
         let hr_tx_clone = self.broadcast_tx.clone();
@@ -359,7 +419,7 @@ impl App {
         let rr_twitch_threshold =
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
         let rr_ignore_after_empty = self.settings.ble.rr_ignore_after_empty as usize;
-        debug!("Spawning notification thread, AppState: {:?}", self.state);
+        debug!("Spawning notification thread, AppView: {:?}", self.view);
         self.hr_thread_handle = Some(tokio::spawn(async move {
             start_notification_thread(
                 hr_tx_clone,
@@ -370,6 +430,17 @@ impl App {
             )
             .await
         }));
+    }
+
+    fn is_device_saved(&self, given_device: Option<&DeviceInfo>) -> bool {
+        let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
+
+        if self.settings.ble.saved_name.is_empty() && self.settings.ble.saved_address.is_empty() {
+            return false;
+        }
+
+        device.name == self.settings.ble.saved_name
+            || device.address == self.settings.ble.saved_address
     }
 
     pub fn start_osc_thread(&mut self) {
@@ -413,7 +484,7 @@ impl App {
         let shutdown_requested_clone = self.cancel_actors.clone();
         let dummy_settings_clone = self.settings.dummy.clone();
         debug!("Spawning Dummy thread");
-        self.state = AppState::HeartRateView;
+        self.view = AppView::HeartRateView;
         self.chart_high_rr = self.settings.tui.chart_rr_max;
         self.dummy_thread_handle = Some(tokio::spawn(async move {
             dummy_thread(broadcast_tx, dummy_settings_clone, shutdown_requested_clone).await
@@ -428,7 +499,7 @@ impl App {
         let rr_twitch_threshold =
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
         debug!("Spawning Websocket thread");
-        self.state = AppState::WaitingForWebsocket;
+        self.view = AppView::WaitingForWebsocket;
         self.websocket_thread_handle = Some(tokio::spawn(async move {
             websocket_thread(
                 broadcast_tx,
@@ -489,6 +560,7 @@ impl App {
         }
     }
 
+    /// Wrapper for save_settings that handles errors and returns just a success bool
     pub fn try_save_settings(&mut self) -> bool {
         if let Err(e) = self.save_settings() {
             self.handle_error_update(ErrorPopup::detailed("Couldn't save settings!", e));
@@ -538,8 +610,14 @@ impl App {
         }
     }
 
-    pub fn is_idle_on_main_menu(&self) -> bool {
-        self.error_message.is_none() && self.state == AppState::MainMenu
+    pub fn is_idle_on_ble_selection(&self) -> bool {
+        self.error_message.is_none()
+            && self.view == AppView::BleDeviceSelection
+            && self.sub_state == SubState::None
+    }
+
+    fn datasets_empty(&self) -> bool {
+        self.heart_rate_history.is_empty() && self.rr_history.is_empty()
     }
 
     fn update_session_stats(&mut self, new_bpm: f64, new_rr: Option<&Duration>) {
@@ -646,23 +724,6 @@ impl App {
         }
     }
 
-    fn table_state_scroll(up: bool, state: &mut TableState, table_len: usize) {
-        if table_len == 0 {
-            return;
-        }
-        let next = match state.selected() {
-            Some(selected) => {
-                if up {
-                    (selected + table_len - 1) % table_len
-                } else {
-                    (selected + 1) % table_len
-                }
-            }
-            None => 0,
-        };
-        state.select(Some(next));
-    }
-
     fn handle_error_update(&mut self, error: ErrorPopup) {
         // Don't override a fatal error popup
         match self.error_message {
@@ -687,37 +748,41 @@ impl App {
     }
 
     pub fn scroll_up(&mut self) {
-        match self.state {
-            AppState::CharacteristicView => {
+        match self.sub_state {
+            SubState::CharacteristicView => {
                 self.characteristic_scroll = self.characteristic_scroll.saturating_sub(1);
             }
-            AppState::MainMenu => {
-                Self::table_state_scroll(
-                    true,
-                    &mut self.table_state,
-                    self.discovered_devices.len(),
-                );
+            SubState::SaveDevicePrompt => {
+                table_state_scroll(true, &mut self.prompt_state, 3);
             }
-            AppState::SaveDevicePrompt => {
-                Self::table_state_scroll(true, &mut self.save_prompt_state, 3);
+            SubState::VrcxAutostartPrompt => {
+                table_state_scroll(true, &mut self.prompt_state, 4);
+            }
+            _ => {}
+        }
+        match self.view {
+            AppView::BleDeviceSelection if self.is_idle_on_ble_selection() => {
+                table_state_scroll(true, &mut self.table_state, self.discovered_devices.len());
             }
             _ => {}
         }
     }
     pub fn scroll_down(&mut self) {
-        match self.state {
-            AppState::CharacteristicView => {
+        match self.sub_state {
+            SubState::CharacteristicView => {
                 self.characteristic_scroll = self.characteristic_scroll.wrapping_add(1);
             }
-            AppState::MainMenu => {
-                Self::table_state_scroll(
-                    false,
-                    &mut self.table_state,
-                    self.discovered_devices.len(),
-                );
+            SubState::SaveDevicePrompt => {
+                table_state_scroll(false, &mut self.prompt_state, 3);
             }
-            AppState::SaveDevicePrompt => {
-                Self::table_state_scroll(false, &mut self.save_prompt_state, 3);
+            SubState::VrcxAutostartPrompt => {
+                table_state_scroll(false, &mut self.prompt_state, 4);
+            }
+            _ => {}
+        }
+        match self.view {
+            AppView::BleDeviceSelection if self.is_idle_on_ble_selection() => {
+                table_state_scroll(false, &mut self.table_state, self.discovered_devices.len());
             }
             _ => {}
         }
@@ -737,10 +802,13 @@ impl App {
             return;
         }
 
-        match self.state {
-            AppState::CharacteristicView => self.state = AppState::MainMenu,
-            AppState::SaveDevicePrompt => {
-                let chosen_option = self.save_prompt_state.selected().unwrap_or(0);
+        match self.sub_state {
+            SubState::CharacteristicView => {
+                self.sub_state = SubState::None;
+                return;
+            }
+            SubState::SaveDevicePrompt => {
+                let chosen_option = self.prompt_state.selected().unwrap_or(0);
                 match SavePromptChoice::from(chosen_option) {
                     SavePromptChoice::Yes => {
                         self.should_save_ble_device = true;
@@ -757,8 +825,51 @@ impl App {
                     chosen_option
                 );
                 self.connect_for_hr(None);
+                return;
             }
-            AppState::MainMenu => {
+            SubState::VrcxAutostartPrompt => {
+                let chosen_option = self.prompt_state.selected().unwrap_or(0);
+                match VrcxPromptChoice::from(chosen_option) {
+                    VrcxPromptChoice::Yes => {
+                        if let Err(e) = self.vrcx.create_shortcut() {
+                            self.handle_error_update(ErrorPopup::Intermittent(format!(
+                                "Failed to create VRCX shortcut: {}",
+                                e
+                            )));
+                        } else {
+                            // Commented out since the prompt is skipped if a shortcut exists,
+                            // since if the user removes the shortcut *or* moves the exe + config somewhere else,
+                            // it wouldn't prompt to make a new one!
+                            // self.settings.misc.vrcx_shortcut_prompt = false;
+                            // self.try_save_settings();
+                            self.handle_error_update(ErrorPopup::UserMustDismiss("Autostart shortcut created! Make sure the App Launcher is enabled in VRCX's Advanced settings!".to_string()));
+                            self.auto_update_prompt();
+                        }
+                    }
+                    VrcxPromptChoice::No => {
+                        self.auto_update_prompt();
+                    }
+                    VrcxPromptChoice::NeverAsk => {
+                        self.settings.misc.vrcx_shortcut_prompt = false;
+                        self.try_save_settings();
+                        self.auto_update_prompt();
+                    }
+                    VrcxPromptChoice::OpenFolder => {
+                        if let Err(e) = opener::open(self.vrcx.path().unwrap()) {
+                            self.handle_error_update(ErrorPopup::UserMustDismiss(format!(
+                                "Failed to open VRCX's startup folder! {}",
+                                e
+                            )));
+                        }
+                    }
+                }
+                return;
+            }
+            _ => {}
+        }
+        #[allow(clippy::single_match)]
+        match self.view {
+            AppView::BleDeviceSelection => {
                 // app_state changed by method
                 debug!("Connecting from main menu");
                 self.connect_for_hr(None);
@@ -797,10 +908,7 @@ impl App {
                 }
 
                 // If the device is saved, connect to it
-                if (device.id == self.settings.ble.saved_address
-                    || device.name == self.settings.ble.saved_name)
-                    && self.is_idle_on_main_menu()
-                {
+                if self.is_device_saved(Some(&device)) && self.is_idle_on_ble_selection() {
                     self.quick_connect_ui = true;
                     // I'm going to assume that if we find a set saved device,
                     // they're always going to want to update the value in case Name/MAC changes,
@@ -817,7 +925,7 @@ impl App {
                             .position(|d| d.id == device.id),
                     );
                     self.try_save_device(Some(&device));
-                    debug!("Connecting to saved device, AppState: {:?}", self.state);
+                    debug!("Connecting to saved device, AppView: {:?}", self.view);
                     // app_state changed by method
                     self.connect_for_hr(Some(&device));
                 } else {
@@ -826,13 +934,11 @@ impl App {
             }
             DeviceUpdate::Characteristics(characteristics) => {
                 self.selected_characteristics = characteristics;
-                self.state = AppState::CharacteristicView
+                self.sub_state = SubState::CharacteristicView
             }
             DeviceUpdate::Error(error) => {
                 error!("BLE Thread Error: {:?}", error.clone());
-                if self.state == AppState::HeartRateViewNoData
-                    && matches!(error, ErrorPopup::Intermittent(_))
-                {
+                if self.view == AppView::HeartRateView && self.datasets_empty() {
                     // Ignoring the intermittent ones when we're in the inbetween state
                 } else {
                     // Don't override a fatal error
@@ -840,9 +946,8 @@ impl App {
                         self.error_message = Some(error);
                     }
                 }
-                if self.state == AppState::HeartRateView
-                    || self.state == AppState::HeartRateViewNoData
-                    || self.state == AppState::ConnectingForHeartRate
+                if self.view == AppView::HeartRateView
+                    || self.sub_state == SubState::ConnectingForHeartRate
                 {
                     broadcast!(
                         self.broadcast_tx,
@@ -853,20 +958,14 @@ impl App {
                 //self.is_loading_characteristics = false;
             }
             DeviceUpdate::ConnectedEvent(id) => {
-                if self.state == AppState::ConnectingForCharacteristics {
-                    self.state = AppState::CharacteristicView;
+                if self.sub_state == SubState::ConnectingForCharacteristics {
+                    self.sub_state = SubState::CharacteristicView;
                 } else {
-                    self.state = if self.heart_rate_status.heart_rate_bpm > 0 {
-                        AppState::HeartRateView
-                    } else {
-                        AppState::HeartRateViewNoData
-                    };
+                    // If it wasn't for characteristics, it's probably for HR
+                    self.view = AppView::HeartRateView;
                 }
 
-                if self.state == AppState::HeartRateView
-                    || self.state == AppState::HeartRateViewNoData
-                    || self.state == AppState::ConnectingForHeartRate
-                {
+                if self.view == AppView::HeartRateView {
                     if id == self.get_selected_device().unwrap().id {
                         debug!("Connected to device {:?}, stopping BLE scan", id);
                         self.ble_scan_paused.store(true, Ordering::SeqCst);
@@ -874,16 +973,17 @@ impl App {
                     self.try_save_device(None);
                 }
             }
-            DeviceUpdate::DisconnectedEvent(id) => {
+            DeviceUpdate::DisconnectedEvent(disconnected_id) => {
                 self.error_message = Some(ErrorPopup::Intermittent(
                     "Disconnected from device!".to_string(),
                 ));
-                if (self.state == AppState::HeartRateView
-                    || self.state == AppState::HeartRateViewNoData
-                    || self.state == AppState::MainMenu)
-                    && id == self.get_selected_device().unwrap().id
+                if (self.view == AppView::HeartRateView || self.is_idle_on_ble_selection())
+                    && disconnected_id == self.get_selected_device().unwrap().id
                 {
-                    debug!("Disconnected from device {:?}, resuming BLE scan", id);
+                    debug!(
+                        "Disconnected from device {:?}, resuming BLE scan",
+                        disconnected_id
+                    );
                     broadcast!(
                         self.broadcast_tx,
                         HeartRateStatus::default(),

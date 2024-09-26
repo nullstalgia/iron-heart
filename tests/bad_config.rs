@@ -16,6 +16,7 @@ async fn misspelled_bool() {
         config_required: true,
         no_save: true,
         subcommands: None,
+        skip_prompts: true,
     };
 
     iron_heart::run_headless(arg_config, parent_token)
@@ -35,6 +36,7 @@ async fn missing_end_quote() {
         config_required: true,
         no_save: true,
         subcommands: None,
+        skip_prompts: true,
     };
 
     iron_heart::run_headless(arg_config, parent_token)

@@ -16,6 +16,7 @@ pub struct MiscSettings {
     pub bpm_file_path: String,
     pub log_sessions_to_csv: bool,
     pub log_sessions_csv_path: String,
+    pub vrcx_shortcut_prompt: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -103,12 +104,12 @@ pub struct PrometheusSettings {
     pub header: String,
     pub user: String,
     pub pass: String,
+    pub batch_size: usize,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-pub struct NagSettings {
+pub struct AutoUpdateSettings {
     pub update_check_prompt: bool,
-    pub vrcx_shortcut_prompt: bool,
     pub allow_checking_for_updates: bool,
     pub version_skipped: String,
 }
@@ -121,6 +122,8 @@ pub struct Settings {
     pub misc: MiscSettings,
     pub dummy: DummySettings,
     pub tui: TuiSettings,
+    // pub updates: AutoUpdateSettings,
+    // pub prometheus: PrometheusSettings,
 }
 
 impl Settings {
@@ -143,6 +146,9 @@ impl Settings {
             default_bpm_txt_path = "../../bpm.txt"
         };
 
+        // TODO: New way of doing defaults
+        // Either use serde's defaults and skip the extra config crate entirely (doesn't look like it supports serde defaults?)
+        // or switch to something more sane like figment or confique
         let settings = Config::builder()
             // Start off by merging in the "default" configuration file
             .add_source(ConfigFile::from(config_path).required(required))
@@ -179,6 +185,10 @@ impl Settings {
             .set_default("misc.bpm_file_path", default_bpm_txt_path)?
             .set_default("misc.log_sessions_to_csv", false)?
             .set_default("misc.log_sessions_csv_path", default_session_log_path)?
+            .set_default("misc.vrcx_shortcut_prompt", true)?
+            // .set_default("updates.update_check_prompt", true)?
+            // .set_default("updates.allow_checking_for_updates", false)?
+            // .set_default("updates.version_skipped", "")?
             .set_default("tui.session_stats_use_12hr", true)?
             .set_default("tui.chart_bpm_enabled", true)?
             .set_default("tui.chart_rr_enabled", true)?
@@ -191,6 +201,13 @@ impl Settings {
             .set_default("dummy.high_bpm", 120)?
             .set_default("dummy.bpm_speed", 1.5)?
             .set_default("dummy.loops_before_dc", 2)?
+            // .set_default("prometheus.enabled", false)?
+            // .set_default("prometheus.url", "")?
+            // .set_default("prometheus.auth_type", "none")?
+            // .set_default("prometheus.header", "")?
+            // .set_default("prometheus.user", "")?
+            // .set_default("prometheus.pass", "")?
+            // .set_default("prometheus.batch_size", 30)?
             .build()?
             .try_deserialize()?;
 

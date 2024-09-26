@@ -6,7 +6,7 @@ edition = "2021"
 default-run = "iron-heart"
 
 [features]
-# Ignores user dotfiles/AppData, using the current directory instead
+# When active, ignores user dotfiles/AppData, using the current directory instead
 portable = []
 
 [dependencies]
@@ -48,11 +48,19 @@ local-ip-address = "0.6.1"
 ratatui-macros = "0.4.3"
 directories = "5.0.1"
 argh = "0.1.12"
+#rat-widget = "0.16.2"
+#serde-inline-default = { git = "https://github.com/nullstalgia/serde-inline-default", rev = "91e3db1" }
+#serde-inline-default = { path = "../serde-inline-default" }
+educe = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]
-# Using fork until lilopkins/lnk-rs's #25 and #26 resolve
+# Using fork until lilopkins/lnk-rs's #25 and #26 resolve, not sure if #21 is ready yet
 # https://github.com/lilopkins/lnk-rs/issues/25
 lnk = { git = "https://github.com/isma-xnm/lnk-rs", rev = "0a3d44d" }
+# Jeeeez, apparently this one is more mature for *writing*
+# I would consider combining the two, but lnk-rs has #21 which would be even better
+mslnk = "0.1.8"
+opener = "0.7.2"
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "1.4"

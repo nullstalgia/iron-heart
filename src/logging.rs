@@ -26,6 +26,7 @@ struct CsvData {
     Battery: u8,
     TwitchUp: u8,
     TwitchDown: u8,
+    // Activity: u8,
 }
 
 struct FileLoggingActor {

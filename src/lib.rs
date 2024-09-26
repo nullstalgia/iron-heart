@@ -41,6 +41,9 @@ mod structs;
 mod utils;
 mod widgets;
 
+#[cfg(windows)]
+mod vrcx;
+
 mod event;
 mod handler;
 mod tui;
@@ -92,6 +95,9 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     info!("Starting app...");
 
     app.init(&arg_config);
+
+    // Only when running TUI
+    app.first_time_setup(&arg_config).await;
 
     // Start the main loop.
     while !app.cancel_app.is_cancelled() {
