@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+#[cfg(windows)]
 pub mod tui;
 
 #[derive(Debug, Default)]

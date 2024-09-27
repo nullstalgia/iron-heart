@@ -39,10 +39,8 @@ mod scan;
 mod settings;
 mod structs;
 mod utils;
-mod widgets;
-
-#[cfg(windows)]
 mod vrcx;
+mod widgets;
 
 mod event;
 mod handler;

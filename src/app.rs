@@ -25,7 +25,6 @@ use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
 use crate::ui::table_state_scroll;
-use crate::vrcx::tui::VrcxPromptChoice;
 use crate::vrcx::VrcxStartup;
 use crate::widgets::prompts::SavePromptChoice;
 use crate::{
@@ -839,6 +838,8 @@ impl App {
             }
             #[cfg(windows)]
             SubState::VrcxAutostartPrompt => {
+                use crate::vrcx::tui::VrcxPromptChoice;
+
                 let chosen_option = self.prompt_state.selected().unwrap_or(0);
                 match VrcxPromptChoice::from(chosen_option) {
                     VrcxPromptChoice::Yes => {

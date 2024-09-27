@@ -6,9 +6,11 @@ use ratatui::{
 
 use crate::{
     app::{App, AppView, SubState},
-    vrcx::tui::vrcx_prompt,
     widgets::prompts::{connecting_popup, render_error_popup},
 };
+
+#[cfg(windows)]
+use crate::vrcx::tui::vrcx_prompt;
 
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
@@ -119,6 +121,7 @@ pub fn render(app: &mut App, f: &mut Frame) {
             f.render_widget(connecting_block, area);
         }
         SubState::VrcxAutostartPrompt => {
+            #[cfg(windows)]
             vrcx_prompt(app, f);
         }
         SubState::None | SubState::ConnectingForCharacteristics => {}
