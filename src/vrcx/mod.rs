@@ -1,5 +1,5 @@
 use directories::BaseDirs;
-use log::debug;
+use log::{debug, warn};
 use std::{
     env::current_exe,
     path::{Path, PathBuf},
@@ -118,6 +118,13 @@ async fn find_shortcut(startup_path: &Option<PathBuf>) -> Result<Option<PathBuf>
 
 /// Checks if the shortcut at a given Path resolves to the current executable
 async fn check_shortcut(shortcut_path: &Path) -> Result<bool, AppError> {
+    if let Some(ext) = shortcut_path.extension() {
+        if ext.to_ascii_lowercase() != "lnk" {
+            return Ok(false);
+        }
+    } else {
+        return Ok(false);
+    }
     let shortcut =
         lnk::ShellLink::open(shortcut_path).map_err(|err| AppError::Lnk(format!("{err:?}")))?;
 
@@ -145,7 +152,7 @@ async fn check_shortcut(shortcut_path: &Path) -> Result<bool, AppError> {
     }
 
     if shortcut_target == PathBuf::new() {
-        debug!("{shortcut:#?}");
+        warn!("No path was resolved from: {shortcut:#?}");
         return Err(AppError::Lnk(
             "No path was resolved from shortcut! Maybe send in your logs with an Issue?"
                 .to_string(),
