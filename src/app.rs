@@ -324,24 +324,34 @@ impl App {
         if arg_config.skip_prompts {
             return;
         }
+
+        #[cfg(windows)]
         if let Err(e) = self.vrcx.init().await {
             self.handle_error_update(ErrorPopup::Intermittent(format!(
                 "VRCX Shortcut Error: {e}"
             )));
             return;
         }
-        if self.vrcx.shortcut_exists() {
-            self.auto_update_prompt();
-        } else if self.vrcx.vrcx_installed() {
+
+        if self.vrcx.vrcx_installed() && !self.vrcx.shortcut_exists() {
             self.vrcx_prompt();
+        } else {
+            self.auto_update_prompt();
         }
     }
 
+    #[cfg(windows)]
     fn vrcx_prompt(&mut self) {
         if self.settings.misc.vrcx_shortcut_prompt {
             self.prompt_state.select(Some(0));
             self.sub_state = SubState::VrcxAutostartPrompt;
         }
+    }
+
+    #[cfg(not(windows))]
+    fn vrcx_prompt(&mut self) {
+        // When not on windows, just skip to auto-update prompt
+        self.auto_update_prompt();
     }
 
     fn auto_update_prompt(&mut self) {
@@ -842,6 +852,8 @@ impl App {
                             // it wouldn't prompt to make a new one!
                             // self.settings.misc.vrcx_shortcut_prompt = false;
                             // self.try_save_settings();
+
+                            // TODO Maybe make this a lil more graceful
                             self.handle_error_update(ErrorPopup::UserMustDismiss("Autostart shortcut created! Make sure the App Launcher is enabled in VRCX's Advanced settings!".to_string()));
                             self.auto_update_prompt();
                         }
