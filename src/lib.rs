@@ -177,7 +177,7 @@ fn log_config(
 ) -> Result<(PathBuf, LevelFilter, FastLogFormat), AppError> {
     let had_error = app.error_message.is_some();
     let log_name = std::env::current_exe()?.with_extension("log");
-    let log_path = working_directory.with_file_name(&log_name);
+    let log_path = working_directory.with_file_name(log_name);
     let log_level = app.settings.get_log_level();
     let log_format = if log_level <= LevelFilter::Info || had_error {
         // Default format

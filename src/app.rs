@@ -244,7 +244,7 @@ impl App {
             chart_mid_rr: 0.0,
             websocket_url: None,
             config_path,
-            vrcx: VrcxStartup::default(),
+            vrcx: VrcxStartup::new(),
         }
     }
 
@@ -389,9 +389,6 @@ impl App {
     }
 
     pub fn connect_for_hr(&mut self, quick_connect_device: Option<&DeviceInfo>) {
-        if !self.is_idle_on_ble_selection() {
-            return;
-        }
         let selected_device = if let Some(device) = quick_connect_device {
             device
         } else {

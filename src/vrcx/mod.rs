@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 #[cfg(windows)]
 pub mod tui;
 
@@ -7,14 +5,10 @@ pub mod tui;
 mod windows;
 
 #[cfg(windows)]
-#[derive(Debug, Default)]
-pub struct VrcxStartup {
-    startup_path: Option<PathBuf>,
-    shortcut_path: Option<PathBuf>,
-}
+pub use windows::VrcxStartup;
 
 #[cfg(not(windows))]
 mod unix;
 
 #[cfg(not(windows))]
-pub struct VrcxStartup;
+pub use unix::VrcxStartup;

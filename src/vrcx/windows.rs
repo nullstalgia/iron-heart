@@ -9,9 +9,20 @@ use tokio::fs::read_dir;
 
 use crate::errors::AppError;
 
-use super::VrcxStartup;
+#[derive(Debug)]
+pub struct VrcxStartup {
+    startup_path: Option<PathBuf>,
+    shortcut_path: Option<PathBuf>,
+}
 
 impl VrcxStartup {
+    pub fn new() -> Self {
+        Self {
+            startup_path: None,
+            shortcut_path: None,
+        }
+    }
+
     pub async fn init(&mut self) -> Result<(), AppError> {
         self.startup_path = get_vrcx_startup_path();
         self.shortcut_path = find_shortcut(&self.startup_path).await?;
