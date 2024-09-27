@@ -88,6 +88,7 @@ pub enum SubState {
     SaveDevicePrompt,
     ConnectingForCharacteristics,
     ConnectingForHeartRate,
+    #[allow(dead_code)] // Never constructed on Unix
     VrcxAutostartPrompt,
 }
 
