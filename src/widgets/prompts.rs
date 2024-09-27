@@ -1,6 +1,7 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Modifier, Style},
+    text::{Line, Text},
     widgets::{Block, Borders, Clear, Paragraph, Row, Table, Wrap},
     Frame,
 };
@@ -101,7 +102,7 @@ pub fn render_error_popup(app: &App, f: &mut Frame) {
         let block = Block::default()
             .borders(Borders::ALL)
             .title(title)
-            .style(style);
+            .border_style(style);
 
         // Draw the block
         f.render_widget(Clear, area);
@@ -122,7 +123,9 @@ pub fn render_error_popup(app: &App, f: &mut Frame) {
                 .alignment(Alignment::Center)
                 .wrap(Wrap { trim: true });
 
-            let second_paragraph = Paragraph::new(span!(error_message))
+            let lines: Vec<Line> = error_message.lines().map(Line::raw).collect();
+            let details = Text::from(lines);
+            let second_paragraph = Paragraph::new(details)
                 .alignment(Alignment::Left)
                 .wrap(Wrap { trim: false });
 
