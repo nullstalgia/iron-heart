@@ -837,6 +837,7 @@ impl App {
                 self.connect_for_hr(None);
                 return;
             }
+            #[cfg(windows)]
             SubState::VrcxAutostartPrompt => {
                 let chosen_option = self.prompt_state.selected().unwrap_or(0);
                 match VrcxPromptChoice::from(chosen_option) {
