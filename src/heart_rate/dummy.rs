@@ -14,10 +14,12 @@ use tokio::sync::broadcast::Sender as BSender;
 pub async fn dummy_thread(
     broadcast_tx: BSender<AppUpdate>,
     dummy_settings: DummySettings,
+    seconds_override: Option<f32>,
     cancel_token: CancellationToken,
 ) {
-    let bpm_update_per_sec = Duration::from_secs_f32(1.0 / (dummy_settings.bpm_speed));
-    let mut bpm_update_interval = time::interval(bpm_update_per_sec);
+    let bpm_updates_per_sec = seconds_override.unwrap_or(dummy_settings.bpm_speed);
+    let bpm_update_interval = Duration::from_secs_f32(1.0 / (bpm_updates_per_sec));
+    let mut bpm_update_interval = time::interval(bpm_update_interval);
     let low_bpm = dummy_settings.low_bpm;
     let high_bpm = dummy_settings.high_bpm;
     let loops_before_dc = dummy_settings.loops_before_dc;

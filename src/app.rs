@@ -266,14 +266,14 @@ impl App {
         if let Some(subcommands) = arg_config.subcommands.as_ref() {
             match subcommands {
                 SubCommands::Ble(_) => self.start_bluetooth_event_thread(),
-                SubCommands::Dummy(_) => self.start_dummy_thread(),
+                SubCommands::Dummy(dummy) => self.start_dummy_thread(dummy.seconds),
                 SubCommands::WebSocket(ws) => self.start_websocket_thread(ws.port),
             }
             return;
         }
 
         if self.settings.dummy.enabled {
-            self.start_dummy_thread();
+            self.start_dummy_thread(None);
         } else if self.settings.websocket.enabled {
             self.start_websocket_thread(None);
         } else {

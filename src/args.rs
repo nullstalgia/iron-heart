@@ -45,4 +45,8 @@ pub struct WebSocketCmd {
 /// send dummy data for testing avatars/logging
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "dummy")]
-pub struct DummyCmd {}
+pub struct DummyCmd {
+    /// how many seconds between dummy updates
+    #[argh(option, short = 's')]
+    pub seconds: Option<f32>,
+}
