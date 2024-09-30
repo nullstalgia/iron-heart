@@ -30,8 +30,10 @@ pub enum AppError {
     Ws(#[from] tokio_websockets::Error),
     #[error("Bluetooth Error: {0}")]
     Bt(#[from] btleplug::Error),
-    #[error("TOML Serialization Error: {0}")]
+    #[error("TOML Write Error: {0}")]
     TomlSer(#[from] toml::ser::Error),
+    #[error("TOML Read Error: {0}")]
+    TomlDe(#[from] toml::de::Error),
     #[error("CSV Error: {0}")]
     Csv(#[from] csv_async::Error),
     #[error("Parse Int Error: {0}")]

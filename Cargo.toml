@@ -52,6 +52,7 @@ argh = "0.1.12"
 #serde-inline-default = { git = "https://github.com/nullstalgia/serde-inline-default", rev = "91e3db1" }
 #serde-inline-default = { path = "../serde-inline-default" }
 educe = "0.6.0"
+serde_with = "3.9.0"
 
 [target.'cfg(windows)'.dependencies]
 # Using fork until lilopkins/lnk-rs's #25 and #26 resolve, not sure if #21 is ready yet

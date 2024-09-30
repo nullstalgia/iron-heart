@@ -18,6 +18,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
+use crate::activities::Activities;
 use crate::args::{SubCommands, TopLevelCmd};
 use crate::broadcast;
 use crate::errors::AppError;
@@ -51,6 +52,7 @@ pub enum DeviceUpdate {
 #[derive(Debug, Clone)]
 pub enum AppUpdate {
     HeartRateStatus(HeartRateStatus),
+    //ActivitySelected(u8),
     WebsocketReady(std::net::SocketAddr),
     Error(ErrorPopup),
 }
@@ -160,6 +162,7 @@ pub struct App {
     pub websocket_url: Option<String>,
     pub config_path: PathBuf,
     vrcx: VrcxStartup,
+    pub activities: Activities,
 }
 
 impl App {
@@ -245,10 +248,11 @@ impl App {
             websocket_url: None,
             config_path,
             vrcx: VrcxStartup::new(),
+            activities: Activities::new(),
         }
     }
 
-    pub fn init(&mut self, arg_config: &TopLevelCmd) {
+    pub async fn init(&mut self, arg_config: &TopLevelCmd) {
         // Return early if error is present
         if let Some(error) = self.error_message.take() {
             self.handle_error_update(error);
@@ -258,6 +262,11 @@ impl App {
         if !self.try_save_settings() {
             return;
         }
+        if !self.try_load_activities().await {
+            return;
+        }
+        // self.handle_error_update(ErrorPopup::Fatal(format!("{:?}", self.activities)));
+        // return;
         if self.settings.osc.enabled {
             self.start_osc_thread();
         }
@@ -278,6 +287,16 @@ impl App {
             self.start_websocket_thread(None);
         } else {
             self.start_bluetooth_event_thread();
+        }
+    }
+
+    async fn try_load_activities(&mut self) -> bool {
+        if let Err(e) = self.activities.load().await {
+            self.handle_error_update(ErrorPopup::detailed("Couldn't load activities!", e));
+
+            false
+        } else {
+            true
         }
     }
 
@@ -440,11 +459,11 @@ impl App {
     }
 
     fn is_device_saved(&self, given_device: Option<&DeviceInfo>) -> bool {
-        let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
-
         if self.settings.ble.saved_name.is_empty() && self.settings.ble.saved_address.is_empty() {
             return false;
         }
+
+        let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
 
         device.name == self.settings.ble.saved_name
             || device.address == self.settings.ble.saved_address
@@ -486,7 +505,7 @@ impl App {
         }));
     }
 
-    pub fn start_dummy_thread(&mut self) {
+    pub fn start_dummy_thread(&mut self, seconds_override: Option<f32>) {
         let broadcast_tx = self.broadcast_tx.clone();
         let shutdown_requested_clone = self.cancel_actors.clone();
         let dummy_settings_clone = self.settings.dummy.clone();
@@ -494,7 +513,13 @@ impl App {
         self.view = AppView::HeartRateView;
         self.chart_high_rr = self.settings.tui.chart_rr_max;
         self.dummy_thread_handle = Some(tokio::spawn(async move {
-            dummy_thread(broadcast_tx, dummy_settings_clone, shutdown_requested_clone).await
+            dummy_thread(
+                broadcast_tx,
+                dummy_settings_clone,
+                seconds_override,
+                shutdown_requested_clone,
+            )
+            .await
         }));
     }
 
@@ -586,12 +611,18 @@ impl App {
         }
     }
 
+    // TODO! Make sure blank device names aren't saved!!!!!
     pub fn try_save_device(&mut self, given_device: Option<&DeviceInfo>) {
         if self.should_save_ble_device && self.allow_modifying_config {
             let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
 
             let new_id = device.get_id();
             let new_name = device.name.clone();
+
+            if new_id.is_empty() && new_name.is_empty() {
+                return;
+            }
+
             let mut damaged = false;
             if self.settings.ble.saved_address != new_id || self.settings.ble.saved_name != new_name
             {

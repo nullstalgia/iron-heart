@@ -93,6 +93,7 @@ pub struct WebSocketSettings {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ActivitiesSettings {
     pub enabled: bool,
+    pub remember_last: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -124,6 +125,7 @@ pub struct Settings {
     pub tui: TuiSettings,
     // pub updates: AutoUpdateSettings,
     // pub prometheus: PrometheusSettings,
+    pub activities: ActivitiesSettings,
 }
 
 impl Settings {
@@ -201,6 +203,8 @@ impl Settings {
             .set_default("dummy.high_bpm", 120)?
             .set_default("dummy.bpm_speed", 1.5)?
             .set_default("dummy.loops_before_dc", 2)?
+            .set_default("activities.enabled", false)?
+            .set_default("activities.remember_last", true)?
             // .set_default("prometheus.enabled", false)?
             // .set_default("prometheus.url", "")?
             // .set_default("prometheus.auth_type", "none")?
@@ -215,6 +219,7 @@ impl Settings {
     }
 
     pub fn save(&self, config_path: &PathBuf) -> Result<(), AppError> {
+        // TODO Look into toml_edit's options
         let toml_config = toml::to_string(self)?;
 
         let mut file = File::create(config_path).map_err(|e| AppError::CreateFile {

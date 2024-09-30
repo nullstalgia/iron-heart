@@ -26,14 +26,7 @@ pub fn heart_rate_display(app: &App, frame: &mut Frame) {
     let [bpm_history, rr_history] = horizontal_split.areas(bottom);
     let [shared_chart] = horizontal_shared.areas(bottom);
 
-    render_table(
-        frame,
-        status_area,
-        &app.heart_rate_status,
-        &app.session_high_bpm,
-        &app.session_low_bpm,
-        app.settings.tui.session_stats_use_12hr,
-    );
+    render_table(frame, status_area, app);
     let bpm_chart = app.settings.tui.chart_bpm_enabled;
     let rr_chart = app.settings.tui.chart_rr_enabled;
     let combined = app.settings.tui.charts_combine;

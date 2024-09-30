@@ -92,7 +92,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
 
     info!("Starting app...");
 
-    app.init(&arg_config);
+    app.init(&arg_config).await;
 
     // Only when running TUI
     app.first_time_setup(&arg_config).await;
@@ -147,7 +147,7 @@ pub async fn run_headless(
 
     info!("Starting app...");
 
-    app.init(&arg_config);
+    app.init(&arg_config).await;
 
     // Start the main loop.
     while !app.cancel_app.is_cancelled() {
