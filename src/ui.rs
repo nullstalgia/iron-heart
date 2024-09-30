@@ -14,10 +14,10 @@ use crate::vrcx::tui::vrcx_prompt;
 
 use crate::structs::DeviceInfo;
 use crate::utils::centered_rect;
+use crate::widgets::action_bar::action_bar;
 use crate::widgets::detail_table::detail_table;
 use crate::widgets::device_table::device_table;
 use crate::widgets::heart_rate_display::heart_rate_display;
-use crate::widgets::info_table::info_table;
 use crate::widgets::inspect_overlay::inspect_overlay;
 use crate::widgets::prompts::save_prompt;
 
@@ -61,7 +61,7 @@ pub fn render(app: &mut App, f: &mut Frame) {
             f.render_widget(detail_table, chunks[1]);
 
             // Draw the info table
-            let info_table: ratatui::widgets::Table<'_> = info_table(
+            let info_table: ratatui::widgets::Table<'_> = action_bar(
                 app.ble_scan_paused.load(Ordering::SeqCst),
                 app.sub_state == SubState::ConnectingForCharacteristics,
                 &app.frame_count,

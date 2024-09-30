@@ -6,13 +6,12 @@ use ratatui::{
 
 pub const SPINNER: [char; 4] = ['|', '/', '-', '\\'];
 
-/// Creates a table with information about the application and the user input.
-pub fn info_table(
+/// Creates a table with information about potential actions
+pub fn action_bar(
     scan_paused: bool,
     is_loading_characteristics: bool,
     frame_count: &usize,
 ) -> Table<'static> {
-    //let spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     let index_slow = (frame_count / 2) % SPINNER.len();
     let index = frame_count % SPINNER.len();
     let info_rows = vec![Row::new(vec![
