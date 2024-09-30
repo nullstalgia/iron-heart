@@ -50,7 +50,7 @@ pub async fn dummy_thread(
                 }
                 if loops == loops_before_dc && loops_before_dc != 0 {
                     broadcast!(broadcast_tx, ErrorPopup::Intermittent(
-                        "Simulating lost connection".into(),
+                        format!("Simulating lost connection ({:.0} seconds left)", bound.abs_diff(hr_status.heart_rate_bpm) as f32 / dummy_settings.bpm_speed),
                     ));
                 } else {
                     broadcast!(broadcast_tx, hr_status.clone());
