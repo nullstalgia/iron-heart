@@ -16,7 +16,7 @@ pub enum Event {
     // Mouse click/scroll.
     //Mouse(MouseEvent),
     // Terminal resize.
-    //Resize(u16, u16),
+    Resize,
 }
 
 /// Terminal event handler.
@@ -62,7 +62,7 @@ impl EventHandler {
                         // _sender.send(Event::Mouse(mouse)).unwrap();
                       },
                       CrosstermEvent::Resize(_x, _y) => {
-                        // _sender.send(Event::Resize(x, y)).unwrap();
+                        _sender.send(Event::Resize).unwrap();
                       },
                       CrosstermEvent::FocusLost => {
                       },

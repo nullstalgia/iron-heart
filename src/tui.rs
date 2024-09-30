@@ -50,6 +50,14 @@ impl<B: Backend> Tui<B> {
         Ok(())
     }
 
+    /// Passthrough for Ratatui's [`autoresize`] method
+    ///
+    /// [`autoresize`]: ratatui::Terminal::autoresize
+    pub fn autoresize(&mut self) -> AppResult<()> {
+        self.terminal.autoresize()?;
+        Ok(())
+    }
+
     /// Resets the terminal interface.
     ///
     /// This function is also used for the panic hook to revert

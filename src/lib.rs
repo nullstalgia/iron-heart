@@ -105,6 +105,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
         match tui.events.next().await? {
             Event::Tick => app.term_tick(),
             Event::Key(key_event) => handle_key_events(&mut app, key_event)?,
+            Event::Resize => tui.autoresize()?,
         }
         // Handle BLE Manager Events/Update UI with HR info
         app.main_loop().await;
