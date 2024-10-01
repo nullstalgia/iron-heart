@@ -8,7 +8,7 @@ Set PlaybackSpeed 0.3
 Set Height 600
 Set Padding 10
 Hide
-Type "../target/release/null-iron-heart" Enter
+Type "../target/release/iron-heart dummy --vhs --speed 5.0" Enter
 
 Sleep 24s
 Show

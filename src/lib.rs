@@ -101,14 +101,25 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     while !app.cancel_app.is_cancelled() {
         // Render the user interface.
         tui.draw(&mut app)?;
-        // Handle Crossterm events.
-        match tui.events.next().await? {
-            Event::Tick => app.term_tick(),
-            Event::Key(key_event) => handle_key_events(&mut app, key_event)?,
-            Event::Resize => tui.autoresize()?,
+        tokio::select! {
+            // Handle Crossterm events.
+            val = tui.events.next() => {
+                match val {
+                    Ok(event) => {
+                        match event {
+                            Event::Tick => app.term_tick(),
+                            Event::Key(key_event) => handle_key_events(&mut app, key_event)?,
+                            Event::Resize => tui.autoresize()?,
+                        }
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            }
+            // Handle BLE Manager Events/Update UI with HR info
+            _ = app.app_receivers() => {}
         }
-        // Handle BLE Manager Events/Update UI with HR info
-        app.main_loop().await;
     }
     // After while loop closes
     app.join_threads().await;
@@ -150,16 +161,19 @@ pub async fn run_headless(
 
     app.init(&arg_config).await;
 
+    let actor_canary = app.cancel_actors.clone();
+
     // Start the main loop.
     while !app.cancel_app.is_cancelled() {
         assert_eq!(app.error_message, None);
-        // Handle BLE Manager Events
-        app.main_loop().await;
-        // Since there's no UI to dismiss errors, just close the app
-        // if the actors aren't happy
-        if app.cancel_actors.is_cancelled() {
-            info!("Actors cancelled!");
-            app.cancel_app.cancel();
+        tokio::select! {
+            _ = app.app_receivers() => {}
+            // Since there's no UI to dismiss errors, just close the app
+            // if the actors aren't happy
+            _ = actor_canary.cancelled() => {
+                info!("Actors cancelled!");
+                app.cancel_app.cancel();
+            }
         }
     }
     info!("Joining...");

@@ -39,8 +39,11 @@ clippy:
 ble:
   cargo run -- ble
 
-dummy:
-  cargo run -- dummy
+dummy *ARGS:
+  cargo run -- dummy *ARGS
+
+vhs:
+  cargo run -- dummy --vhs -s 5.0
 
 websocket *ARGS:
   cargo run -- ws {{ARGS}}

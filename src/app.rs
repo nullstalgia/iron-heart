@@ -160,6 +160,7 @@ pub struct App {
     pub chart_high_rr: f64,
     pub chart_mid_rr: f64,
     pub chart_low_rr: f64,
+    ignore_margins_for_vhs: bool,
     pub websocket_url: Option<String>,
     pub config_path: PathBuf,
     vrcx: VrcxStartup,
@@ -246,6 +247,7 @@ impl App {
             chart_high_rr: 0.0,
             chart_low_rr: 0.0,
             chart_mid_rr: 0.0,
+            ignore_margins_for_vhs: false,
             websocket_url: None,
             config_path,
             vrcx: VrcxStartup::new(),
@@ -276,14 +278,17 @@ impl App {
         if let Some(subcommands) = arg_config.subcommands.as_ref() {
             match subcommands {
                 SubCommands::Ble(_) => self.start_bluetooth_event_thread(),
-                SubCommands::Dummy(dummy) => self.start_dummy_thread(dummy.seconds),
+                SubCommands::Dummy(dummy) => {
+                    self.ignore_margins_for_vhs = dummy.vhs;
+                    self.start_dummy_thread(dummy.speed, dummy.vhs);
+                }
                 SubCommands::WebSocket(ws) => self.start_websocket_thread(ws.port),
             }
             return;
         }
 
         if self.settings.dummy.enabled {
-            self.start_dummy_thread(None);
+            self.start_dummy_thread(None, false);
         } else if self.settings.websocket.enabled {
             self.start_websocket_thread(None);
         } else {
@@ -310,38 +315,39 @@ impl App {
         }
     }
 
-    pub async fn main_loop(&mut self) {
-        // Check for updates from BLE Thread
-        if let Ok(new_device_info) = self.ble_rx.try_recv() {
-            self.device_info_callback(new_device_info)
-        }
-
-        // HR Notification Updates
-        if let Ok(hr_data) = self.broadcast_rx.try_recv() {
-            match hr_data {
-                AppUpdate::HeartRateStatus(data) => {
-                    // Assume we have proper data now
-                    self.view = AppView::HeartRateView;
-                    if self.sub_state == SubState::ConnectingForHeartRate {
-                        self.sub_state = SubState::None;
+    pub async fn app_receivers(&mut self) {
+        tokio::select! {
+            // Check for updates from BLE Thread
+            Some(new_device_info) = self.ble_rx.recv() => {
+                self.device_info_callback(new_device_info)
+            }
+            // HR Notification Updates
+            Ok(hr_data) = self.broadcast_rx.recv() => {
+                match hr_data {
+                    AppUpdate::HeartRateStatus(data) => {
+                        // Assume we have proper data now
+                        self.view = AppView::HeartRateView;
+                        if self.sub_state == SubState::ConnectingForHeartRate {
+                            self.sub_state = SubState::None;
+                        }
+                        // Dismiss intermittent errors if we just got a notification packet
+                        if let Some(ErrorPopup::Intermittent(_)) = self.error_message {
+                            self.error_message = None;
+                        }
+                        self.append_to_history(&data);
+                        self.heart_rate_status = data;
                     }
-                    // Dismiss intermittent errors if we just got a notification packet
-                    if let Some(ErrorPopup::Intermittent(_)) = self.error_message {
-                        self.error_message = None;
+                    AppUpdate::Error(error) => self.handle_error_update(error),
+                    AppUpdate::WebsocketReady(local_addr) => {
+                        self.websocket_url = Some(local_addr.to_string());
                     }
-                    self.append_to_history(&data);
-                    self.heart_rate_status = data;
-                }
-                AppUpdate::Error(error) => self.handle_error_update(error),
-                AppUpdate::WebsocketReady(local_addr) => {
-                    self.websocket_url = Some(local_addr.to_string());
-                }
-                AppUpdate::ActivitySelected(_) => {
-                    if let Err(err) = self.activities.save().await {
-                        self.handle_error_update(ErrorPopup::detailed(
-                            "Failed to save activities!",
-                            err,
-                        ));
+                    AppUpdate::ActivitySelected(_) => {
+                        if let Err(err) = self.activities.save().await {
+                            self.handle_error_update(ErrorPopup::detailed(
+                                "Failed to save activities!",
+                                err,
+                            ));
+                        }
                     }
                 }
             }
@@ -525,7 +531,7 @@ impl App {
         }));
     }
 
-    pub fn start_dummy_thread(&mut self, seconds_override: Option<f32>) {
+    pub fn start_dummy_thread(&mut self, seconds_override: Option<f32>, vhs_prefill: bool) {
         let broadcast_tx = self.broadcast_tx.clone();
         let shutdown_requested_clone = self.cancel_actors.clone();
         let dummy_settings_clone = self.settings.dummy.clone();
@@ -537,6 +543,7 @@ impl App {
                 broadcast_tx,
                 dummy_settings_clone,
                 seconds_override,
+                vhs_prefill,
                 shutdown_requested_clone,
             )
             .await
@@ -680,8 +687,13 @@ impl App {
 
     fn update_session_stats(&mut self, new_bpm: f64, new_rr: Option<&Duration>) {
         if self.session_low_bpm.0 == 0.0 || self.session_high_bpm.0 == 0.0 {
-            self.chart_low_bpm = new_bpm - CHART_BPM_VERT_MARGIN;
-            self.chart_high_bpm = new_bpm + CHART_BPM_VERT_MARGIN;
+            let margin = if self.ignore_margins_for_vhs {
+                0.0
+            } else {
+                CHART_BPM_VERT_MARGIN
+            };
+            self.chart_low_bpm = new_bpm - margin;
+            self.chart_high_bpm = new_bpm + margin;
             self.session_low_bpm = (new_bpm, Local::now());
             self.session_high_bpm = (new_bpm, Local::now());
         } else if new_bpm > self.session_high_bpm.0 {

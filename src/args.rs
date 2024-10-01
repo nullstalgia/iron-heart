@@ -46,7 +46,10 @@ pub struct WebSocketCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "dummy")]
 pub struct DummyCmd {
-    /// how many seconds between dummy updates
+    /// how many dummy packets per second
     #[argh(option, short = 's')]
-    pub seconds: Option<f32>,
+    pub speed: Option<f32>,
+    /// vhs mode, don't use chart margins
+    #[argh(switch)]
+    pub vhs: bool,
 }
