@@ -220,6 +220,8 @@ impl Settings {
         Ok(settings)
     }
 
+    // TODO look into blank configs being saved on crash?
+    // Maybe new blank name/address check fixes it, unsure yet.
     pub fn save(&self, config_path: &PathBuf) -> Result<(), AppError> {
         // TODO Look into toml_edit's options
         let toml_config = toml::to_string(self)?;

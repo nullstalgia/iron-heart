@@ -297,7 +297,11 @@ impl App {
             return true;
         }
 
-        if let Err(e) = self.activities.load().await {
+        if let Err(e) = self
+            .activities
+            .load(self.settings.activities.remember_last)
+            .await
+        {
             self.handle_error_update(ErrorPopup::detailed("Couldn't load activities!", e));
 
             false
@@ -332,7 +336,14 @@ impl App {
                 AppUpdate::WebsocketReady(local_addr) => {
                     self.websocket_url = Some(local_addr.to_string());
                 }
-                AppUpdate::ActivitySelected(_) => {}
+                AppUpdate::ActivitySelected(_) => {
+                    if let Err(err) = self.activities.save().await {
+                        self.handle_error_update(ErrorPopup::detailed(
+                            "Failed to save activities!",
+                            err,
+                        ));
+                    }
+                }
             }
         }
     }

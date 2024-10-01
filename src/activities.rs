@@ -27,7 +27,7 @@ struct ActivitiesFile {
     last_activity: u8,
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     activities: HashMap<u8, String>,
-    /// Items formatted like "Index - Name" to avoid doing it each render
+    /// Items formatted like "Index - Name" to avoid doing it each frame render
     #[serde(skip)]
     formatted: HashMap<u8, String>,
 }
@@ -63,7 +63,18 @@ impl Activities {
             table_state: TableState::new(),
         }
     }
-    pub async fn load(&mut self) -> Result<(), AppError> {
+    pub async fn save(&mut self) -> Result<(), AppError> {
+        self.file.last_activity = self.current_activity;
+        let file_path = PathBuf::from(ACTIVITIES_TOML_PATH);
+        let file = File::create(&file_path).await?;
+        let mut writer = BufWriter::new(file);
+        writer
+            .write_all(toml::to_string(&self.file)?.as_bytes())
+            .await?;
+        writer.flush().await?;
+        Ok(())
+    }
+    pub async fn load(&mut self, remember_last: bool) -> Result<(), AppError> {
         let file_path = PathBuf::from(ACTIVITIES_TOML_PATH);
         if !file_path.exists() {
             let file = File::create(&file_path).await?;
@@ -82,6 +93,9 @@ impl Activities {
             self.file = new;
             // TODO bleh
             self.file.formatted = format_activities(&self.file.activities);
+            if remember_last && self.file.activities.contains_key(&self.file.last_activity) {
+                self.current_activity = self.file.last_activity;
+            }
         }
         self.query_from_input();
         if self.selected().is_none() && !self.file.activities.is_empty() {
@@ -122,7 +136,6 @@ impl Activities {
         }
         self.current_activity
     }
-    //pub fn query(query: &str) -> &[Activity] {}
 }
 
 pub mod tui {
