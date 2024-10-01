@@ -87,7 +87,7 @@ pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
         let activity = app.activities.selected();
         let activity: &str = activity.map(|s| s.as_str()).unwrap_or("???");
         content.push(Cell::from(activity));
-        constraints.push(Constraint::Length(20));
+        constraints.push(Constraint::Fill(1));
     }
 
     rows.push(Row::new(headers).style(Style::default().add_modifier(Modifier::BOLD)));

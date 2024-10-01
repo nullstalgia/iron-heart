@@ -131,6 +131,7 @@ impl Activities {
     }
     pub fn select_from_table(&mut self) -> u8 {
         if let Some(new_index) = self.table_state.selected() {
+            // I wonder how fragile this is...
             self.current_activity = self.query[new_index];
         }
         self.current_activity

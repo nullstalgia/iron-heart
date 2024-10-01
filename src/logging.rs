@@ -26,7 +26,7 @@ struct CsvData {
     Battery: u8,
     TwitchUp: u8,
     TwitchDown: u8,
-    // Activity: u8,
+    Activity: u8,
 }
 
 struct FileLoggingActor {
@@ -38,6 +38,7 @@ struct FileLoggingActor {
     files_initialized: bool,
     // Loop-specific vars
     last_rr: Duration,
+    activity: u8,
 }
 
 impl FileLoggingActor {
@@ -50,6 +51,7 @@ impl FileLoggingActor {
             txt_path: None,
             last_rr: Duration::from_secs(0),
             files_initialized: false,
+            activity: 0,
         }
     }
     async fn rx_loop(
@@ -63,6 +65,10 @@ impl FileLoggingActor {
                     match heart_rate_status {
                         Ok(AppUpdate::HeartRateStatus(data)) => {
                             self.handle_data(data).await?;
+                        },
+                        Ok(AppUpdate::ActivitySelected(index)) => {
+                            // Dunno if I want to trigger a CSV save here
+                            self.activity = index;
                         },
                         Ok(_) => {},
                         Err(RecvError::Closed) => {
@@ -143,6 +149,7 @@ impl FileLoggingActor {
                 Battery: heart_rate_status.battery_level.into(),
                 TwitchUp: heart_rate_status.twitch_up as u8,
                 TwitchDown: heart_rate_status.twitch_down as u8,
+                Activity: self.activity,
             };
             csv_writer.serialize(csv_data).await?;
             csv_writer.flush().await.map_err(|e| AppError::WriteFile {

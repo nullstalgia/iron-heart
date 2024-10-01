@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 
 use crate::app::{App, ErrorPopup, SubState};
 use crate::AppResult;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};    
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_input::backend::crossterm::EventHandler;
 
 use log::*;
@@ -65,6 +65,7 @@ pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
                 }
                 KeyCode::Char('a') => {
                     app.activities.input.reset();
+                    app.activities.table_state.select(None);
                     app.activities.query_from_input();
                     app.sub_state = SubState::ActivitySelection;
                 }
