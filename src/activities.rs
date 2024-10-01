@@ -4,7 +4,7 @@ use serde_with::{serde_as, DisplayFromStr};
 
 use tui_input::Input;
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{fs::File, io::BufWriter};
 
@@ -25,15 +25,15 @@ pub struct Activities {
 struct ActivitiesFile {
     /// Used to set current_activity to the last one used before app close if `remember_last` is true.
     last_activity: u8,
-    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
-    activities: HashMap<u8, String>,
+    #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
+    activities: BTreeMap<u8, String>,
     /// Items formatted like "Index - Name" to avoid doing it each frame render
     #[serde(skip)]
-    formatted: HashMap<u8, String>,
+    formatted: BTreeMap<u8, String>,
 }
 
-fn format_activities(activities: &HashMap<u8, String>) -> HashMap<u8, String> {
-    let mut formatted = HashMap::new();
+fn format_activities(activities: &BTreeMap<u8, String>) -> BTreeMap<u8, String> {
+    let mut formatted = BTreeMap::new();
     for (index, name) in activities {
         formatted.insert(*index, format!("{index} - {}", name));
     }
@@ -42,7 +42,7 @@ fn format_activities(activities: &HashMap<u8, String>) -> HashMap<u8, String> {
 
 impl Default for ActivitiesFile {
     fn default() -> Self {
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         let no_activity = "N/A".into();
         map.insert(0, no_activity);
         Self {
@@ -108,7 +108,7 @@ impl Activities {
     }
     pub fn query_from_input(&mut self) {
         let pattern = self.input.to_string().to_lowercase();
-        let mut filtered: Vec<u8> = self
+        let filtered: Vec<u8> = self
             .file
             .activities
             .iter()
@@ -122,8 +122,7 @@ impl Activities {
             })
             .collect();
 
-        // Sort by the u8 keys
-        filtered.sort();
+        // BTreeMaps's iters "produce their items in order by key"
         self.query = filtered;
 
         if self.table_state.selected().is_none() && !self.query.is_empty() {
@@ -139,7 +138,7 @@ impl Activities {
 }
 
 pub mod tui {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     use ratatui::{
         layout::{Alignment, Constraint, Layout},
@@ -207,7 +206,7 @@ pub mod tui {
         // f.render_widget(block, inner_area);
     }
 
-    fn activities_table<'a>(map: &'a HashMap<u8, String>, keys: &[u8]) -> Table<'a> {
+    fn activities_table<'a>(map: &'a BTreeMap<u8, String>, keys: &[u8]) -> Table<'a> {
         let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 
         let rows: Vec<Row> = keys
