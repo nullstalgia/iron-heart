@@ -14,6 +14,7 @@ pub(super) struct OscAddresses {
     pub battery_float: String,
     pub rr_twitch_up: String,
     pub rr_twitch_down: String,
+    pub activity: String,
 }
 
 // Not sure if rosc has a function for this already
@@ -85,6 +86,7 @@ impl OscAddresses {
             )?,
             rr_twitch_up: format_address(&prefix, &osc_params.rr_twitch_up, "rr_twitch_up")?,
             rr_twitch_down: format_address(&prefix, &osc_params.rr_twitch_down, "rr_twitch_down")?,
+            activity: format_address(&prefix, &osc_params.activity, "activity")?,
         })
     }
 }

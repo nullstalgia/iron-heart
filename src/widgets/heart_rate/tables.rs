@@ -1,4 +1,3 @@
-use chrono::{DateTime, Local};
 use ratatui::{
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style},
@@ -6,18 +5,11 @@ use ratatui::{
     Frame,
 };
 
-use crate::{
-    activities::Activities,
-    app::App,
-    heart_rate::{BatteryLevel, HeartRateStatus},
-};
+use crate::{app::App, heart_rate::BatteryLevel};
 
 use ratatui_macros::{line, span};
 
 pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
-    // heart_rate_status: &HeartRateStatus,
-    // activities: Option<ActivitiesFile>,
-
     let mut rows: Vec<Row> = Vec::new();
 
     let mut headers = vec![
@@ -92,11 +84,8 @@ pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
 
     if app.settings.activities.enabled {
         headers.push(line![span!(Modifier::UNDERLINED; "A"), span!("ctivity")]);
-        let activity = app
-            .activities
-            .selected()
-            .map(|(k, v)| format!("{k} - {v}"))
-            .unwrap_or_else(|| "0 - N/A".into());
+        let activity = app.activities.selected();
+        let activity: &str = activity.map(|s| s.as_str()).unwrap_or("???");
         content.push(Cell::from(activity));
         constraints.push(Constraint::Length(20));
     }

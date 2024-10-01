@@ -5,6 +5,7 @@ use ratatui::{
 };
 
 use crate::{
+    activities::tui::render_activity_selection,
     app::{App, AppView, SubState},
     widgets::prompts::{connecting_popup, render_error_popup},
 };
@@ -123,6 +124,9 @@ pub fn render(app: &mut App, f: &mut Frame) {
         SubState::VrcxAutostartPrompt => {
             #[cfg(windows)]
             vrcx_prompt(app, f);
+        }
+        SubState::ActivitySelection => {
+            render_activity_selection(app, f);
         }
         SubState::None | SubState::ConnectingForCharacteristics => {}
     }

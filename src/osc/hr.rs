@@ -62,6 +62,29 @@ pub(super) fn send_raw_beat_params(
     Ok(())
 }
 
+pub(super) fn send_raw_activity_param(
+    new_index: u8,
+    osc_addresses: &OscAddresses,
+    socket: &UdpSocket,
+    target_addr: SocketAddrV4,
+) -> Result<(), AppError> {
+    let mut bundle = OscBundle {
+        timetag: OSC_NOW,
+        content: vec![],
+    };
+
+    let activity_msg = OscMessage {
+        addr: osc_addresses.activity.clone(),
+        args: vec![OscType::Int(new_index as i32)],
+    };
+
+    bundle.content.push(OscPacket::Message(activity_msg));
+
+    let msg_buf = encoder::encode(&OscPacket::Bundle(bundle))?;
+    socket.send_to(&msg_buf, target_addr)?;
+    Ok(())
+}
+
 pub(super) fn make_mimic_data(hr_status: &HeartRateStatus) -> HeartRateStatus {
     let mut mimic = HeartRateStatus::default();
     let jitter = rand::thread_rng().gen_range(-3..3);

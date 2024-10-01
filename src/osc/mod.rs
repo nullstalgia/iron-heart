@@ -1,5 +1,5 @@
 use addresses::OscAddresses;
-use hr::{make_mimic_data, send_raw_beat_params, send_raw_hr_status};
+use hr::{make_mimic_data, send_raw_activity_param, send_raw_beat_params, send_raw_hr_status};
 use log::*;
 use rosc::OscTime;
 use std::net::{SocketAddrV4, UdpSocket};
@@ -111,6 +111,7 @@ impl OscActor {
             &self.socket,
             self.target_addr,
         )?;
+        send_raw_activity_param(0, &self.osc_addresses, &self.socket, self.target_addr)?;
         Ok(())
     }
     fn handle_data(&mut self, data: HeartRateStatus) -> Result<(), AppError> {
@@ -229,6 +230,9 @@ impl OscActor {
                     match hr_data {
                         Ok(AppUpdate::HeartRateStatus(data)) => {
                             self.handle_data(data)?;
+                        },
+                        Ok(AppUpdate::ActivitySelected(index)) => {
+                            send_raw_activity_param(index, &self.osc_addresses, &self.socket, self.target_addr)?;
                         },
                         Ok(_) => {},
                         Err(RecvError::Closed) => {

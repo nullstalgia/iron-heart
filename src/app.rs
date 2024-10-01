@@ -52,7 +52,7 @@ pub enum DeviceUpdate {
 #[derive(Debug, Clone)]
 pub enum AppUpdate {
     HeartRateStatus(HeartRateStatus),
-    //ActivitySelected(u8),
+    ActivitySelected(u8),
     WebsocketReady(std::net::SocketAddr),
     Error(ErrorPopup),
 }
@@ -86,12 +86,13 @@ pub enum AppView {
 pub enum SubState {
     #[default]
     None,
-    CharacteristicView,
-    SaveDevicePrompt,
-    ConnectingForCharacteristics,
-    ConnectingForHeartRate,
     #[allow(dead_code)] // Never constructed on Unix
     VrcxAutostartPrompt,
+    ConnectingForCharacteristics,
+    CharacteristicView,
+    SaveDevicePrompt,
+    ConnectingForHeartRate,
+    ActivitySelection,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,6 +292,11 @@ impl App {
     }
 
     async fn try_load_activities(&mut self) -> bool {
+        // Don't bother loading, return a success
+        if !self.settings.activities.enabled {
+            return true;
+        }
+
         if let Err(e) = self.activities.load().await {
             self.handle_error_update(ErrorPopup::detailed("Couldn't load activities!", e));
 
@@ -312,7 +318,9 @@ impl App {
                 AppUpdate::HeartRateStatus(data) => {
                     // Assume we have proper data now
                     self.view = AppView::HeartRateView;
-                    self.sub_state = SubState::None;
+                    if self.sub_state == SubState::ConnectingForHeartRate {
+                        self.sub_state = SubState::None;
+                    }
                     // Dismiss intermittent errors if we just got a notification packet
                     if let Some(ErrorPopup::Intermittent(_)) = self.error_message {
                         self.error_message = None;
@@ -324,6 +332,7 @@ impl App {
                 AppUpdate::WebsocketReady(local_addr) => {
                     self.websocket_url = Some(local_addr.to_string());
                 }
+                AppUpdate::ActivitySelected(_) => {}
             }
         }
     }
@@ -796,6 +805,13 @@ impl App {
             SubState::VrcxAutostartPrompt => {
                 table_state_scroll(true, &mut self.prompt_state, 4);
             }
+            SubState::ActivitySelection => {
+                table_state_scroll(
+                    true,
+                    &mut self.activities.table_state,
+                    self.activities.query.len(),
+                );
+            }
             _ => {}
         }
         match self.view {
@@ -816,6 +832,13 @@ impl App {
             SubState::VrcxAutostartPrompt => {
                 table_state_scroll(false, &mut self.prompt_state, 4);
             }
+            SubState::ActivitySelection => {
+                table_state_scroll(
+                    false,
+                    &mut self.activities.table_state,
+                    self.activities.query.len(),
+                );
+            }
             _ => {}
         }
         match self.view {
@@ -823,6 +846,11 @@ impl App {
                 table_state_scroll(false, &mut self.table_state, self.discovered_devices.len());
             }
             _ => {}
+        }
+    }
+    pub fn escape_pressed(&mut self) {
+        if self.sub_state == SubState::ActivitySelection {
+            self.sub_state = SubState::None;
         }
     }
     pub fn enter_pressed(&mut self) {
@@ -907,6 +935,15 @@ impl App {
                     }
                 }
                 return;
+            }
+            SubState::ActivitySelection => {
+                let new_activity = self.activities.select_from_table();
+                broadcast!(
+                    self.broadcast_tx,
+                    AppUpdate::ActivitySelected(new_activity),
+                    "Failed to send activity update!"
+                );
+                self.sub_state = SubState::None;
             }
             _ => {}
         }

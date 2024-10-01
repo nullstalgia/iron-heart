@@ -70,6 +70,7 @@ pub struct OscAddrConf {
     pub latest_rr_int: String,
     pub rr_twitch_up: String,
     pub rr_twitch_down: String,
+    pub activity: String,
     // TODO Session Max/Min/Avg Params?
 }
 
@@ -175,6 +176,7 @@ impl Settings {
             .set_default("osc.addresses.latest_rr_int", "RRInterval")?
             .set_default("osc.addresses.rr_twitch_up", "HRTwitchUp")?
             .set_default("osc.addresses.rr_twitch_down", "HRTwitchDown")?
+            .set_default("osc.addresses.activity", "HRActivity")?
             .set_default("ble.never_ask_to_save", false)?
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?

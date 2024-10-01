@@ -53,6 +53,7 @@ argh = "0.1.12"
 #serde-inline-default = { path = "../serde-inline-default" }
 educe = "0.6.0"
 serde_with = "3.9.0"
+tui-input = "0.10.1"
 
 [target.'cfg(windows)'.dependencies]
 # Using fork until lilopkins/lnk-rs's #25 and #26 resolve, not sure if #21 is ready yet
