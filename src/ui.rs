@@ -121,8 +121,8 @@ pub fn render(app: &mut App, f: &mut Frame) {
             f.render_widget(Clear, area);
             f.render_widget(connecting_block, area);
         }
+        #[cfg(windows)]
         SubState::VrcxAutostartPrompt => {
-            #[cfg(windows)]
             vrcx_prompt(app, f);
         }
         SubState::ActivitySelection => {

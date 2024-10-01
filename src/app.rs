@@ -86,7 +86,7 @@ pub enum AppView {
 pub enum SubState {
     #[default]
     None,
-    #[allow(dead_code)] // Never constructed on Unix
+    #[cfg(windows)]
     VrcxAutostartPrompt,
     ConnectingForCharacteristics,
     CharacteristicView,
@@ -813,6 +813,7 @@ impl App {
             SubState::SaveDevicePrompt => {
                 table_state_scroll(true, &mut self.prompt_state, 3);
             }
+            #[cfg(windows)]
             SubState::VrcxAutostartPrompt => {
                 table_state_scroll(true, &mut self.prompt_state, 4);
             }
@@ -840,6 +841,7 @@ impl App {
             SubState::SaveDevicePrompt => {
                 table_state_scroll(false, &mut self.prompt_state, 3);
             }
+            #[cfg(windows)]
             SubState::VrcxAutostartPrompt => {
                 table_state_scroll(false, &mut self.prompt_state, 4);
             }
