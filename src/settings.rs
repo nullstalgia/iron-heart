@@ -236,6 +236,8 @@ impl Settings {
                 source: e,
             })?;
 
+        file.flush()?;
+
         Ok(())
     }
     pub fn get_log_level(&self) -> LevelFilter {

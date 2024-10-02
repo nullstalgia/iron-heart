@@ -41,6 +41,8 @@ impl VrcxStartup {
         self.startup_path.as_ref()
     }
 
+    // These shortcuts apparently trigger: [lnk/lib.rs:355] The ExtraData length is invalid.
+    // However, all the data *we* read is before that section, so *we're* probably okay, and Windows hasn't complained *yet.*
     pub fn create_shortcut(&self) -> Result<(), AppError> {
         let startup_path = self
             .startup_path
