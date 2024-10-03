@@ -40,7 +40,7 @@ ble:
   cargo run -- ble
 
 dummy *ARGS:
-  cargo run -- dummy *ARGS
+  cargo run -- dummy {{ARGS}}
 
 vhs:
   cargo run -- dummy --vhs -s 5.0

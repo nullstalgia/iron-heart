@@ -1,5 +1,5 @@
 use config::{Config, File as ConfigFile};
-use log::LevelFilter;
+use log::{info, LevelFilter};
 use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
@@ -138,7 +138,7 @@ impl Settings {
 
         if !cfg!(debug_assertions) {
             // Release build default params
-            default_log_level = "info";
+            default_log_level = "debug";
             default_session_log_path = "session_logs";
             default_bpm_txt_path = "bpm.txt"
         } else {
@@ -226,17 +226,28 @@ impl Settings {
         // TODO Look into toml_edit's options
         let toml_config = toml::to_string(self)?;
 
+        info!("Serialized config length: {}", toml_config.len());
+
         let mut file = File::create(config_path).map_err(|e| AppError::CreateFile {
             path: PathBuf::from(config_path),
             source: e,
         })?;
+
         file.write_all(toml_config.as_bytes())
             .map_err(|e| AppError::WriteFile {
                 path: PathBuf::from(config_path),
                 source: e,
             })?;
 
-        file.flush()?;
+        file.flush().map_err(|e| AppError::WriteFile {
+            path: PathBuf::from(config_path),
+            source: e,
+        })?;
+
+        file.sync_data().map_err(|e| AppError::WriteFile {
+            path: PathBuf::from(config_path),
+            source: e,
+        })?;
 
         Ok(())
     }
