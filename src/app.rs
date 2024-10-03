@@ -93,6 +93,7 @@ pub enum SubState {
     SaveDevicePrompt,
     ConnectingForHeartRate,
     ActivitySelection,
+    ActivityCreation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +117,8 @@ pub struct App {
     // Devices as found by the BLE thread
     pub ble_rx: Receiver<DeviceUpdate>,
     pub ble_tx: Sender<DeviceUpdate>,
+    // A Sender that can be used to trigger the BLE thread to restart it's objects from other threads
+    pub ble_restart_tx: Option<Sender<()>>,
     // (Usually) Status updates from the heart rate monitor
     // Can also be errors from other actors
     pub broadcast_rx: BReceiver<AppUpdate>,
@@ -210,6 +213,7 @@ impl App {
         Self {
             ble_tx,
             ble_rx,
+            ble_restart_tx: None,
             broadcast_rx,
             broadcast_tx,
             ble_scan_paused: Arc::new(AtomicBool::default()),
@@ -293,6 +297,10 @@ impl App {
             self.start_websocket_thread(None);
         } else {
             self.start_bluetooth_event_thread();
+        }
+
+        if self.settings.activities.enabled && self.activities.current_activity != 0 {
+            self.broadcast_activity(self.activities.current_activity);
         }
     }
 
@@ -410,9 +418,17 @@ impl App {
         let pause_signal_clone = Arc::clone(&self.ble_scan_paused);
         let app_tx_clone = self.ble_tx.clone();
         let shutdown_requested_clone = self.cancel_actors.clone();
+        let (restart_tx, restart_rx) = mpsc::channel(1);
+        self.ble_restart_tx = Some(restart_tx);
         debug!("Spawning Bluetooth CentralEvent thread");
         self.ble_thread_handle = Some(tokio::spawn(async move {
-            bluetooth_event_thread(app_tx_clone, pause_signal_clone, shutdown_requested_clone).await
+            bluetooth_event_thread(
+                app_tx_clone,
+                restart_rx,
+                pause_signal_clone,
+                shutdown_requested_clone,
+            )
+            .await
         }));
     }
 
@@ -466,6 +482,7 @@ impl App {
 
         let device = selected_device.clone();
         let hr_tx_clone = self.broadcast_tx.clone();
+        let restart_tx_clone = self.ble_restart_tx.clone().expect("BLE Restart TX missing");
         let shutdown_requested_clone = self.cancel_actors.clone();
         // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
@@ -475,6 +492,7 @@ impl App {
         self.hr_thread_handle = Some(tokio::spawn(async move {
             start_notification_thread(
                 hr_tx_clone,
+                restart_tx_clone,
                 device,
                 rr_ignore_after_empty,
                 rr_twitch_threshold,
@@ -874,8 +892,11 @@ impl App {
         }
     }
     pub fn escape_pressed(&mut self) {
-        if self.sub_state == SubState::ActivitySelection {
-            self.sub_state = SubState::None;
+        match self.sub_state {
+            SubState::ActivitySelection | SubState::ActivityCreation => {
+                self.activities_esc_pressed();
+            }
+            _ => {}
         }
     }
     pub fn enter_pressed(&mut self) {
@@ -961,14 +982,8 @@ impl App {
                 }
                 return;
             }
-            SubState::ActivitySelection => {
-                let new_activity = self.activities.select_from_table();
-                broadcast!(
-                    self.broadcast_tx,
-                    AppUpdate::ActivitySelected(new_activity),
-                    "Failed to send activity update!"
-                );
-                self.sub_state = SubState::None;
+            SubState::ActivitySelection | SubState::ActivityCreation => {
+                self.activities_enter_pressed();
             }
             _ => {}
         }

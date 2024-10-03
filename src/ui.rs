@@ -5,7 +5,7 @@ use ratatui::{
 };
 
 use crate::{
-    activities::tui::render_activity_selection,
+    activities::tui::{render_activity_name_entry, render_activity_selection},
     app::{App, AppView, SubState},
     widgets::prompts::{connecting_popup, render_error_popup},
 };
@@ -127,6 +127,10 @@ pub fn render(app: &mut App, f: &mut Frame) {
         }
         SubState::ActivitySelection => {
             render_activity_selection(app, f);
+        }
+        SubState::ActivityCreation => {
+            render_activity_selection(app, f);
+            render_activity_name_entry(app, f);
         }
         SubState::None | SubState::ConnectingForCharacteristics => {}
     }

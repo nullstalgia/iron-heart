@@ -9,6 +9,7 @@ use log::*;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender as BSender;
+use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -38,7 +39,11 @@ struct BleMonitorActor {
 }
 
 impl BleMonitorActor {
-    async fn connect(&mut self, broadcast_tx: &BSender<AppUpdate>) -> Result<(), AppError> {
+    async fn connect(
+        &mut self,
+        broadcast_tx: &BSender<AppUpdate>,
+        restart_tx: Sender<()>,
+    ) -> Result<(), AppError> {
         let device = self
             .peripheral
             .device
@@ -110,6 +115,13 @@ impl BleMonitorActor {
                                 "BLE Connection error: {}",
                                 e
                             )));
+                            // This is the "Device Unreachable" error
+                            // Weirdly enough, the Central manager doesn't get this error, only we do here at the HR level
+                            // So, we'll just restart the BLE manager to try to avoid continuous failed reconnects
+                            if let btleplug::Error::NotConnected = e {
+                                restart_tx.send(()).await.expect("Couldn't restart BLE Manager!");
+                                tokio::time::sleep(Duration::from_secs(3)).await;
+                            }
                         }
                     }
                 }
@@ -203,6 +215,7 @@ impl BleMonitorActor {
 
 pub async fn start_notification_thread(
     broadcast_tx: BSender<AppUpdate>,
+    restart_tx: Sender<()>,
     peripheral: DeviceInfo,
     rr_cooldown_amount: usize,
     twitch_threshold: f32,
@@ -221,7 +234,7 @@ pub async fn start_notification_thread(
         rr_left_to_burn: rr_cooldown_amount,
     };
 
-    if let Err(e) = ble_monitor.connect(&broadcast_tx).await {
+    if let Err(e) = ble_monitor.connect(&broadcast_tx, restart_tx).await {
         error!("Fatal BLE Error: {e}");
         let message = "Fatal BLE Error";
         broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));

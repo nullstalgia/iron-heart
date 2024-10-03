@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 /// The scan can be paused by setting the `pause_signal` to `true`.
 pub async fn bluetooth_event_thread(
     tx: mpsc::Sender<DeviceUpdate>,
+    mut restart_signal: mpsc::Receiver<()>,
     pause_signal: Arc<AtomicBool>,
     cancel_token: CancellationToken,
 ) {
@@ -178,6 +179,10 @@ pub async fn bluetooth_event_thread(
                         warn!("Restarting manager and adapter!");
                         break 'events;
                     }
+                }
+                _ = restart_signal.recv() => {
+                    warn!("Got signal to restart BLE manager and adapter!");
+                    break 'events;
                 }
             }
         }
