@@ -36,3 +36,4 @@ jobs:
           zip: windows
           archive: $bin-$tag-$target
           token: ${{ secrets.GITHUB_TOKEN }}
+          checksum: sha512
