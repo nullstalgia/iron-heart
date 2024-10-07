@@ -362,7 +362,7 @@ impl App {
         if self.sub_state == SubState::ActivityCreation {
             self.activities.reset();
             self.sub_state = SubState::ActivitySelection;
-        } else {
+        } else if self.sub_state == SubState::ActivitySelection {
             self.sub_state = SubState::None;
         }
     }

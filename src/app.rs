@@ -26,6 +26,7 @@ use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
 use crate::ui::table_state_scroll;
+use crate::updates::{UpdateHandle, UpdateReply};
 use crate::vrcx::VrcxStartup;
 use crate::widgets::prompts::SavePromptChoice;
 use crate::{
@@ -94,6 +95,11 @@ pub enum SubState {
     ConnectingForHeartRate,
     ActivitySelection,
     ActivityCreation,
+    UpdateAllowCheckPrompt,
+    UpdateFoundPrompt,
+    UpdateDownloading,
+    #[cfg(windows)]
+    LaunchUpdatePrompt,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,7 +124,7 @@ pub struct App {
     pub ble_rx: Receiver<DeviceUpdate>,
     pub ble_tx: Sender<DeviceUpdate>,
     // A Sender that can be used to trigger the BLE thread to restart it's objects from other threads
-    pub ble_restart_tx: Option<Sender<()>>,
+    ble_restart_tx: Option<Sender<()>>,
     // (Usually) Status updates from the heart rate monitor
     // Can also be errors from other actors
     pub broadcast_rx: BReceiver<AppUpdate>,
@@ -168,6 +174,9 @@ pub struct App {
     pub config_path: PathBuf,
     vrcx: VrcxStartup,
     pub activities: Activities,
+    pub updates: UpdateHandle,
+    pub update_download_percentage: f64,
+    pub update_newer_version: Option<String>,
 }
 
 impl App {
@@ -256,6 +265,9 @@ impl App {
             config_path,
             vrcx: VrcxStartup::new(),
             activities: Activities::new(),
+            updates: UpdateHandle::new(),
+            update_download_percentage: 0.0,
+            update_newer_version: None,
         }
     }
 
@@ -359,6 +371,40 @@ impl App {
                     }
                 }
             }
+            Some(data) = self.updates.reply_rx.recv() => {
+                match data {
+                    UpdateReply::UpToDate => {
+                        info!("App is Up to Date!");
+                    }
+                    UpdateReply::UpdateFound(version) => {
+                        info!("Newer Version Found: {version}");
+                        if self.settings.updates.version_skipped.eq(&version) {
+                            info!("Version marked as skipped!");
+                            self.updates.reply_rx.close();
+                            return;
+                        }
+                        self.update_newer_version = Some(version);
+                        self.prompt_state.select(Some(1));
+                        self.sub_state = SubState::UpdateFoundPrompt;
+                    }
+                    UpdateReply::DownloadProgress(percentage) => {
+                        self.update_download_percentage = percentage;
+                    }
+                    #[cfg(windows)]
+                    UpdateReply::ReadyToLaunch => {
+                        self.prompt_state.select(Some(0));
+                        self.sub_state = SubState::LaunchUpdatePrompt;
+                    }
+                    #[cfg(not(windows))]
+                    UpdateReply::ReadyToLaunch => {
+                        self.updates.start_new_version();
+                    }
+                    UpdateReply::Error(err) => {
+                        self.handle_error_update(ErrorPopup::detailed("Error during auto update:", err));
+                    }
+                }
+                // warn!("{:?}", data);
+            }
         }
     }
 
@@ -398,6 +444,8 @@ impl App {
         if self.settings.misc.vrcx_shortcut_prompt {
             self.prompt_state.select(Some(0));
             self.sub_state = SubState::VrcxAutostartPrompt;
+        } else {
+            self.auto_update_prompt();
         }
     }
 
@@ -407,9 +455,29 @@ impl App {
         self.auto_update_prompt();
     }
 
-    fn auto_update_prompt(&mut self) {
-        //todo!()
+    pub fn auto_update_prompt(&mut self) {
+        // Check if we've allowed checking for updates
+        // If we have, or just did, spawn the update checking task
+        // It'll have a oneshot it can send a new version to ask for confirmation for
+
+        // In case the user manually set updates true without also changing prompt
+        if self.settings.updates.allow_checking_for_updates {
+            self.spawn_update_check();
+            return;
+        }
+
+        // If we haven't asked the user yet, do that first.
+        if self.settings.updates.update_check_prompt {
+            self.prompt_state.select(Some(0));
+            self.sub_state = SubState::UpdateAllowCheckPrompt;
+            return;
+        }
+
         self.sub_state = SubState::None;
+    }
+
+    fn spawn_update_check(&mut self) {
+        self.updates.query_latest();
     }
 
     // TODO Proper actor/handle structures for threads
@@ -812,7 +880,7 @@ impl App {
         }
     }
 
-    fn handle_error_update(&mut self, error: ErrorPopup) {
+    pub fn handle_error_update(&mut self, error: ErrorPopup) {
         // Don't override a fatal error popup
         match self.error_message {
             Some(ErrorPopup::Fatal(_)) | Some(ErrorPopup::FatalDetailed(_, _)) => return,
@@ -854,6 +922,11 @@ impl App {
                     self.activities.query.len(),
                 );
             }
+            SubState::UpdateFoundPrompt | SubState::UpdateAllowCheckPrompt => {
+                self.updates_scroll(true)
+            }
+            #[cfg(windows)]
+            SubState::LaunchUpdatePrompt => self.updates_scroll(true),
             _ => {}
         }
         match self.view {
@@ -882,6 +955,11 @@ impl App {
                     self.activities.query.len(),
                 );
             }
+            SubState::UpdateFoundPrompt | SubState::UpdateAllowCheckPrompt => {
+                self.updates_scroll(false)
+            }
+            #[cfg(windows)]
+            SubState::LaunchUpdatePrompt => self.updates_scroll(false),
             _ => {}
         }
         match self.view {
@@ -921,7 +999,7 @@ impl App {
             }
             SubState::SaveDevicePrompt => {
                 let chosen_option = self.prompt_state.selected().unwrap_or(0);
-                match SavePromptChoice::from(chosen_option) {
+                match SavePromptChoice::from(chosen_option as u8) {
                     SavePromptChoice::Yes => {
                         self.should_save_ble_device = true;
                         self.try_save_settings();
@@ -944,7 +1022,7 @@ impl App {
                 use crate::vrcx::tui::VrcxPromptChoice;
 
                 let chosen_option = self.prompt_state.selected().unwrap_or(0);
-                match VrcxPromptChoice::from(chosen_option) {
+                match VrcxPromptChoice::from(chosen_option as u8) {
                     VrcxPromptChoice::Yes => {
                         if let Err(e) = self.vrcx.create_shortcut() {
                             self.handle_error_update(ErrorPopup::Intermittent(format!(
@@ -985,6 +1063,11 @@ impl App {
             SubState::ActivitySelection | SubState::ActivityCreation => {
                 self.activities_enter_pressed();
             }
+            SubState::UpdateAllowCheckPrompt | SubState::UpdateFoundPrompt => {
+                self.updates_enter_pressed()
+            }
+            #[cfg(windows)]
+            SubState::LaunchUpdatePrompt => self.updates_enter_pressed(),
             _ => {}
         }
         #[allow(clippy::single_match)]

@@ -1,3 +1,4 @@
+use num_enum::FromPrimitive;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Modifier, Style},
@@ -17,8 +18,11 @@ use crate::{
 // Clickable (device menu and prompts!)
 // Mouse Hover Events!
 
+#[derive(Debug, Eq, PartialEq, FromPrimitive)]
+#[repr(u8)]
 pub enum SavePromptChoice {
     Yes,
+    #[num_enum(default)]
     No,
     Never,
 }
@@ -154,17 +158,6 @@ pub fn render_error_popup(app: &App, f: &mut Frame) {
 //     SkipVersion,
 // }
 
-/// Creates a pop-up asking if the user wants to update to the newest version, or skip this one
-/// If not portable, just offers to open a link to the changelog
+// Creates a pop-up asking if the user wants to update to the newest version, or skip this one
+// If not portable, just offers to open a link to the changelog
 // pub fn update_app_prompt(portable: bool) -> Table<'static> {}
-
-impl From<usize> for SavePromptChoice {
-    fn from(index: usize) -> Self {
-        match index {
-            0 => SavePromptChoice::Yes,
-            1 => SavePromptChoice::No,
-            2 => SavePromptChoice::Never,
-            _ => SavePromptChoice::No,
-        }
-    }
-}

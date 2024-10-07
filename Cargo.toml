@@ -54,6 +54,12 @@ argh = "0.1.12"
 educe = "0.6.0"
 serde_with = "3.9.0"
 tui-input = "0.10.1"
+tempfile = "3.13.0"
+reqwest = { version = "0.12.8", features = ["stream"] }
+sha2 = "0.10.8"
+self-replace = "1.5.0"
+num_enum = "0.7.3"
+opener = "0.7.2"
 
 [target.'cfg(windows)'.dependencies]
 # Using fork until lilopkins/lnk-rs's #25 and #26 resolve, not sure if #21 is ready yet
@@ -62,7 +68,13 @@ lnk = { git = "https://github.com/isma-xnm/lnk-rs", rev = "0a3d44d" }
 # Jeeeez, apparently this one is more mature for *writing*
 # I would consider combining the two, but lnk-rs has #21 which would be even better
 mslnk = "0.1.8"
-opener = "0.7.2"
+self_update = { version = "0.41.0", features = [
+    "compression-zip-bzip2",
+    "compression-zip-deflate",
+] }
+
+[target.'cfg(unix)'.dependencies]
+self_update = { version = "0.41.0", features = ["compression-flate2"] }
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "1.4"

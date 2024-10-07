@@ -38,6 +38,12 @@ pub enum AppError {
     Csv(#[from] csv_async::Error),
     #[error("Parse Int Error: {0}")]
     ParseIntError(#[from] std::num::ParseIntError),
+    #[error("Updater Error: {0}")]
+    Updater(#[from] self_update::errors::Error),
+    #[error("Task Join Error: {0}")]
+    Join(#[from] tokio::task::JoinError),
+    #[error("Web Error: {0}")]
+    Reqwest(#[from] reqwest::Error),
     // My errors
     #[error("Failed to get working directory")]
     WorkDir,
@@ -47,6 +53,14 @@ pub enum AppError {
     OscAddress(String, String),
     #[error("Failed to get event")]
     NoEvent,
+    #[error("Bad HTTP Status: \"{0}\"")]
+    HttpStatus(u16),
+    #[error("Update checksum missing")]
+    MissingChecksum,
+    #[error("Update checksum mismatch")]
+    BadChecksum,
+    #[error("Tried to update non-portable app")]
+    NotPortable,
     // Because lnk::Error doesn't impl Display yet
     #[error("Error parsing shortcut: {0}")]
     Lnk(String),

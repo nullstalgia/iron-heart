@@ -7,8 +7,12 @@ use ratatui::{
 use crate::{
     activities::tui::{render_activity_name_entry, render_activity_selection},
     app::{App, AppView, SubState},
+    updates::tui::{update_allow_check_prompt, update_downloading_ui, update_found_prompt},
     widgets::prompts::{connecting_popup, render_error_popup},
 };
+
+#[cfg(windows)]
+use crate::updates::tui::restart_app_prompt;
 
 #[cfg(windows)]
 use crate::vrcx::tui::vrcx_prompt;
@@ -131,6 +135,19 @@ pub fn render(app: &mut App, f: &mut Frame) {
         SubState::ActivityCreation => {
             render_activity_selection(app, f);
             render_activity_name_entry(app, f);
+        }
+        SubState::UpdateAllowCheckPrompt => {
+            update_allow_check_prompt(app, f);
+        }
+        SubState::UpdateFoundPrompt => {
+            update_found_prompt(app, f);
+        }
+        SubState::UpdateDownloading => {
+            update_downloading_ui(app, f);
+        }
+        #[cfg(windows)]
+        SubState::LaunchUpdatePrompt => {
+            restart_app_prompt(app, f);
         }
         SubState::None | SubState::ConnectingForCharacteristics => {}
     }

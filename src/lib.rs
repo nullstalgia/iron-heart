@@ -38,6 +38,7 @@ mod panic_handler;
 mod scan;
 mod settings;
 mod structs;
+mod updates;
 mod utils;
 mod vrcx;
 mod widgets;

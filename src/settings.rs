@@ -124,7 +124,7 @@ pub struct Settings {
     pub misc: MiscSettings,
     pub dummy: DummySettings,
     pub tui: TuiSettings,
-    // pub updates: AutoUpdateSettings,
+    pub updates: AutoUpdateSettings,
     // pub prometheus: PrometheusSettings,
     pub activities: ActivitiesSettings,
 }
@@ -190,9 +190,9 @@ impl Settings {
             .set_default("misc.log_sessions_to_csv", false)?
             .set_default("misc.log_sessions_csv_path", default_session_log_path)?
             .set_default("misc.vrcx_shortcut_prompt", true)?
-            // .set_default("updates.update_check_prompt", true)?
-            // .set_default("updates.allow_checking_for_updates", false)?
-            // .set_default("updates.version_skipped", "")?
+            .set_default("updates.update_check_prompt", true)?
+            .set_default("updates.allow_checking_for_updates", false)?
+            .set_default("updates.version_skipped", "")?
             .set_default("tui.session_stats_use_12hr", true)?
             .set_default("tui.chart_bpm_enabled", true)?
             .set_default("tui.chart_rr_enabled", true)?

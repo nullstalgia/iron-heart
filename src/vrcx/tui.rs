@@ -7,6 +7,8 @@ use ratatui::{
 use ratatui::prelude::*;
 use ratatui_macros::{line, row, text};
 
+use num_enum::FromPrimitive;
+
 use crate::{app::App, utils::centered_rect};
 
 pub fn vrcx_prompt(app: &mut App, frame: &mut Frame) {
@@ -63,21 +65,12 @@ pub fn vrcx_options() -> Table<'static> {
     option_table
 }
 
+#[derive(Debug, Eq, PartialEq, FromPrimitive)]
+#[repr(u8)]
 pub enum VrcxPromptChoice {
     Yes,
+    #[num_enum(default)]
     No,
     NeverAsk,
     OpenFolder,
-}
-
-impl From<usize> for VrcxPromptChoice {
-    fn from(choice: usize) -> Self {
-        match choice {
-            0 => Self::Yes,
-            1 => Self::No,
-            2 => Self::NeverAsk,
-            3 => Self::OpenFolder,
-            _ => Self::No,
-        }
-    }
 }
