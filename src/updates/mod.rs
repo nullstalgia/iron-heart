@@ -20,6 +20,10 @@ use tokio::sync::mpsc;
 use tui::{UpdateCheckChoice, UpdatePromptChoice};
 
 #[cfg(windows)]
+use crossterm::event::DisableMouseCapture;
+#[cfg(windows)]
+use crossterm::terminal::LeaveAlternateScreen;
+#[cfg(windows)]
 use tui::UpdateRestartChoice;
 
 pub mod tui;
@@ -346,16 +350,6 @@ impl UpdateHandle {
             .try_send(msg)
             .expect("Unable to signal for new app launch");
     }
-    // pub async fn get_unique_id(&self) -> u32 {
-    //     let (send, recv) = oneshot::channel();
-    //     let msg = UpdateCommand::GetUniqueId { respond_to: send };
-
-    //     // Ignore send errors. If this send fails, so does the
-    //     // recv.await below. There's no reason to check for the
-    //     // same failure twice.
-    //     let _ = self.command_tx.send(msg).await;
-    //     recv.await.expect("Actor task has been killed")
-    // }
 }
 
 // Yoinked from
@@ -398,7 +392,7 @@ impl App {
                         info!("{url}");
                         if let Err(e) = opener::open_browser(url) {
                             self.handle_error_update(ErrorPopup::UserMustDismiss(format!(
-                                "Failed to open VRCX's startup folder! {}",
+                                "Failed to open app repository! {}",
                                 e
                             )));
                         }
@@ -440,6 +434,7 @@ impl App {
                         self.settings.updates.allow_checking_for_updates = true;
                         self.settings.updates.update_check_prompt = false;
                         self.try_save_settings();
+                        self.sub_state = SubState::None;
                         self.auto_update_prompt();
                     }
                 }
@@ -447,12 +442,8 @@ impl App {
             #[cfg(windows)]
             SubState::LaunchUpdatePrompt => {
                 crossterm::terminal::disable_raw_mode().unwrap();
-                crossterm::execute!(
-                    std::io::stdout(),
-                    crossterm::terminal::LeaveAlternateScreen,
-                    crossterm::terminal::DisableMouseCapture
-                )
-                .unwrap();
+                crossterm::execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture)
+                    .unwrap();
                 let chosen_option = self.prompt_state.selected().unwrap_or(0);
                 match UpdateRestartChoice::from(chosen_option as u8) {
                     UpdateRestartChoice::Yes => self.updates.start_new_version(),
@@ -483,28 +474,3 @@ impl App {
         }
     }
 }
-
-// struct HashVec(Vec<u8>);
-// impl fmt::Display for HashVec {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         let s = self
-//             .0
-//             .iter()
-//             .map(|item| format!("{item:x}"))
-//             .collect::<Vec<String>>()
-//             .join("");
-//         write!(f, "{}", s)
-//     }
-// }
-// impl Deref for HashVec {
-//     type Target = Vec<u8>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-// impl From<Vec<u8>> for HashVec {
-//     fn from(vec: Vec<u8>) -> Self {
-//         HashVec(vec)
-//     }
-// }

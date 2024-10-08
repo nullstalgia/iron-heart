@@ -119,7 +119,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
                 }
             }
             // Handle BLE Manager Events/Update UI with HR info
-            _ = app.app_receivers() => {}
+            data = app.app_receivers() => app.app_handlers(data).await
         }
     }
     // After while loop closes
@@ -162,19 +162,12 @@ pub async fn run_headless(
 
     app.init(&arg_config).await;
 
-    let actor_canary = app.cancel_actors.clone();
-
-    // Start the main loop.
-    while !app.cancel_app.is_cancelled() {
+    // Since there's no UI to dismiss errors, just close the app
+    // if the actors aren't happy
+    while !app.cancel_app.is_cancelled() && !app.cancel_actors.is_cancelled() {
         assert_eq!(app.error_message, None);
         tokio::select! {
-            _ = app.app_receivers() => {}
-            // Since there's no UI to dismiss errors, just close the app
-            // if the actors aren't happy
-            _ = actor_canary.cancelled() => {
-                info!("Actors cancelled!");
-                app.cancel_app.cancel();
-            }
+            data = app.app_receivers() => app.app_handlers(data).await
         }
     }
     info!("Joining...");

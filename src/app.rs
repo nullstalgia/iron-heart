@@ -42,6 +42,12 @@ use crate::{
     },
 };
 
+pub enum AppRx {
+    DeviceUpdate(DeviceUpdate),
+    AppUpdate(AppUpdate),
+    UpdateReply(UpdateReply),
+}
+
 pub enum DeviceUpdate {
     ConnectedEvent(String),
     DisconnectedEvent(String),
@@ -335,14 +341,29 @@ impl App {
         }
     }
 
-    pub async fn app_receivers(&mut self) {
+    // Had to break this apart into two functions, since the parent
+    // tokio::select could cancel any concurrent handling if a terminal event came in
+    pub async fn app_receivers(&mut self) -> AppRx {
         tokio::select! {
             // Check for updates from BLE Thread
             Some(new_device_info) = self.ble_rx.recv() => {
-                self.device_info_callback(new_device_info)
+                AppRx::DeviceUpdate(new_device_info)
             }
             // HR Notification Updates
             Ok(hr_data) = self.broadcast_rx.recv() => {
+                AppRx::AppUpdate(hr_data)
+            }
+            // Replies from the executable self-updating task
+            Some(data) = self.updates.reply_rx.recv() => {
+                AppRx::UpdateReply(data)
+            }
+        }
+    }
+
+    pub async fn app_handlers(&mut self, data: AppRx) {
+        match data {
+            AppRx::DeviceUpdate(new_device_info) => self.device_info_callback(new_device_info),
+            AppRx::AppUpdate(hr_data) => {
                 match hr_data {
                     AppUpdate::HeartRateStatus(data) => {
                         // Assume we have proper data now
@@ -371,40 +392,40 @@ impl App {
                     }
                 }
             }
-            Some(data) = self.updates.reply_rx.recv() => {
-                match data {
-                    UpdateReply::UpToDate => {
-                        info!("App is Up to Date!");
-                    }
-                    UpdateReply::UpdateFound(version) => {
-                        info!("Newer Version Found: {version}");
-                        if self.settings.updates.version_skipped.eq(&version) {
-                            info!("Version marked as skipped!");
-                            self.updates.reply_rx.close();
-                            return;
-                        }
-                        self.update_newer_version = Some(version);
-                        self.prompt_state.select(Some(1));
-                        self.sub_state = SubState::UpdateFoundPrompt;
-                    }
-                    UpdateReply::DownloadProgress(percentage) => {
-                        self.update_download_percentage = percentage;
-                    }
-                    #[cfg(windows)]
-                    UpdateReply::ReadyToLaunch => {
-                        self.prompt_state.select(Some(0));
-                        self.sub_state = SubState::LaunchUpdatePrompt;
-                    }
-                    #[cfg(not(windows))]
-                    UpdateReply::ReadyToLaunch => {
-                        self.updates.start_new_version();
-                    }
-                    UpdateReply::Error(err) => {
-                        self.handle_error_update(ErrorPopup::detailed("Error during auto update:", err));
-                    }
+            AppRx::UpdateReply(data) => match data {
+                UpdateReply::UpToDate => {
+                    info!("App is Up to Date!");
                 }
-                // warn!("{:?}", data);
-            }
+                UpdateReply::UpdateFound(version) => {
+                    info!("Newer Version Found: {version}");
+                    if self.settings.updates.version_skipped.eq(&version) {
+                        info!("Version marked as skipped!");
+                        self.updates.reply_rx.close();
+                        return;
+                    }
+                    self.update_newer_version = Some(version);
+                    self.prompt_state.select(Some(1));
+                    self.sub_state = SubState::UpdateFoundPrompt;
+                }
+                UpdateReply::DownloadProgress(percentage) => {
+                    self.update_download_percentage = percentage;
+                }
+                #[cfg(windows)]
+                UpdateReply::ReadyToLaunch => {
+                    self.prompt_state.select(Some(0));
+                    self.sub_state = SubState::LaunchUpdatePrompt;
+                }
+                #[cfg(not(windows))]
+                UpdateReply::ReadyToLaunch => {
+                    self.updates.start_new_version();
+                }
+                UpdateReply::Error(err) => {
+                    self.handle_error_update(ErrorPopup::detailed(
+                        "Error during auto update:",
+                        err,
+                    ));
+                }
+            },
         }
     }
 

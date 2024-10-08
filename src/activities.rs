@@ -1,3 +1,4 @@
+use log::info;
 use ratatui::widgets::TableState;
 use serde_derive::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
@@ -74,10 +75,11 @@ impl Activities {
         self.file.last_activity = self.current_activity;
         let file_path = PathBuf::from(ACTIVITIES_TOML_PATH);
         let mut file = File::create(&file_path).await?;
-        file.write_all(toml::to_string(&self.file)?.as_bytes())
-            .await?;
+        let buffer = toml::to_string(&self.file)?;
+        file.write_all(buffer.as_bytes()).await?;
         file.flush().await?;
         file.sync_data().await?;
+        info!("Serialized activities length: {}", buffer.len());
         Ok(())
     }
     pub async fn load(&mut self, remember_last: bool) -> Result<u8, AppError> {
