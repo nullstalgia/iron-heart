@@ -120,7 +120,7 @@ impl BleMonitorActor {
                             // So, we'll just restart the BLE manager to try to avoid continuous failed reconnects
                             if let btleplug::Error::NotConnected = e {
                                 restart_tx.send(()).await.expect("Couldn't restart BLE Manager!");
-                                tokio::time::sleep(Duration::from_secs(3)).await;
+                                tokio::time::sleep(Duration::from_secs(5)).await;
                             }
                         }
                     }

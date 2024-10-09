@@ -182,6 +182,7 @@ pub async fn bluetooth_event_thread(
                 }
                 _ = restart_signal.recv() => {
                     warn!("Got signal to restart BLE manager and adapter!");
+                    pause_signal.store(false, Ordering::SeqCst);
                     break 'events;
                 }
             }
