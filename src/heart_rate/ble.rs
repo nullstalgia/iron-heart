@@ -174,6 +174,7 @@ impl BleMonitorActor {
         }
     }
     fn handle_ble_hr(&mut self, data: &ValueNotification) -> HeartRateStatus {
+        let timestamp = chrono::Local::now();
         let new_hr_status = parse_hrm(&data.value);
         // An oddity I've noticed, is if we don't get an RR interval each update,
         // there's a decent chance that the next one we do get will be weirdly high.
@@ -198,6 +199,7 @@ impl BleMonitorActor {
             battery_level: self.battery_level,
             twitch_up,
             twitch_down,
+            timestamp,
         }
     }
     async fn get_monitor_battery(&mut self, device: &btleplug::platform::Peripheral) {

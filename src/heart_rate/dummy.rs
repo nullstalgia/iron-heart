@@ -34,6 +34,7 @@ pub async fn dummy_thread(
     };
 
     let mut dummy_tick = || {
+        hr_status.timestamp = chrono::Local::now();
         if vhs_mode {
             loops_before_dc = 0;
         }

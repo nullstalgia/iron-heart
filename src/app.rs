@@ -25,6 +25,7 @@ use crate::errors::AppError;
 use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
+use crate::logging::prometheus_logging_thread;
 use crate::ui::table_state_scroll;
 use crate::updates::{UpdateHandle, UpdateReply};
 use crate::vrcx::VrcxStartup;
@@ -157,7 +158,8 @@ pub struct App {
     pub ble_thread_handle: Option<JoinHandle<()>>,
     pub hr_thread_handle: Option<JoinHandle<()>>,
     pub osc_thread_handle: Option<JoinHandle<()>>,
-    pub logging_thread_handle: Option<JoinHandle<()>>,
+    pub file_logging_handle: Option<JoinHandle<()>>,
+    pub prometheus_handle: Option<JoinHandle<()>>,
     pub dummy_thread_handle: Option<JoinHandle<()>>,
     pub websocket_thread_handle: Option<JoinHandle<()>>,
     // Raw histories
@@ -255,7 +257,8 @@ impl App {
             ble_thread_handle: None,
             hr_thread_handle: None,
             osc_thread_handle: None,
-            logging_thread_handle: None,
+            file_logging_handle: None,
+            prometheus_handle: None,
             dummy_thread_handle: None,
             websocket_thread_handle: None,
             session_high_bpm: (0.0, Local::now()),
@@ -287,15 +290,15 @@ impl App {
         if !self.try_save_settings() {
             return;
         }
-        if !self.try_load_activities().await {
+        let Some(activity) = self.try_load_activities().await else {
             return;
-        }
+        };
         // self.handle_error_update(ErrorPopup::Fatal(format!("{:?}", self.activities)));
         // return;
         if self.settings.osc.enabled {
-            self.start_osc_thread();
+            self.start_osc_thread(activity);
         }
-        self.start_logging_thread();
+        self.start_logging_threads(activity.unwrap_or(0));
         // HR source selection
         if let Some(subcommands) = arg_config.subcommands.as_ref() {
             match subcommands {
@@ -316,16 +319,17 @@ impl App {
         } else {
             self.start_bluetooth_event_thread();
         }
-
-        if self.settings.activities.enabled && self.activities.current_activity != 0 {
-            self.broadcast_activity(self.activities.current_activity);
-        }
     }
 
-    async fn try_load_activities(&mut self) -> bool {
+    /// Returns None if activities didn't load properly (error handling is handled in here)
+    ///
+    /// Returns Some(None) if activities were disabled.
+    ///
+    /// Returns Some(Some(index)) of this sessions initial activity
+    async fn try_load_activities(&mut self) -> Option<Option<u8>> {
         // Don't bother loading, return a success
         if !self.settings.activities.enabled {
-            return true;
+            return Some(None);
         }
 
         if let Err(e) = self
@@ -335,9 +339,9 @@ impl App {
         {
             self.handle_error_update(ErrorPopup::detailed("Couldn't load activities!", e));
 
-            false
+            None
         } else {
-            true
+            Some(Some(self.activities.current_activity))
         }
     }
 
@@ -602,7 +606,7 @@ impl App {
             || device.address == self.settings.ble.saved_address
     }
 
-    pub fn start_osc_thread(&mut self) {
+    pub fn start_osc_thread(&mut self, initial_activity: Option<u8>) {
         let osc_settings = self.settings.osc.clone();
         let broadcast_rx = self.broadcast_tx.subscribe();
         let broadcast_tx = self.broadcast_tx.clone();
@@ -613,6 +617,7 @@ impl App {
             osc_thread(
                 broadcast_rx,
                 broadcast_tx,
+                initial_activity,
                 osc_settings,
                 shutdown_requested_clone,
             )
@@ -620,22 +625,47 @@ impl App {
         }));
     }
 
-    pub fn start_logging_thread(&mut self) {
-        let misc_settings_clone = self.settings.misc.clone();
-        let shutdown_requested_clone = self.cancel_actors.clone();
-        let broadcast_rx = self.broadcast_tx.subscribe();
-        let broadcast_tx = self.broadcast_tx.clone();
+    pub fn start_logging_threads(&mut self, initial_activity: u8) {
+        let file_logging_enabled = self.settings.misc.log_sessions_to_csv
+            || self.settings.misc.write_bpm_to_file
+            || self.settings.misc.write_rr_to_file;
+        if file_logging_enabled {
+            let misc_settings_clone = self.settings.misc.clone();
+            let shutdown_requested_clone = self.cancel_actors.clone();
+            let broadcast_rx = self.broadcast_tx.subscribe();
+            let broadcast_tx = self.broadcast_tx.clone();
 
-        debug!("Spawning Data Logging thread");
-        self.logging_thread_handle = Some(tokio::spawn(async move {
-            file_logging_thread(
-                broadcast_rx,
-                broadcast_tx,
-                misc_settings_clone,
-                shutdown_requested_clone,
-            )
-            .await
-        }));
+            debug!("Spawning Data Logging thread");
+            self.file_logging_handle = Some(tokio::spawn(async move {
+                file_logging_thread(
+                    broadcast_rx,
+                    broadcast_tx,
+                    initial_activity,
+                    misc_settings_clone,
+                    shutdown_requested_clone,
+                )
+                .await
+            }));
+        }
+
+        if self.settings.prometheus.enabled {
+            let prometheus_settings_clone = self.settings.prometheus.clone();
+            let shutdown_requested_clone = self.cancel_actors.clone();
+            let broadcast_rx = self.broadcast_tx.subscribe();
+            let broadcast_tx = self.broadcast_tx.clone();
+
+            debug!("Spawning Prometheus thread");
+            self.prometheus_handle = Some(tokio::spawn(async move {
+                prometheus_logging_thread(
+                    broadcast_rx,
+                    broadcast_tx,
+                    initial_activity,
+                    prometheus_settings_clone,
+                    shutdown_requested_clone,
+                )
+                .await
+            }));
+        }
     }
 
     pub fn start_dummy_thread(&mut self, seconds_override: Option<f32>, vhs_prefill: bool) {
@@ -711,10 +741,17 @@ impl App {
             }
         }
 
-        if let Some(handle) = self.logging_thread_handle.take() {
-            debug!("Joining Logging thread");
+        if let Some(handle) = self.file_logging_handle.take() {
+            debug!("Joining File Logging thread");
             if let Err(err) = timeout(duration, handle).await {
-                error!("Failed to join Logging thread: {:?}", err);
+                error!("Failed to join File Logging thread: {:?}", err);
+            }
+        }
+
+        if let Some(handle) = self.prometheus_handle.take() {
+            debug!("Joining Prometheus thread");
+            if let Err(err) = timeout(duration, handle).await {
+                error!("Failed to join Prometheus thread: {:?}", err);
             }
         }
 

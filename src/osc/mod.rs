@@ -50,10 +50,12 @@ struct OscActor {
     // hide the BPM display in VRChat, we'll just bounce around
     // the last known actual value until we reconnect or time out.
     max_hide_disconnection: Duration,
+    // TODO send with bpm
+    activity: Option<u8>,
 }
 
 impl OscActor {
-    fn build(osc_settings: OscSettings) -> Result<Self, AppError> {
+    fn build(initial_activity: Option<u8>, osc_settings: OscSettings) -> Result<Self, AppError> {
         let osc_addresses = OscAddresses::build(&osc_settings.addresses)?;
 
         let host_addr = SocketAddrV4::from_str(&format!("{}:{}", osc_settings.host_ip, 0))?;
@@ -88,6 +90,7 @@ impl OscActor {
             disconnected_at: None,
             disconnect_update_interval,
             max_hide_disconnection,
+            activity: initial_activity,
         })
     }
     // Hides display on avatar and sets value to 0
@@ -232,6 +235,7 @@ impl OscActor {
                             self.handle_data(data)?;
                         },
                         Ok(AppUpdate::ActivitySelected(index)) => {
+                            self.activity = Some(index);
                             send_raw_activity_param(index, &self.osc_addresses, &self.socket, self.target_addr)?;
                         },
                         Ok(_) => {},
@@ -267,10 +271,11 @@ impl OscActor {
 pub async fn osc_thread(
     broadcast_rx: BReceiver<AppUpdate>,
     broadcast_tx: BSender<AppUpdate>,
+    initial_activity: Option<u8>,
     osc_settings: OscSettings,
     cancel_token: CancellationToken,
 ) {
-    let mut osc = match OscActor::build(osc_settings) {
+    let mut osc = match OscActor::build(initial_activity, osc_settings) {
         Ok(osc) => osc,
         Err(e) => {
             error!("Failed to set up OSC. {e}");

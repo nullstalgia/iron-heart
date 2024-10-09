@@ -101,12 +101,20 @@ pub struct ActivitiesSettings {
 pub struct PrometheusSettings {
     pub enabled: bool,
     pub url: String,
-    pub target_table: String,
-    pub auth_type: String, // none, header, user, auth
     pub header: String,
-    pub user: String,
-    pub pass: String,
-    pub batch_size: usize,
+    // Unused for now, maybe someone'll ask for it.
+    // pub batch_size: usize,
+    pub metrics: PrometheusMetrics,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct PrometheusMetrics {
+    pub bpm: String,
+    pub rr: String,
+    pub battery: String,
+    pub twitch_up: String,
+    pub twitch_down: String,
+    pub activity: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -125,8 +133,8 @@ pub struct Settings {
     pub dummy: DummySettings,
     pub tui: TuiSettings,
     pub updates: AutoUpdateSettings,
-    // pub prometheus: PrometheusSettings,
     pub activities: ActivitiesSettings,
+    pub prometheus: PrometheusSettings,
 }
 
 impl Settings {
@@ -207,12 +215,15 @@ impl Settings {
             .set_default("dummy.loops_before_dc", 2)?
             .set_default("activities.enabled", false)?
             .set_default("activities.remember_last", true)?
-            // .set_default("prometheus.enabled", false)?
-            // .set_default("prometheus.url", "")?
-            // .set_default("prometheus.auth_type", "none")?
-            // .set_default("prometheus.header", "")?
-            // .set_default("prometheus.user", "")?
-            // .set_default("prometheus.pass", "")?
+            .set_default("prometheus.enabled", false)?
+            .set_default("prometheus.url", "localhost:9000")?
+            .set_default("prometheus.header", "")?
+            .set_default("prometheus.metrics.bpm", "heart_rate_bpm")?
+            .set_default("prometheus.metrics.rr", "heart_rate_rr")?
+            .set_default("prometheus.metrics.battery", "heart_rate_battery")?
+            .set_default("prometheus.metrics.twitch_up", "heart_rate_twitch_up")?
+            .set_default("prometheus.metrics.twitch_down", "heart_rate_twitch_down")?
+            .set_default("prometheus.metrics.activity", "heart_rate_activity")?
             // .set_default("prometheus.batch_size", 30)?
             .build()?
             .try_deserialize()?;

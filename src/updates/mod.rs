@@ -265,7 +265,6 @@ impl UpdateBackend {
                         .expect("Failed to send latest release version");
                 } else {
                     self.reply_tx
-                        // .send(UpdateReply::UpdateFound(version))
                         .send(UpdateReply::UpToDate)
                         .await
                         .expect("Failed to send up to date message");

@@ -44,6 +44,12 @@ pub enum AppError {
     Join(#[from] tokio::task::JoinError),
     #[error("Web Error: {0}")]
     Reqwest(#[from] reqwest::Error),
+    #[error("Prometheus Error: {0}")]
+    Prometheus(#[from] prometheus::Error),
+    #[error("ASCII characters (32-127) only")]
+    InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
+    #[error("ASCII characters (32-127) only")]
+    InvalidHeaderName(#[from] http::header::InvalidHeaderName),
     // My errors
     #[error("Failed to get working directory")]
     WorkDir,
@@ -61,6 +67,12 @@ pub enum AppError {
     BadChecksum,
     #[error("Tried to update non-portable app")]
     NotPortable,
+    #[error("Tried to get non-existant Prometheus metric")]
+    MissingMetric,
+    #[error("Header missing separating \":\"")]
+    MissingDelimiter,
+    #[error("Empty IP Address")]
+    MissingIpAddr,
     // Because lnk::Error doesn't impl Display yet
     #[error("Error parsing shortcut: {0}")]
     Lnk(String),

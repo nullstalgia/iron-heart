@@ -7,6 +7,8 @@ mod twitcher;
 
 use std::time::Duration;
 
+use chrono::{DateTime, Local};
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BatteryLevel {
     #[default]
@@ -33,6 +35,7 @@ pub struct HeartRateStatus {
     // all listeners see twitches at the same time
     pub twitch_up: bool,
     pub twitch_down: bool,
+    pub timestamp: DateTime<Local>,
 }
 
 // Only used as a backup if the HRM doesn't support

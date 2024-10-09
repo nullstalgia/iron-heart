@@ -166,6 +166,7 @@ impl WebsocketActor {
             }
         };
         if let Ok(new_status) = serde_json::from_str::<JSONHeartRate>(&message) {
+            let now = chrono::Local::now();
             self.hr_status.heart_rate_bpm = new_status.bpm;
             if let Some(battery) = new_status.battery {
                 self.hr_status.battery_level = BatteryLevel::Level(battery);
@@ -182,6 +183,7 @@ impl WebsocketActor {
                 .handle(new_status.bpm, &self.hr_status.rr_intervals);
             self.hr_status.twitch_up = twitch_up;
             self.hr_status.twitch_down = twitch_down;
+            self.hr_status.timestamp = now;
 
             Ok((self.hr_status.clone().into(), true))
         } else {

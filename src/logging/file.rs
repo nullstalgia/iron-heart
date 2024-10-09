@@ -1,5 +1,4 @@
-use crate::app::{AppUpdate, ErrorPopup};
-use crate::broadcast;
+use crate::app::AppUpdate;
 use crate::errors::AppError;
 use crate::heart_rate::HeartRateStatus;
 use crate::settings::MiscSettings;
@@ -12,7 +11,7 @@ use std::time::Duration;
 use tokio::fs::{create_dir, File};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::{Receiver as BReceiver, Sender as BSender};
+use tokio::sync::broadcast::Receiver as BReceiver;
 use tokio_util::sync::CancellationToken;
 
 const CSV_FILE_PREFIX: &str = "nih-";
@@ -29,7 +28,7 @@ struct CsvData {
     Activity: u8,
 }
 
-struct FileLoggingActor {
+pub(super) struct FileLoggingActor {
     misc_settings: MiscSettings,
     csv_writer: Option<AsyncSerializer<File>>,
     csv_path: Option<PathBuf>,
@@ -42,7 +41,7 @@ struct FileLoggingActor {
 }
 
 impl FileLoggingActor {
-    fn new(misc_settings: MiscSettings) -> Self {
+    pub(super) fn new(initial_activity: u8, misc_settings: MiscSettings) -> Self {
         Self {
             misc_settings,
             csv_writer: None,
@@ -51,10 +50,10 @@ impl FileLoggingActor {
             txt_path: None,
             last_rr: Duration::from_secs(0),
             files_initialized: false,
-            activity: 0,
+            activity: initial_activity,
         }
     }
-    async fn rx_loop(
+    pub(super) async fn rx_loop(
         &mut self,
         broadcast_rx: &mut BReceiver<AppUpdate>,
         cancel_token: CancellationToken,
@@ -142,8 +141,9 @@ impl FileLoggingActor {
             .unwrap_or(&self.last_rr);
 
         if let Some(csv_writer) = &mut self.csv_writer {
+            let timestamp = heart_rate_status.timestamp.format("%Y-%m-%d %H:%M:%S");
             let csv_data = CsvData {
-                Timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                Timestamp: timestamp.to_string(),
                 BPM: heart_rate_status.heart_rate_bpm,
                 RR: reported_rr.as_millis() as u16,
                 Battery: heart_rate_status.battery_level.into(),
@@ -189,27 +189,5 @@ impl FileLoggingActor {
         self.last_rr = *reported_rr;
 
         Ok(())
-    }
-}
-
-pub async fn file_logging_thread(
-    mut broadcast_rx: BReceiver<AppUpdate>,
-    broadcast_tx: BSender<AppUpdate>,
-    misc_settings: MiscSettings,
-    cancel_token: CancellationToken,
-) {
-    if !misc_settings.log_sessions_to_csv && !misc_settings.write_bpm_to_file {
-        info!("No file logging was enabled! Shutting down thread.");
-        return;
-    }
-
-    let mut logging = FileLoggingActor::new(misc_settings);
-
-    info!("Logging thread started!");
-
-    if let Err(e) = logging.rx_loop(&mut broadcast_rx, cancel_token).await {
-        error!("File Logging error: {e}");
-        let message = "File Logging error.";
-        broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
     }
 }
