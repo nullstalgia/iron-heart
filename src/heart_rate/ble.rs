@@ -120,6 +120,7 @@ impl BleMonitorActor {
                             // This is the "Device Unreachable" error
                             // Weirdly enough, the Central manager doesn't get this error, only we do here at the HR level
                             // So, we'll just restart the BLE manager to try to avoid continuous failed reconnects
+                            // And wait a moment for the manager to get it's bearings.
                             if let btleplug::Error::NotConnected = e {
                                 device.disconnect().await?;
                                 restart_tx.send(()).await.expect("Couldn't restart BLE Manager!");

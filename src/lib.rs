@@ -85,7 +85,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
         .expect("Failed to convert log path to &str");
     fast_log::init(
         fast_log::Config::new()
-            .file_loop(log_path, fast_log::consts::LogSize::MB(1))
+            .file_loop(log_path, fast_log::consts::LogSize::MB(5))
             .level(log_level)
             .format(log_format)
             .chan_len(Some(1000000)),
@@ -159,7 +159,7 @@ pub async fn run_headless(
 
     info!("Loaded config from: {}", app.config_path.display());
 
-    info!("Starting app...");
+    info!("Starting app... v{}", cargo_crate_version!());
 
     app.init(&arg_config).await;
 

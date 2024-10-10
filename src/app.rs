@@ -776,7 +776,7 @@ impl App {
     }
 
     fn save_settings(&mut self) -> Result<(), AppError> {
-        if self.allow_modifying_config {
+        if self.allow_modifying_config && !self.cancel_actors.is_cancelled() {
             self.settings.save(&self.config_path)
         } else {
             Ok(())
@@ -784,7 +784,10 @@ impl App {
     }
 
     pub fn try_save_device(&mut self, given_device: Option<&DeviceInfo>) {
-        if self.should_save_ble_device && self.allow_modifying_config {
+        if self.should_save_ble_device
+            && self.allow_modifying_config
+            && !self.cancel_actors.is_cancelled()
+        {
             let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
 
             let new_id = device.get_id();

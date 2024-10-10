@@ -48,6 +48,7 @@ pub async fn bluetooth_event_thread(
             }
         };
         let central = match manager.adapters().await.and_then(|adapters| {
+            debug!("Found adapters: {adapters:#?}");
             adapters
                 .into_iter()
                 .next()
@@ -182,6 +183,7 @@ pub async fn bluetooth_event_thread(
                 }
                 Some(()) = restart_signal.recv() => {
                     warn!("Got signal to restart BLE manager and adapter!");
+                    debug!("Central State was: {central:#?}");
                     pause_signal.store(false, Ordering::SeqCst);
                     break 'events;
                 }
