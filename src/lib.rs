@@ -6,6 +6,7 @@ use args::TopLevelCmd;
 use errors::AppError;
 use fast_log::FastLogFormat;
 use ratatui::{backend::CrosstermBackend, Terminal};
+use self_update::cargo_crate_version;
 use std::{
     io,
     path::{Path, PathBuf},
@@ -91,7 +92,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     )
     .expect("Failed to initialize fast_log");
 
-    info!("Starting app...");
+    info!("Starting app... v{}", cargo_crate_version!());
 
     app.init(&arg_config).await;
 

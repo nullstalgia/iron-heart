@@ -92,7 +92,7 @@ pub async fn bluetooth_event_thread(
                 continue 'adapter;
             }
         };
-        debug!("Inital scanning started!");
+        info!("Inital scanning started!");
         let mut scanning = true;
 
         'events: loop {
@@ -180,7 +180,7 @@ pub async fn bluetooth_event_thread(
                         break 'events;
                     }
                 }
-                _ = restart_signal.recv() => {
+                Some(()) = restart_signal.recv() => {
                     warn!("Got signal to restart BLE manager and adapter!");
                     pause_signal.store(false, Ordering::SeqCst);
                     break 'events;

@@ -766,6 +766,7 @@ impl App {
     /// Wrapper for save_settings that handles errors and returns just a success bool
     pub fn try_save_settings(&mut self) -> bool {
         if let Err(e) = self.save_settings() {
+            error!("Couldn't save settings! {}", e);
             self.handle_error_update(ErrorPopup::detailed("Couldn't save settings!", e));
 
             false
@@ -782,7 +783,6 @@ impl App {
         }
     }
 
-    // TODO! Make sure blank device names aren't saved!!!!!
     pub fn try_save_device(&mut self, given_device: Option<&DeviceInfo>) {
         if self.should_save_ble_device && self.allow_modifying_config {
             let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
@@ -790,7 +790,7 @@ impl App {
             let new_id = device.get_id();
             let new_name = device.name.clone();
 
-            if new_id.is_empty() && new_name.is_empty() {
+            if new_id.is_empty() || new_name.is_empty() {
                 return;
             }
 
@@ -1228,7 +1228,7 @@ impl App {
 
                 if self.view == AppView::HeartRateView {
                     if id == self.get_selected_device().unwrap().id {
-                        debug!("Connected to device {:?}, stopping BLE scan", id);
+                        info!("Connected to device {:?}, stopping BLE scan", id);
                         self.ble_scan_paused.store(true, Ordering::SeqCst);
                     }
                     self.try_save_device(None);
@@ -1241,7 +1241,7 @@ impl App {
                 if (self.view == AppView::HeartRateView || self.is_idle_on_ble_selection())
                     && disconnected_id == self.get_selected_device().unwrap().id
                 {
-                    debug!(
+                    info!(
                         "Disconnected from device {:?}, resuming BLE scan",
                         disconnected_id
                     );

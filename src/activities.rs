@@ -78,7 +78,7 @@ impl Activities {
         let buffer = toml::to_string(&self.file)?;
         file.write_all(buffer.as_bytes()).await?;
         file.flush().await?;
-        file.sync_data().await?;
+        file.sync_all().await?;
         info!("Serialized activities length: {}", buffer.len());
         Ok(())
     }
@@ -90,7 +90,7 @@ impl Activities {
             file.write_all(toml::to_string(&default)?.as_bytes())
                 .await?;
             file.flush().await?;
-            file.sync_data().await?;
+            file.sync_all().await?;
             self.file = default;
         } else {
             let mut file = File::open(&file_path).await?;

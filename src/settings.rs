@@ -255,7 +255,7 @@ impl Settings {
             source: e,
         })?;
 
-        file.sync_data().map_err(|e| AppError::WriteFile {
+        file.sync_all().map_err(|e| AppError::WriteFile {
             path: PathBuf::from(config_path),
             source: e,
         })?;

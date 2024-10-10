@@ -230,7 +230,7 @@ impl UpdateBackend {
             let release = self_update::backends::github::Update::configure()
                 // .auth_token("github_pat_XYZ")
                 .repo_owner("nullstalgia")
-                .repo_name("null_iron_heart_hidden")
+                .repo_name("iron-heart")
                 .bin_name(bin_name)
                 .current_version(current)
                 .build()?

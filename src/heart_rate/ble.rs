@@ -38,18 +38,20 @@ struct BleMonitorActor {
     rr_left_to_burn: usize,
 }
 
+// TODO Consider letting this thread be restarted
+
 impl BleMonitorActor {
     async fn connect(
         &mut self,
         broadcast_tx: &BSender<AppUpdate>,
         restart_tx: Sender<()>,
     ) -> Result<(), AppError> {
-        let device = self
-            .peripheral
-            .device
-            .clone()
-            .expect("Missing device object?");
         'connection: loop {
+            let device = self
+                .peripheral
+                .device
+                .clone()
+                .expect("Missing device object?");
             if self.cancel_token.is_cancelled() {
                 break 'connection;
             }
@@ -119,8 +121,9 @@ impl BleMonitorActor {
                             // Weirdly enough, the Central manager doesn't get this error, only we do here at the HR level
                             // So, we'll just restart the BLE manager to try to avoid continuous failed reconnects
                             if let btleplug::Error::NotConnected = e {
+                                device.disconnect().await?;
                                 restart_tx.send(()).await.expect("Couldn't restart BLE Manager!");
-                                tokio::time::sleep(Duration::from_secs(5)).await;
+                                tokio::time::sleep(Duration::from_secs(20)).await;
                             }
                         }
                     }
