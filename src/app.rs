@@ -560,6 +560,7 @@ impl App {
                 && !self.is_device_saved(None)
             {
                 debug!("Asking to save device");
+                self.prompt_state.select(Some(0));
                 self.sub_state = SubState::SaveDevicePrompt;
                 return;
             }
@@ -1134,10 +1135,14 @@ impl App {
                 self.activities_enter_pressed();
             }
             SubState::UpdateAllowCheckPrompt | SubState::UpdateFoundPrompt => {
-                self.updates_enter_pressed()
+                self.updates_enter_pressed();
+                return;
             }
             #[cfg(windows)]
-            SubState::LaunchUpdatePrompt => self.updates_enter_pressed(),
+            SubState::LaunchUpdatePrompt => {
+                self.updates_enter_pressed();
+                return;
+            }
             _ => {}
         }
         #[allow(clippy::single_match)]
