@@ -26,7 +26,6 @@ pub fn vrcx_prompt(app: &mut App, frame: &mut Frame) {
     let inner_area = block.inner(area);
     let [explanation, options] = vertical.areas(inner_area);
 
-    // Create a paragraph explaining autoconnect
     let explanation_paragraph = Paragraph::new(text![
         "VRCX can autostart this application alongside VRChat!",
         "Would you like me to generate the required shortcut?",

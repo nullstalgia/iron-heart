@@ -26,7 +26,6 @@ pub fn update_allow_check_prompt(app: &mut App, frame: &mut Frame) {
     let inner_area = block.inner(area);
     let [explanation, options] = vertical.areas(inner_area);
 
-    // Create a paragraph explaining autoconnect
     let explanation_paragraph = Paragraph::new(text!["Allow checking for updates on app startup?"])
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
@@ -113,7 +112,6 @@ pub fn update_found_prompt(app: &mut App, frame: &mut Frame) {
         "Would you like to open the repository in your web browser?"
     };
 
-    // Create a paragraph explaining autoconnect
     let explanation_paragraph = Paragraph::new(text![
         "A newer version of the application has been released!",
         format!("{current_version} -> {new_version}"),
