@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tokio::fs::read_dir;
-use tracing::{debug, warn};
+use tracing::{debug, error, instrument, warn};
 
 use crate::errors::AppError;
 
@@ -98,7 +98,7 @@ async fn find_shortcut(startup_path: &Option<PathBuf>) -> Result<Option<PathBuf>
     while let Some(potential_shortcut) = dir.next_entry().await? {
         if potential_shortcut.file_type().await?.is_file() {
             let path = potential_shortcut.path();
-            let result = check_shortcut(&path).await;
+            let result = check_shortcut(&path);
             match result {
                 Ok(is_our_shortcut) => {
                     if is_our_shortcut {
@@ -126,7 +126,8 @@ async fn find_shortcut(startup_path: &Option<PathBuf>) -> Result<Option<PathBuf>
 }
 
 /// Checks if the shortcut at a given Path resolves to the current executable
-async fn check_shortcut(shortcut_path: &Path) -> Result<bool, AppError> {
+#[instrument]
+fn check_shortcut(shortcut_path: &Path) -> Result<bool, AppError> {
     if let Some(ext) = shortcut_path.extension() {
         if ext.to_ascii_lowercase() != "lnk" {
             return Ok(false);
@@ -136,7 +137,6 @@ async fn check_shortcut(shortcut_path: &Path) -> Result<bool, AppError> {
     }
     let shortcut =
         lnk::ShellLink::open(shortcut_path).map_err(|err| AppError::Lnk(format!("{err:?}")))?;
-
     let mut shortcut_target = PathBuf::new();
 
     // Try to build path with working dir + relative
@@ -167,11 +167,13 @@ async fn check_shortcut(shortcut_path: &Path) -> Result<bool, AppError> {
                 .to_string(),
         ));
     }
-
-    let absolute_path = shortcut_target.canonicalize()?;
+    let Ok(absolute_path) = shortcut_target.canonicalize() else {
+        error!("Failed to canonicalize shortcut's path!");
+        return Ok(false);
+    };
     let our_path = current_exe()?.canonicalize()?;
     if absolute_path == our_path {
-        debug!("Shortcut found at {}!", shortcut_path.to_string_lossy());
+        debug!("Shortcut found!");
         Ok(true)
     } else {
         debug!("Not our shortcut at {}", shortcut_path.to_string_lossy());

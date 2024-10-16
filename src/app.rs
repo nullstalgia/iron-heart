@@ -487,6 +487,7 @@ impl App {
 
         // In case the user manually set updates true without also changing prompt
         if self.settings.updates.allow_checking_for_updates {
+            self.sub_state = SubState::None;
             self.spawn_update_check();
             return;
         }
