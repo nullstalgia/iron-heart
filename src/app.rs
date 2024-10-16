@@ -565,12 +565,10 @@ impl App {
                 return;
             }
 
-            if let Some(selected_index) = self.table_state.selected() {
-                self.discovered_devices.get(selected_index)
-            } else {
-                None
-            }
-            .unwrap()
+            let selected_index = self.table_state.selected().unwrap_or(0);
+            self.discovered_devices
+                .get(selected_index)
+                .expect("Chosen device missing")
         };
 
         debug!("(HR) Pausing BLE scan");
