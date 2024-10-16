@@ -43,7 +43,7 @@ pub async fn bluetooth_event_thread(
                 ))))
                 .await
                 .expect("Failed to send error message");
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
                 continue 'adapter;
             }
         };
@@ -63,7 +63,7 @@ pub async fn bluetooth_event_thread(
                 )))
                 .await
                 .expect("Failed to send error message");
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
                 continue 'adapter;
             }
         };
@@ -76,7 +76,7 @@ pub async fn bluetooth_event_thread(
             ))))
             .await
             .expect("Failed to send error message");
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
             continue 'adapter;
         }
         let mut events = match central.events().await {
@@ -89,7 +89,7 @@ pub async fn bluetooth_event_thread(
                 ))))
                 .await
                 .expect("Failed to send error message");
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
                 continue 'adapter;
             }
         };
@@ -113,8 +113,8 @@ pub async fn bluetooth_event_thread(
                     ))))
                     .await
                     .expect("Failed to send error message");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue 'events;
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    break 'events;
                 }
                 scanning = true;
             }

@@ -142,7 +142,7 @@ impl BleMonitorActor {
                     ));
                 }
             }
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
         }
         Ok(())
     }
