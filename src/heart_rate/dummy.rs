@@ -3,8 +3,8 @@ use crate::app::{AppUpdate, ErrorPopup};
 use crate::broadcast;
 use crate::settings::DummySettings;
 
-use log::*;
 use std::time::Duration;
+use tracing::info;
 
 use tokio::time;
 use tokio_util::sync::CancellationToken;

@@ -5,12 +5,12 @@ use crate::structs::DeviceInfo;
 
 use btleplug::api::{Characteristic, Peripheral, ValueNotification};
 use futures::{Stream, StreamExt};
-use log::*;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender as BSender;
 use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::broadcast;

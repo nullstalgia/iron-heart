@@ -5,13 +5,13 @@ use crate::broadcast;
 use crate::errors::AppError;
 use crate::settings::WebSocketSettings;
 
-use log::*;
 use serde::Deserialize;
 use std::net::{SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender as BSender;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
@@ -69,6 +69,7 @@ impl WebsocketActor {
         cancel_token: CancellationToken,
     ) -> Result<(), AppError> {
         'server: loop {
+            info!("Websocket server (re)starting!");
             let connection: tokio::net::TcpStream;
             tokio::select! {
                 result = self.listener.accept() => {
@@ -101,6 +102,7 @@ impl WebsocketActor {
                     continue 'server;
                 }
             };
+            debug!("Websocket handshake complete, starting rx loop.");
             'receiving: loop {
                 tokio::select! {
                     item = server.next() => {
@@ -135,6 +137,13 @@ impl WebsocketActor {
             Some(Ok(msg)) if msg.is_text() => {
                 let msg = msg.as_text().unwrap().to_owned();
                 msg
+            }
+            Some(Ok(msg)) if msg.is_close() => {
+                warn!("Websocket client sent close opcode!");
+                return Ok((
+                    ErrorPopup::Intermittent("Device closed connection!".to_string()).into(),
+                    false,
+                ));
             }
             //
             Some(Ok(msg)) => {

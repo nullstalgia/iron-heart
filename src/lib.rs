@@ -4,23 +4,23 @@ extern crate lazy_static;
 
 use args::TopLevelCmd;
 use errors::AppError;
-use fast_log::FastLogFormat;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use self_update::cargo_crate_version;
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::PathBuf};
 use tokio::fs::create_dir;
 use tokio_util::sync::CancellationToken;
-
-use log::*;
 
 use crate::app::App;
 use event::{Event, EventHandler};
 use handler::handle_key_events;
 use std::error;
+
 use tui::Tui;
+
+use rolling_file::{BasicRollingFileAppender, RollingConditionBasic};
+use tracing::info;
+use tracing_subscriber::{filter, prelude::*};
+use tracing_subscriber::{fmt::time::ChronoLocal, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[cfg(not(any(debug_assertions, feature = "portable")))]
 use directories::BaseDirs;
@@ -60,7 +60,6 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
             .expect("Failed to build full supplied config path")
         // Can also fail if doesn't exist. Need to decide how to handle.
     });
-    info!("Working directory: {}", working_directory.display());
     if !working_directory.exists() {
         create_dir(&working_directory)
             .await
@@ -70,6 +69,36 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
             })?;
     }
     std::env::set_current_dir(&working_directory).expect("Failed to change working directory");
+    let log_name = std::env::current_exe()?
+        .with_extension("log")
+        .file_name()
+        .expect("Couldn't build log path!")
+        .to_owned();
+    let file_appender = BasicRollingFileAppender::new(
+        log_name,
+        RollingConditionBasic::new().max_size(1024 * 1024 * 5),
+        2,
+    )
+    .unwrap();
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let time_fmt = ChronoLocal::new("%Y-%m-%d %H:%M:%S%.6f".to_owned());
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_writer(non_blocking)
+        // .pretty()
+        .with_file(false)
+        .with_ansi(false)
+        .with_target(true)
+        .with_timer(time_fmt)
+        .with_line_number(true)
+        .with_filter(filter::LevelFilter::DEBUG);
+    let (fmt_layer, reload_handle) = tracing_subscriber::reload::Layer::new(fmt_layer);
+    // Allow everything through but limit lnk to just info, since it spits out a bit too much when reading shortcuts
+    let env_filter = tracing_subscriber::EnvFilter::new("trace,lnk=info");
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .init();
+
     let mut app = App::build(&arg_config, None);
 
     // Initialize the terminal user interface.
@@ -79,20 +108,10 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     let mut tui = Tui::new(terminal, events);
     tui.init()?;
 
-    let (log_path, log_level, log_format) = log_config(&app, &working_directory)?;
-    let log_path = log_path
-        .to_str()
-        .expect("Failed to convert log path to &str");
-    fast_log::init(
-        fast_log::Config::new()
-            .file_loop(log_path, fast_log::consts::LogSize::MB(5))
-            .level(log_level)
-            .format(log_format)
-            .chan_len(Some(1000000)),
-    )
-    .expect("Failed to initialize fast_log");
-
     info!("Starting app... v{}", cargo_crate_version!());
+
+    // Starting off at DEBUG, and setting to whatever user has defined
+    reload_handle.modify(|layer| *layer.filter_mut() = app.settings.get_log_level())?;
 
     app.init(&arg_config).await;
 
@@ -127,7 +146,6 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     app.join_threads().await;
 
     info!("Shutting down gracefully...");
-    log::logger().flush();
 
     // Reset the terminal.
     tui.exit()?;
@@ -138,22 +156,8 @@ pub async fn run_headless(
     arg_config: TopLevelCmd,
     parent_token: CancellationToken,
 ) -> Result<(), AppError> {
-    let working_directory = determine_working_directory().ok_or(AppError::WorkDir)?;
-
+    // let working_directory = determine_working_directory().ok_or(AppError::WorkDir)?;
     let mut app = App::build(&arg_config, Some(parent_token));
-
-    let (_, log_level, log_format) = log_config(&app, &working_directory)?;
-
-    // assert_eq!("a", std::env::current_dir().unwrap().to_str().unwrap());
-
-    fast_log::init(
-        fast_log::Config::new()
-            .console()
-            .level(log_level)
-            .format(log_format)
-            .chan_len(Some(1000000)),
-    )
-    .expect("Failed to initialize fast_log");
 
     assert_eq!(app.error_message, None);
 
@@ -176,28 +180,8 @@ pub async fn run_headless(
     app.join_threads().await;
 
     info!("Shutting down gracefully...");
-    log::logger().flush();
 
     Ok(())
-}
-
-fn log_config(
-    app: &App,
-    working_directory: &Path,
-) -> Result<(PathBuf, LevelFilter, FastLogFormat), AppError> {
-    let had_error = app.error_message.is_some();
-    let log_name = std::env::current_exe()?.with_extension("log");
-    let log_path = working_directory.with_file_name(log_name);
-    let log_level = app.settings.get_log_level();
-    let log_format = if log_level <= LevelFilter::Info || had_error {
-        // Default format
-        fast_log::FastLogFormat::new()
-    } else {
-        // Show line number
-        fast_log::FastLogFormat::new().set_display_line_level(LevelFilter::Trace)
-    };
-
-    Ok((log_path, log_level, log_format))
 }
 
 /// Returns the directory that logs, config, and other files should be placed in by default.

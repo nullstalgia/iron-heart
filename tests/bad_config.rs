@@ -4,7 +4,8 @@ use tokio_util::sync::CancellationToken;
 
 use ntest::timeout;
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
+#[test_log(default_log_filter = "debug")]
 #[ignore = "can't be concurrent"]
 #[timeout(3000)] // 3s timeout
 #[should_panic(expected = "explicit panic")]
@@ -24,7 +25,8 @@ async fn misspelled_bool() {
         .unwrap();
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
+#[test_log(default_log_filter = "debug")]
 #[ignore = "can't be concurrent"]
 #[timeout(3000)] // 3s timeout
 #[should_panic(expected = "explicit panic")]

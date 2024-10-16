@@ -4,7 +4,6 @@ use crate::heart_rate::HeartRateStatus;
 use crate::settings::MiscSettings;
 
 use csv_async::AsyncSerializer;
-use log::*;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -13,6 +12,7 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver as BReceiver;
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 const CSV_FILE_PREFIX: &str = "nih-";
 

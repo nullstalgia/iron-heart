@@ -1,5 +1,4 @@
 use chrono::{DateTime, Local};
-use log::*;
 use ratatui::widgets::TableState;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -17,6 +16,7 @@ use tokio::sync::{
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info};
 
 use crate::activities::Activities;
 use crate::args::{SubCommands, TopLevelCmd};
@@ -776,7 +776,9 @@ impl App {
     }
 
     fn save_settings(&mut self) -> Result<(), AppError> {
-        if self.allow_modifying_config && !self.cancel_actors.is_cancelled() {
+        if self.allow_modifying_config
+        // && !self.cancel_actors.is_cancelled()
+        {
             self.settings.save(&self.config_path)
         } else {
             Ok(())
@@ -784,9 +786,8 @@ impl App {
     }
 
     pub fn try_save_device(&mut self, given_device: Option<&DeviceInfo>) {
-        if self.should_save_ble_device
-            && self.allow_modifying_config
-            && !self.cancel_actors.is_cancelled()
+        if self.should_save_ble_device && self.allow_modifying_config
+        // && !self.cancel_actors.is_cancelled()
         {
             let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
 

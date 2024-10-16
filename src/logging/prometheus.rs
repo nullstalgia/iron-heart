@@ -5,7 +5,6 @@ use crate::settings::PrometheusSettings;
 
 use chrono::{DateTime, Local};
 use http::{header, HeaderName, HeaderValue};
-use log::*;
 use prometheus::proto::MetricFamily;
 use reqwest::Client;
 use std::collections::BTreeMap;
@@ -14,6 +13,7 @@ use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver as BReceiver;
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 use prometheus::{Encoder, IntGauge, Opts, Registry, TextEncoder};
 

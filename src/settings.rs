@@ -1,10 +1,10 @@
 use config::{Config, File as ConfigFile};
-use log::{info, LevelFilter};
 use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
+use tracing::{info, level_filters::LevelFilter};
 
 use crate::errors::AppError;
 
@@ -263,6 +263,6 @@ impl Settings {
         Ok(())
     }
     pub fn get_log_level(&self) -> LevelFilter {
-        LevelFilter::from_str(&self.misc.log_level).unwrap_or(LevelFilter::Info)
+        LevelFilter::from_str(&self.misc.log_level).unwrap_or(LevelFilter::INFO)
     }
 }

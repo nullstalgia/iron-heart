@@ -5,7 +5,7 @@ use crate::AppResult;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_input::backend::crossterm::EventHandler;
 
-use log::*;
+use tracing::{debug, error};
 
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {

@@ -1,7 +1,7 @@
-use log::info;
 use ratatui::widgets::TableState;
 use serde_derive::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
+use tracing::info;
 
 use tui_input::Input;
 

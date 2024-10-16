@@ -1,11 +1,11 @@
 use directories::BaseDirs;
-use log::{debug, warn};
 use std::{
     env::current_exe,
     ffi::OsStr,
     path::{Path, PathBuf},
 };
 use tokio::fs::read_dir;
+use tracing::{debug, warn};
 
 use crate::errors::AppError;
 

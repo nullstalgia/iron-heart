@@ -5,7 +5,7 @@ use tiny_http::{Response, Server};
 #[derive(FromArgs)]
 struct Args {
     /// port to listen on (default: 9000)
-    #[argh(option, default = "9000")]
+    #[argh(option, default = "9000", short = 'p')]
     port: u16,
 }
 

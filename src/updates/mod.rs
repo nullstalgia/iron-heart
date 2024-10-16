@@ -9,7 +9,6 @@ use crate::ui::table_state_scroll;
 
 use futures_util::StreamExt;
 use http::HeaderMap;
-use log::{error, info};
 use self_update::cargo_crate_version;
 use self_update::update::ReleaseAsset;
 use self_update::version::bump_is_greater;
@@ -17,6 +16,7 @@ use self_update::{get_target, update::Release};
 use sha2::{Digest, Sha512};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
+use tracing::{error, info};
 use tui::{UpdateCheckChoice, UpdatePromptChoice};
 
 #[cfg(windows)]

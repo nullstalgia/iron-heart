@@ -1,6 +1,5 @@
 use addresses::OscAddresses;
 use hr::{make_mimic_data, send_raw_activity_param, send_raw_beat_params, send_raw_hr_status};
-use log::*;
 use rosc::OscTime;
 use std::net::{SocketAddrV4, UdpSocket};
 use std::str::FromStr;
@@ -8,6 +7,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{Receiver as BReceiver, Sender as BSender};
 use tokio::time::{self, interval, Duration, Instant, Interval};
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 use crate::app::{AppUpdate, ErrorPopup};
 use crate::broadcast;

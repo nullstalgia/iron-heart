@@ -5,7 +5,7 @@ use crossterm::{
 };
 
 use color_eyre::eyre::Result;
-use log::*;
+use tracing::error;
 // use std::error::Error;
 
 // https://ratatui.rs/recipes/apps/better-panic/
@@ -30,6 +30,7 @@ pub fn initialize_panic_handler() -> Result<()> {
         {
             eprintln!("{}", msg); // prints color-eyre stack trace to stderr
             use human_panic::{handle_dump, print_msg, Metadata};
+            use tracing::info;
             let meta = Metadata::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
             let file_path = handle_dump(&meta, panic_info);
@@ -49,8 +50,6 @@ pub fn initialize_panic_handler() -> Result<()> {
                 .verbosity(better_panic::Verbosity::Full)
                 .create_panic_handler()(panic_info);
         }
-
-        log::logger().flush();
 
         std::process::exit(libc::EXIT_FAILURE);
     }));

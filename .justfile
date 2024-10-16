@@ -28,8 +28,8 @@ build-release:
 test:
   cargo test
 
-test-integration:
-  cargo test -- --ignored --nocapture --test-threads=1
+test-integration *ARGS:
+  cargo test -- --ignored --nocapture --test-threads=1 {{ARGS}}
 
 clippy:
   cargo clippy --all-targets --all-features

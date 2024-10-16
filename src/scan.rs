@@ -6,13 +6,13 @@ use btleplug::api::{
 };
 use btleplug::platform::Manager;
 use futures::StreamExt;
-use log::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 
 /// Scans for Bluetooth devices and sends the information to the provided `mpsc::Sender`.
 /// The scan can be paused by setting the `pause_signal` to `true`.

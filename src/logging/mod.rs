@@ -4,10 +4,10 @@ use crate::broadcast;
 use crate::settings::{MiscSettings, PrometheusSettings};
 
 use file::FileLoggingActor;
-use log::*;
 use prometheus::PrometheusLoggingActor;
 use tokio::sync::broadcast::{Receiver as BReceiver, Sender as BSender};
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
 mod file;
 mod prometheus;

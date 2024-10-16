@@ -34,8 +34,8 @@ impl From<u16> for JSONHeartRate {
     }
 }
 
-//#[test]
-#[tokio::test]
+#[test_log::test(tokio::test)]
+#[test_log(default_log_filter = "debug")]
 #[ignore = "can't be concurrent"]
 #[timeout(10000)] // 10s timeout
 async fn websocket_to_txt() -> Result<(), iron_heart::errors::AppError> {
