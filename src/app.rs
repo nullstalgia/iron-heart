@@ -370,16 +370,18 @@ impl App {
             AppRx::AppUpdate(hr_data) => {
                 match hr_data {
                     AppUpdate::HeartRateStatus(data) => {
-                        // Assume we have proper data now
-                        self.view = AppView::HeartRateView;
-                        if self.sub_state == SubState::ConnectingForHeartRate {
-                            self.sub_state = SubState::None;
+                        if data.heart_rate_bpm > 0 {
+                            // Assume we have proper data now
+                            self.view = AppView::HeartRateView;
+                            if self.sub_state == SubState::ConnectingForHeartRate {
+                                self.sub_state = SubState::None;
+                            }
+                            // Dismiss intermittent errors if we just got a notification packet
+                            if let Some(ErrorPopup::Intermittent(_)) = self.error_message {
+                                self.error_message = None;
+                            }
+                            self.append_to_history(&data);
                         }
-                        // Dismiss intermittent errors if we just got a notification packet
-                        if let Some(ErrorPopup::Intermittent(_)) = self.error_message {
-                            self.error_message = None;
-                        }
-                        self.append_to_history(&data);
                         self.heart_rate_status = data;
                     }
                     AppUpdate::Error(error) => self.handle_error_update(error),
@@ -944,7 +946,7 @@ impl App {
     }
 
     pub fn handle_error_update(&mut self, error: ErrorPopup) {
-        // Don't override a fatal error popup
+        // Never override a fatal error popup
         match self.error_message {
             Some(ErrorPopup::Fatal(_)) | Some(ErrorPopup::FatalDetailed(_, _)) => return,
             _ => {}
@@ -957,6 +959,11 @@ impl App {
                 // Just for the UI, "stop" the scan
                 self.ble_scan_paused.store(true, Ordering::SeqCst);
             }
+            // Don't let an intermittent error override a "UserMustDismiss" error
+            ErrorPopup::Intermittent(_) => match self.error_message {
+                Some(ErrorPopup::UserMustDismiss(_)) => {}
+                _ => self.error_message = Some(error),
+            },
             _ => self.error_message = Some(error),
         }
     }
