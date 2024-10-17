@@ -64,7 +64,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter", "chrono"] }
 tracing-appender = "0.2"
 tracing-log = "0.2.0"
 rolling-file = "0.2.0"
-
+# console-subscriber = "0.4.0"
 
 [target.'cfg(windows)'.dependencies]
 # Using fork until lilopkins/lnk-rs's #25 and #26 resolve, not sure if #21 is ready yet
@@ -92,3 +92,7 @@ test-log = { version = "0.2.16", default-features = false, features = [
     "trace",
     "unstable",
 ] }
+
+# For console-subscriber
+# [build]
+# rustflags = ["--cfg", "tokio_unstable"]

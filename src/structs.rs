@@ -4,7 +4,7 @@ use btleplug::api::CharPropFlags;
 use uuid::Uuid;
 
 /// A struct to hold the information of a Bluetooth device.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 pub struct DeviceInfo {
     // TODO id vs address
@@ -59,6 +59,7 @@ impl DeviceInfo {
 }
 
 /// A struct to hold the information of a GATT Characteristic.
+#[derive(Debug)]
 pub struct Characteristic {
     pub uuid: Uuid,
     pub properties: CharPropFlags,

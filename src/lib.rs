@@ -74,6 +74,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
         .file_name()
         .expect("Couldn't build log path!")
         .to_owned();
+    // let console = console_subscriber::spawn();
     let file_appender = BasicRollingFileAppender::new(
         log_name,
         RollingConditionBasic::new().max_size(1024 * 1024 * 5),
@@ -95,6 +96,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     // Allow everything through but limit lnk to just info, since it spits out a bit too much when reading shortcuts
     let env_filter = tracing_subscriber::EnvFilter::new("trace,lnk=info");
     tracing_subscriber::registry()
+        // .with(console)
         .with(env_filter)
         .with(fmt_layer)
         .init();

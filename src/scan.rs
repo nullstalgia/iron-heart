@@ -4,7 +4,7 @@ use crate::structs::{Characteristic, DeviceInfo};
 use btleplug::api::{
     Central, CentralEvent, Manager as _, Peripheral, PeripheralProperties, ScanFilter,
 };
-use btleplug::platform::Manager;
+use btleplug::platform::{Adapter, Manager};
 use futures::StreamExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -22,39 +22,44 @@ pub async fn bluetooth_event_thread(
     pause_signal: Arc<AtomicBool>,
     cancel_token: CancellationToken,
 ) {
+    info!("Bluetooth CentralEvent thread started!");
     // If no event is heard in this period,
     // the manager and adapter will be recreated
     // (if the scan isn't paused)
     let duration = Duration::from_secs(30);
 
+    let manager = match Manager::new().await {
+        Ok(manager) => manager,
+        Err(e) => {
+            error!("Failed to create manager: {}", e);
+            tx.send(DeviceUpdate::Error(ErrorPopup::detailed(
+                "Failed to create manager: ",
+                e.into(),
+            )))
+            .await
+            .expect("Failed to send error message");
+            return;
+        }
+    };
+
+    let central: Adapter;
+
     'adapter: loop {
-        info!("Bluetooth CentralEvent thread started!");
         if cancel_token.is_cancelled() {
             info!("Shutting down Bluetooth CentralEvent thread!");
-            break 'adapter;
+            return;
         }
-        let manager = match Manager::new().await {
-            Ok(manager) => manager,
-            Err(e) => {
-                error!("Failed to create manager: {}", e);
-                tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
-                    "Failed to create manager: {}",
-                    e
-                ))))
-                .await
-                .expect("Failed to send error message");
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue 'adapter;
-            }
-        };
-        let central = match manager.adapters().await.and_then(|adapters| {
+        match manager.adapters().await.and_then(|adapters| {
             debug!("Found adapters: {adapters:#?}");
             adapters
                 .into_iter()
                 .next()
                 .ok_or(btleplug::Error::DeviceNotFound)
         }) {
-            Ok(central) => central,
+            Ok(adapter) => {
+                central = adapter;
+                break 'adapter;
+            }
             Err(_) => {
                 error!("No Bluetooth adapters found!");
                 tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(
@@ -64,128 +69,134 @@ pub async fn bluetooth_event_thread(
                 .await
                 .expect("Failed to send error message");
                 tokio::time::sleep(Duration::from_secs(10)).await;
-                continue 'adapter;
             }
         };
+    }
 
-        if let Err(e) = central.start_scan(ScanFilter::default()).await {
-            error!("Scanning failure: {}", e);
-            tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
-                "Scanning failure: {}",
+    if let Err(e) = central.start_scan(ScanFilter::default()).await {
+        error!("Scanning failure: {}", e);
+        tx.send(DeviceUpdate::Error(ErrorPopup::Fatal(format!(
+            "Scanning failure: {}",
+            e
+        ))))
+        .await
+        .expect("Failed to send error message");
+        // tokio::time::sleep(Duration::from_secs(10)).await;
+        return;
+    }
+
+    let mut events = match central.events().await {
+        Ok(e) => e,
+        Err(e) => {
+            error!("BLE failure: {}", e);
+            tx.send(DeviceUpdate::Error(ErrorPopup::Fatal(format!(
+                "BLE failure: {}",
                 e
             ))))
             .await
             .expect("Failed to send error message");
-            tokio::time::sleep(Duration::from_secs(10)).await;
-            continue 'adapter;
+            // tokio::time::sleep(Duration::from_secs(5)).await;
+            return;
         }
-        let mut events = match central.events().await {
-            Ok(e) => e,
-            Err(e) => {
-                error!("BLE failure: {}", e);
+    };
+    info!("Inital scanning started!");
+    let mut scanning = true;
+
+    'events: loop {
+        if pause_signal.load(Ordering::SeqCst) {
+            if scanning {
+                info!("Pausing scan");
+                central.stop_scan().await.expect("Failed to stop scan!");
+                scanning = false;
+            }
+        } else if !scanning {
+            info!("Resuming scan");
+            if let Err(e) = central.start_scan(ScanFilter::default()).await {
+                error!("Failed to resume scanning: {}", e);
                 tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
-                    "BLE failure: {}",
+                    "Failed to resume scanning: {}",
                     e
                 ))))
                 .await
                 .expect("Failed to send error message");
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue 'adapter;
+                break 'events;
             }
-        };
-        info!("Inital scanning started!");
-        let mut scanning = true;
+            scanning = true;
+        }
 
-        'events: loop {
-            if pause_signal.load(Ordering::SeqCst) {
+        tokio::select! {
+            Some(event) = events.next() => {
+                match event {
+                    CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => {
+                        if let Ok(device) = central.peripheral(&id).await {
+                            let properties = device
+                                .properties()
+                                .await
+                                .unwrap()
+                                .unwrap_or(PeripheralProperties::default());
+
+                            if properties.services.is_empty() {
+                                continue 'events;
+                            }
+
+                            // Add the device's information to the discovered list
+                            let device = DeviceInfo::new(
+                                device.id().to_string(),
+                                properties.local_name,
+                                properties.tx_power_level,
+                                properties.address.to_string(),
+                                properties.rssi,
+                                properties.manufacturer_data,
+                                properties.services,
+                                properties.service_data,
+                                device.clone(),
+                            );
+
+                            // Send a clone of the accumulated device information so far
+                            if tx.send(DeviceUpdate::DeviceInfo(device)).await.is_err() {
+                                error!("Couldn't send device info update!");
+                                break 'events;
+                            }
+                        }
+                    }
+                    CentralEvent::DeviceDisconnected(id) => {
+                        warn!("Device disconnected: {}", id);
+                        if tx.send(DeviceUpdate::DisconnectedEvent(id.to_string())).await.is_err() {
+                            error!("Couldn't send DisconnectedEvent!");
+                            break 'events;
+                        }
+                    }
+                    CentralEvent::DeviceConnected(id) => {
+                        info!("Device connected: {}", id);
+                        if tx.send(DeviceUpdate::ConnectedEvent(id.to_string())).await.is_err() {
+                            error!("Couldn't send ConnectedEvent!");
+                            break 'events;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ = cancel_token.cancelled() => {
+                info!("Shutting down Bluetooth CentralEvent thread!");
+                break 'events;
+            }
+            _ = tokio::time::sleep(duration) => {
+                debug!("CentralEvent timeout");
+                if !pause_signal.load(Ordering::SeqCst) {
+                    warn!("Restarting scan!");
+                    if scanning {
+                        let _ = central.stop_scan().await;
+                        scanning = false;
+                    }
+                }
+            }
+            Some(()) = restart_signal.recv() => {
+                warn!("Got signal to restart scan from HR Notif thread!");
+                // debug!("Central State was: {central:#?}");
+                pause_signal.store(false, Ordering::SeqCst);
                 if scanning {
-                    info!("Pausing scan");
-                    central.stop_scan().await.expect("Failed to stop scan!");
+                    let _ = central.stop_scan().await;
                     scanning = false;
-                }
-            } else if !scanning {
-                info!("Resuming scan");
-                if let Err(e) = central.start_scan(ScanFilter::default()).await {
-                    error!("Failed to resume scanning: {}", e);
-                    tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
-                        "Failed to resume scanning: {}",
-                        e
-                    ))))
-                    .await
-                    .expect("Failed to send error message");
-                    tokio::time::sleep(Duration::from_secs(10)).await;
-                    break 'events;
-                }
-                scanning = true;
-            }
-            tokio::select! {
-                Some(event) = events.next() => {
-                    match event {
-                        CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => {
-                            if let Ok(device) = central.peripheral(&id).await {
-                                let properties = device
-                                    .properties()
-                                    .await
-                                    .unwrap()
-                                    .unwrap_or(PeripheralProperties::default());
-
-                                if properties.services.is_empty() {
-                                    continue 'events;
-                                }
-
-                                // Add the device's information to the discovered list
-                                let device = DeviceInfo::new(
-                                    device.id().to_string(),
-                                    properties.local_name,
-                                    properties.tx_power_level,
-                                    properties.address.to_string(),
-                                    properties.rssi,
-                                    properties.manufacturer_data,
-                                    properties.services,
-                                    properties.service_data,
-                                    device.clone(),
-                                );
-
-                                // Send a clone of the accumulated device information so far
-                                if tx.send(DeviceUpdate::DeviceInfo(device)).await.is_err() {
-                                    error!("Couldn't send device info update!");
-                                    break 'adapter;
-                                }
-                            }
-                        }
-                        CentralEvent::DeviceDisconnected(id) => {
-                            warn!("Device disconnected: {}", id);
-                            if tx.send(DeviceUpdate::DisconnectedEvent(id.to_string())).await.is_err() {
-                                error!("Couldn't send DisconnectedEvent!");
-                                break 'adapter;
-                            }
-                        }
-                        CentralEvent::DeviceConnected(id) => {
-                            info!("Device connected: {}", id);
-                            if tx.send(DeviceUpdate::ConnectedEvent(id.to_string())).await.is_err() {
-                                error!("Couldn't send ConnectedEvent!");
-                                break 'adapter;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                _ = cancel_token.cancelled() => {
-                    info!("Shutting down Bluetooth CentralEvent thread!");
-                    break 'adapter;
-                }
-                _ = tokio::time::sleep(duration) => {
-                    debug!("CentralEvent timeout");
-                    if !pause_signal.load(Ordering::SeqCst) {
-                        warn!("Restarting manager and adapter!");
-                        break 'events;
-                    }
-                }
-                Some(()) = restart_signal.recv() => {
-                    warn!("Got signal to restart BLE manager and adapter!");
-                    debug!("Central State was: {central:#?}");
-                    pause_signal.store(false, Ordering::SeqCst);
-                    break 'events;
                 }
             }
         }

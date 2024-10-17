@@ -49,6 +49,7 @@ pub enum AppRx {
     UpdateReply(UpdateReply),
 }
 
+#[derive(Debug)]
 pub enum DeviceUpdate {
     ConnectedEvent(String),
     DisconnectedEvent(String),
@@ -351,14 +352,17 @@ impl App {
         tokio::select! {
             // Check for updates from BLE Thread
             Some(new_device_info) = self.ble_rx.recv() => {
+                // debug!("ble: {new_device_info:?}");
                 AppRx::DeviceUpdate(new_device_info)
             }
             // HR Notification Updates
             Ok(hr_data) = self.broadcast_rx.recv() => {
+                // debug!("broadcast: {hr_data:?}");
                 AppRx::AppUpdate(hr_data)
             }
             // Replies from the executable self-updating task
             Some(data) = self.updates.reply_rx.recv() => {
+                // debug!("update: {data:?}");
                 AppRx::UpdateReply(data)
             }
         }
@@ -370,7 +374,7 @@ impl App {
             AppRx::AppUpdate(hr_data) => {
                 match hr_data {
                     AppUpdate::HeartRateStatus(data) => {
-                        if data.heart_rate_bpm > 0 {
+                        if data.heart_rate_bpm > 0 || !data.rr_intervals.is_empty() {
                             // Assume we have proper data now
                             self.view = AppView::HeartRateView;
                             if self.sub_state == SubState::ConnectingForHeartRate {
@@ -546,6 +550,10 @@ impl App {
     }
 
     pub fn connect_for_hr(&mut self, quick_connect_device: Option<&DeviceInfo>) {
+        if self.hr_thread_handle.is_some() {
+            debug!("Not spawning extra notification thread");
+            return;
+        }
         let selected_device = if let Some(device) = quick_connect_device {
             device
         } else {
