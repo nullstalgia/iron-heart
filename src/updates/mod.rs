@@ -272,9 +272,11 @@ impl UpdateBackend {
             }
             Ok(Err(err)) => {
                 error!("Error getting latest release: {}", err);
+                self.command_rx.close();
             }
             Err(err) => {
                 error!("Error joining get_latest_release: {}", err);
+                self.command_rx.close();
             }
         }
     }
@@ -433,7 +435,6 @@ impl App {
                         self.settings.updates.allow_checking_for_updates = true;
                         self.settings.updates.update_check_prompt = false;
                         self.try_save_settings();
-                        self.sub_state = SubState::None;
                         self.auto_update_prompt();
                     }
                 }

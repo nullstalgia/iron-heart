@@ -487,25 +487,16 @@ impl App {
     }
 
     pub fn auto_update_prompt(&mut self) {
-        // Check if we've allowed checking for updates
-        // If we have, or just did, spawn the update checking task
-        // It'll have a oneshot it can send a new version to ask for confirmation for
+        self.sub_state = SubState::None;
 
-        // In case the user manually set updates true without also changing prompt
+        // In case the user set updates true externally without also changing prompt
         if self.settings.updates.allow_checking_for_updates {
-            self.sub_state = SubState::None;
             self.spawn_update_check();
-            return;
-        }
-
-        // If we haven't asked the user yet, do that first.
-        if self.settings.updates.update_check_prompt {
+        } else if self.settings.updates.update_check_prompt {
+            // But if we haven't asked the user yet, do that first.
             self.prompt_state.select(Some(0));
             self.sub_state = SubState::UpdateAllowCheckPrompt;
-            return;
         }
-
-        self.sub_state = SubState::None;
     }
 
     fn spawn_update_check(&mut self) {

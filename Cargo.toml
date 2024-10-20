@@ -92,7 +92,3 @@ test-log = { version = "0.2.16", default-features = false, features = [
     "trace",
     "unstable",
 ] }
-
-# For console-subscriber
-# [build]
-# rustflags = ["--cfg", "tokio_unstable"]

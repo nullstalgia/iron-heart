@@ -107,25 +107,32 @@ impl BleMonitorActor {
 
                             info!("Heart Rate Monitor stream closed!");
                             device.disconnect().await?;
+                            if self.cancel_token.is_cancelled() {
+                                break 'connection;
+                            }
                             broadcast!(broadcast_tx, ErrorPopup::Intermittent(
                                 "Connection timed out".into(),
                             ));
                         }
                         Err(e) => {
+                            device.disconnect().await?;
+
                             error!("BLE Connection error: {}", e);
                             broadcast!(broadcast_tx, ErrorPopup::Intermittent(format!(
                                 "BLE Connection error: {}",
                                 e
                             )));
-                            // This is the "Device Unreachable" error
-                            // Weirdly enough, the Central manager doesn't get this error, only we do here at the HR level
-                            // So, we'll just restart the BLE manager to try to avoid continuous failed reconnects
-                            // And wait a moment for the manager to get it's bearings.
-                            if let btleplug::Error::NotConnected = e {
-                                device.disconnect().await?;
-                                restart_tx.send(()).await.expect("Couldn't restart BLE Manager!");
-                                tokio::time::sleep(Duration::from_secs(20)).await;
+                            // `NotConnected` is the "Device Unreachable" error
+                            // Weirdly enough, the Central manager doesn't get that error, only we do here at the HR level
+                            // `DeviceNotFound` can also occur when being disconnected for a long time
+                            // Telling the manager to restart its scan when these crop up help avoid needing to restart the whole app
+                            match e {
+                                btleplug::Error::NotConnected | btleplug::Error::DeviceNotFound => {
+                                    restart_tx.send(()).await.expect("Couldn't restart BLE Manager!");
+                                },
+                                _ => {}
                             }
+                            tokio::time::sleep(Duration::from_secs(20)).await;
                         }
                     }
                 }

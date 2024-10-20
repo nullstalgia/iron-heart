@@ -126,6 +126,7 @@ pub async fn bluetooth_event_thread(
 
         tokio::select! {
             Some(event) = events.next() => {
+                // debug!("{:?}", event);
                 match event {
                     CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => {
                         if let Ok(device) = central.peripheral(&id).await {
@@ -184,20 +185,12 @@ pub async fn bluetooth_event_thread(
                 debug!("CentralEvent timeout");
                 if !pause_signal.load(Ordering::SeqCst) {
                     warn!("Restarting scan!");
-                    if scanning {
-                        let _ = central.stop_scan().await;
-                        scanning = false;
-                    }
                 }
             }
             Some(()) = restart_signal.recv() => {
                 warn!("Got signal to restart scan from HR Notif thread!");
                 // debug!("Central State was: {central:#?}");
                 pause_signal.store(false, Ordering::SeqCst);
-                if scanning {
-                    let _ = central.stop_scan().await;
-                    scanning = false;
-                }
             }
         }
     }
