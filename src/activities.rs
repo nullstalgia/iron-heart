@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::app::{App, AppUpdate, SubState};
+use crate::app::{App, AppUpdate, AppView, SubState};
 use crate::broadcast;
 use crate::errors::AppError;
 
@@ -326,16 +326,17 @@ pub mod tui {
 
 impl App {
     pub fn activities_select_prompt(&mut self) {
+        if self.view != AppView::HeartRateView || self.sub_state != SubState::None {
+            return;
+        }
         if self.settings.activities.enabled {
             self.activities.reset();
             self.sub_state = SubState::ActivitySelection;
         }
     }
     pub fn activities_new_prompt(&mut self) {
-        if self.settings.activities.enabled {
-            self.activities.reset();
-            self.sub_state = SubState::ActivityCreation;
-        }
+        self.activities.reset();
+        self.sub_state = SubState::ActivityCreation;
     }
     pub fn activities_enter_pressed(&mut self) {
         match self.sub_state {

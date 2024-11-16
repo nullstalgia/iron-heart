@@ -8,6 +8,9 @@ on:
   release:
     types: [created]
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   upload-assets:
     strategy:
@@ -37,3 +40,6 @@ jobs:
           archive: $bin-$tag-$target
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha512
+      - uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "**/*.tar.gz,**/*.zip"

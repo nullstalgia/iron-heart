@@ -18,13 +18,13 @@ use crate::broadcast;
 use super::measurement::parse_hrm;
 use super::twitcher::Twitcher;
 
-pub const HEART_RATE_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180d_0000_1000_8000_00805f9b34fb);
+pub const HEART_RATE_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180d_0000_1000_8000_00805f9b34fb); // 0000180d-0000-1000-8000-00805f9b34fb
 pub const HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID: Uuid =
-    Uuid::from_u128(0x00002a37_0000_1000_8000_00805f9b34fb);
+    Uuid::from_u128(0x00002a37_0000_1000_8000_00805f9b34fb); // 00002a37-0000-1000-8000-00805f9b34fb
 
-//pub const BATTERY_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb);
+//pub const BATTERY_SERVICE_UUID: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb); // 0000180f-0000-1000-8000-00805f9b34fb
 pub const BATTERY_LEVEL_CHARACTERISTIC_UUID: Uuid =
-    Uuid::from_u128(0x00002a19_0000_1000_8000_00805f9b34fb);
+    Uuid::from_u128(0x00002a19_0000_1000_8000_00805f9b34fb); // 00002a19-0000-1000-8000-00805f9b34fb
 
 struct BleMonitorActor {
     peripheral: DeviceInfo,
@@ -128,7 +128,7 @@ impl BleMonitorActor {
                             // Telling the manager to restart its scan when these crop up help avoid needing to restart the whole app
                             match e {
                                 btleplug::Error::NotConnected | btleplug::Error::DeviceNotFound => {
-                                    restart_tx.send(()).await.expect("Couldn't restart BLE Manager!");
+                                    restart_tx.send(()).await.expect("Couldn't trigger BLE Scan!");
                                 },
                                 _ => {}
                             }

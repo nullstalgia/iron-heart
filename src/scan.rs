@@ -185,6 +185,12 @@ pub async fn bluetooth_event_thread(
                 debug!("CentralEvent timeout");
                 if !pause_signal.load(Ordering::SeqCst) {
                     warn!("Restarting scan!");
+                    if scanning {
+                        if let Err(e) = central.stop_scan().await {
+                            warn!("Error stopping scan: {e}");
+                        }
+                        scanning = false;
+                    }
                 }
             }
             Some(()) = restart_signal.recv() => {

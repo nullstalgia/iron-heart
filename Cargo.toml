@@ -92,3 +92,7 @@ test-log = { version = "0.2.16", default-features = false, features = [
     "trace",
     "unstable",
 ] }
+
+# [lints.clippy]
+# pedantic = "deny"
+# nursery = "deny"
