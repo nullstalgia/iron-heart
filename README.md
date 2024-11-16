@@ -16,7 +16,7 @@ A BLE Heart Rate Monitor bridge built in Rust for use with OSC in Social VR, OBS
 - Quick reconnection to saved device on app startup
 - Terminal UI and Charts: Powered by [Ratatui](https://ratatui.rs/)
 - CSV Logging, review your past sessions!
-- Prometheus Push logging for [metrics](pic)! Compatible with [VictoriaMetrics](https://docs.victoriametrics.com/url-examples/#apiv1importprometheus) too!
+- Prometheus Push logging for [metrics](https://github.com/user-attachments/assets/bd2e2aff-72fb-4d70-97ad-6522f80b18ac)! Compatible with [VictoriaMetrics](https://docs.victoriametrics.com/url-examples/#apiv1importprometheus) too!
 - Text file output, perfect for an OBS Text Source!
 - Self-Updating!
 - Can auto-start with VRChat using VRCX's App Launcher
