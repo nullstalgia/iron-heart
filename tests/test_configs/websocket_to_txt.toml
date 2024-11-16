@@ -1,0 +1,16 @@
+[osc]
+enabled = false
+
+[websocket]
+enabled = true
+port = 5566
+
+[misc]
+log_level = "debug"
+write_bpm_to_file = true
+write_rr_to_file = false
+bpm_file_path = "tests/output/bpm.txt"
+log_sessions_to_csv = false
+
+[dummy]
+enabled = false

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Comment=A BLE Heart Rate Monitor bridge built in Rust
+Terminal=true
+Name=iron-heart
+Exec=iron-heart
+Icon=iron-heart.png
+Categories=Utility;
+Keywords=heart;bpm;
+NoDisplay=false

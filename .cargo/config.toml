@@ -1,0 +1,3 @@
+# # For console-subscriber
+# [build]
+# rustflags = ["--cfg", "tokio_unstable"]

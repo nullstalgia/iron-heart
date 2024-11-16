@@ -1,9 +1,12 @@
-use config::{Config, ConfigError, File as ConfigFile};
-use log::LevelFilter;
+use config::{Config, File as ConfigFile};
 use serde_derive::{Deserialize, Serialize};
-use std::env;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
+use std::str::FromStr;
+use tracing::{info, level_filters::LevelFilter};
+
+use crate::errors::AppError;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MiscSettings {
@@ -13,6 +16,11 @@ pub struct MiscSettings {
     pub bpm_file_path: String,
     pub log_sessions_to_csv: bool,
     pub log_sessions_csv_path: String,
+    pub vrcx_shortcut_prompt: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct TuiSettings {
     pub session_stats_use_12hr: bool,
     pub chart_bpm_enabled: bool,
     pub chart_rr_enabled: bool,
@@ -30,9 +38,13 @@ pub struct BLESettings {
     pub rr_ignore_after_empty: u16,
 }
 
+// TODO Async get for osc settings due to oscquery
+// and find some way to deal with the dc's/osc restarts?
+// oscquery is gonna suuuck
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-pub struct OSCSettings {
-    // enabled: bool,
+pub struct OscSettings {
+    pub enabled: bool,
     pub host_ip: String,
     pub target_ip: String,
     pub port: u16,
@@ -40,19 +52,25 @@ pub struct OSCSettings {
     pub only_positive_float_bpm: bool,
     pub hide_disconnections: bool,
     pub max_hide_disconnection_sec: u16,
-    pub address_prefix: String,
-    pub param_hrm_connected: String,
-    pub param_hiding_disconnect: String,
-    pub param_hrm_battery_int: String,
-    pub param_hrm_battery_float: String,
-    pub param_beat_toggle: String,
-    pub param_beat_pulse: String,
-    pub param_bpm_int: String,
-    pub param_bpm_float: String,
-    pub param_latest_rr_int: String,
     pub twitch_rr_threshold_ms: u16,
-    pub param_rr_twitch_up: String,
-    pub param_rr_twitch_down: String,
+    pub addresses: OscAddrConf,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct OscAddrConf {
+    pub prefix: String,
+    pub hrm_connected: String,
+    pub hiding_disconnect: String,
+    pub hrm_battery_int: String,
+    pub hrm_battery_float: String,
+    pub beat_toggle: String,
+    pub beat_pulse: String,
+    pub bpm_int: String,
+    pub bpm_float: String,
+    pub latest_rr_int: String,
+    pub rr_twitch_up: String,
+    pub rr_twitch_down: String,
+    pub activity: String,
     // TODO Session Max/Min/Avg Params?
 }
 
@@ -73,51 +91,100 @@ pub struct WebSocketSettings {
     pub port: u16,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct ActivitiesSettings {
+    pub enabled: bool,
+    pub remember_last: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct PrometheusSettings {
+    pub enabled: bool,
+    pub url: String,
+    pub header: String,
+    // Unused for now, maybe someone'll ask for it.
+    // pub batch_size: usize,
+    pub metrics: PrometheusMetrics,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct PrometheusMetrics {
+    pub bpm: String,
+    pub rr: String,
+    pub battery: String,
+    pub twitch_up: String,
+    pub twitch_down: String,
+    pub activity: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct AutoUpdateSettings {
+    pub update_check_prompt: bool,
+    pub allow_checking_for_updates: bool,
+    pub version_skipped: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Settings {
-    pub osc: OSCSettings,
+    pub osc: OscSettings,
     pub ble: BLESettings,
     pub websocket: WebSocketSettings,
     pub misc: MiscSettings,
     pub dummy: DummySettings,
+    pub tui: TuiSettings,
+    pub updates: AutoUpdateSettings,
+    pub activities: ActivitiesSettings,
+    pub prometheus: PrometheusSettings,
 }
 
 impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
-        // TODO Maybe not use exe path so people can install to path?
-        // Not sure about the use case amount though...
-        let exe_path = env::current_exe().expect("Failed to get executable path");
-        let config_path = exe_path.with_extension("toml");
+    #[allow(clippy::needless_late_init)]
+    pub fn load(config_path: PathBuf, required: bool) -> Result<Self, AppError> {
+        let default_log_level;
+        let default_session_log_path;
+        let default_bpm_txt_path;
 
-        let default_log_level = if cfg!(debug_assertions) {
-            "debug"
+        if !cfg!(debug_assertions) {
+            // Release build default params
+            default_log_level = "debug";
+            default_session_log_path = "session_logs";
+            default_bpm_txt_path = "bpm.txt"
         } else {
-            "info"
+            // Debug build default params
+            default_log_level = "debug";
+            // (assuming it's in target/debug/)
+            default_session_log_path = "../../session_logs";
+            default_bpm_txt_path = "../../bpm.txt"
         };
 
-        let s = Config::builder()
+        // TODO: New way of doing defaults
+        // Either use serde's defaults and skip the extra config crate entirely (doesn't look like it supports serde defaults?)
+        // or switch to something more sane like figment or confique
+        let settings = Config::builder()
             // Start off by merging in the "default" configuration file
-            .add_source(ConfigFile::from(config_path).required(false))
+            .add_source(ConfigFile::from(config_path).required(required))
+            .set_default("osc.enabled", true)?
             .set_default("osc.host_ip", "0.0.0.0")?
             .set_default("osc.target_ip", "127.0.0.1")?
             .set_default("osc.port", 9000)?
             .set_default("osc.pulse_length_ms", 100)?
             .set_default("osc.only_positive_float_bpm", false)?
-            .set_default("osc.address_prefix", "/avatar/parameters/")?
             .set_default("osc.hide_disconnections", false)?
             .set_default("osc.max_hide_disconnection_sec", 60)?
-            .set_default("osc.param_hrm_connected", "isHRConnected")?
-            .set_default("osc.param_hiding_disconnect", "isHRReconnecting")?
-            .set_default("osc.param_hrm_battery_int", "HRBattery")?
-            .set_default("osc.param_hrm_battery_float", "HRBatteryFloat")?
-            .set_default("osc.param_beat_toggle", "HeartBeatToggle")?
-            .set_default("osc.param_beat_pulse", "isHRBeat")?
-            .set_default("osc.param_bpm_int", "HR")?
-            .set_default("osc.param_bpm_float", "floatHR")?
-            .set_default("osc.param_latest_rr_int", "RRInterval")?
             .set_default("osc.twitch_rr_threshold_ms", 50)?
-            .set_default("osc.param_rr_twitch_up", "HRTwitchUp")?
-            .set_default("osc.param_rr_twitch_down", "HRTwitchDown")?
+            .set_default("osc.addresses.prefix", "/avatar/parameters/")?
+            .set_default("osc.addresses.hrm_connected", "isHRConnected")?
+            .set_default("osc.addresses.hiding_disconnect", "isHRReconnecting")?
+            .set_default("osc.addresses.hrm_battery_int", "HRBattery")?
+            .set_default("osc.addresses.hrm_battery_float", "HRBatteryFloat")?
+            .set_default("osc.addresses.beat_toggle", "HeartBeatToggle")?
+            .set_default("osc.addresses.beat_pulse", "isHRBeat")?
+            .set_default("osc.addresses.bpm_int", "HR")?
+            .set_default("osc.addresses.bpm_float", "floatHR")?
+            .set_default("osc.addresses.latest_rr_int", "RRInterval")?
+            .set_default("osc.addresses.rr_twitch_up", "HRTwitchUp")?
+            .set_default("osc.addresses.rr_twitch_down", "HRTwitchDown")?
+            .set_default("osc.addresses.activity", "HRActivity")?
             .set_default("ble.never_ask_to_save", false)?
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?
@@ -127,46 +194,75 @@ impl Settings {
             .set_default("misc.log_level", default_log_level)?
             .set_default("misc.write_bpm_to_file", false)?
             .set_default("misc.write_rr_to_file", false)?
-            .set_default("misc.bpm_file_path", "bpm.txt")?
+            .set_default("misc.bpm_file_path", default_bpm_txt_path)?
             .set_default("misc.log_sessions_to_csv", false)?
-            .set_default("misc.log_sessions_csv_path", "session_logs")?
-            .set_default("misc.session_stats_use_12hr", true)?
-            .set_default("misc.chart_bpm_enabled", true)?
-            .set_default("misc.chart_rr_enabled", true)?
-            .set_default("misc.chart_rr_max", 2.0)?
-            .set_default("misc.chart_rr_clamp_high", true)?
-            .set_default("misc.chart_rr_clamp_low", false)?
-            .set_default("misc.charts_combine", true)?
+            .set_default("misc.log_sessions_csv_path", default_session_log_path)?
+            .set_default("misc.vrcx_shortcut_prompt", true)?
+            .set_default("updates.update_check_prompt", true)?
+            .set_default("updates.allow_checking_for_updates", false)?
+            .set_default("updates.version_skipped", "")?
+            .set_default("tui.session_stats_use_12hr", true)?
+            .set_default("tui.chart_bpm_enabled", true)?
+            .set_default("tui.chart_rr_enabled", true)?
+            .set_default("tui.chart_rr_max", 2.0)?
+            .set_default("tui.chart_rr_clamp_high", true)?
+            .set_default("tui.chart_rr_clamp_low", false)?
+            .set_default("tui.charts_combine", true)?
             .set_default("dummy.enabled", false)?
             .set_default("dummy.low_bpm", 50)?
             .set_default("dummy.high_bpm", 120)?
             .set_default("dummy.bpm_speed", 1.5)?
             .set_default("dummy.loops_before_dc", 2)?
-            .build()?;
+            .set_default("activities.enabled", false)?
+            .set_default("activities.remember_last", true)?
+            .set_default("prometheus.enabled", false)?
+            .set_default("prometheus.url", "localhost:9000")?
+            .set_default("prometheus.header", "")?
+            .set_default("prometheus.metrics.bpm", "heart_rate_bpm")?
+            .set_default("prometheus.metrics.rr", "heart_rate_rr")?
+            .set_default("prometheus.metrics.battery", "heart_rate_battery")?
+            .set_default("prometheus.metrics.twitch_up", "heart_rate_twitch_up")?
+            .set_default("prometheus.metrics.twitch_down", "heart_rate_twitch_down")?
+            .set_default("prometheus.metrics.activity", "heart_rate_activity")?
+            // .set_default("prometheus.batch_size", 30)?
+            .build()?
+            .try_deserialize()?;
 
-        s.try_deserialize()
+        Ok(settings)
     }
-    pub fn save(&self) -> Result<(), std::io::Error> {
-        let exe_path = env::current_exe().expect("Failed to get executable path");
-        let config_path = exe_path.with_extension("toml");
 
-        let toml_string = toml::to_string(self).expect("Failed to serialize config");
+    // TODO look into blank configs being saved on crash?
+    // Maybe new blank name/address check fixes it, unsure yet.
+    pub fn save(&self, config_path: &PathBuf) -> Result<(), AppError> {
+        // TODO Look into toml_edit's options
+        let toml_config = toml::to_string(self)?;
 
-        let mut file = File::create(config_path).expect("Failed to create config file");
-        file.write_all(toml_string.as_bytes())
-            .expect("Failed to write to config file");
+        info!("Serialized config length: {}", toml_config.len());
+
+        let mut file = File::create(config_path).map_err(|e| AppError::CreateFile {
+            path: PathBuf::from(config_path),
+            source: e,
+        })?;
+
+        file.write_all(toml_config.as_bytes())
+            .map_err(|e| AppError::WriteFile {
+                path: PathBuf::from(config_path),
+                source: e,
+            })?;
+
+        file.flush().map_err(|e| AppError::WriteFile {
+            path: PathBuf::from(config_path),
+            source: e,
+        })?;
+
+        file.sync_all().map_err(|e| AppError::WriteFile {
+            path: PathBuf::from(config_path),
+            source: e,
+        })?;
 
         Ok(())
     }
     pub fn get_log_level(&self) -> LevelFilter {
-        match self.misc.log_level.to_lowercase().as_str() {
-            "off" => LevelFilter::Off,
-            "error" => LevelFilter::Error,
-            "warn" => LevelFilter::Warn,
-            "info" => LevelFilter::Info,
-            "debug" => LevelFilter::Debug,
-            "trace" => LevelFilter::Trace,
-            _ => LevelFilter::Info,
-        }
+        LevelFilter::from_str(&self.misc.log_level).unwrap_or(LevelFilter::INFO)
     }
 }

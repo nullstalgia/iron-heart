@@ -1,4 +1,3 @@
-use chrono::{DateTime, Local};
 use ratatui::{
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style},
@@ -6,28 +5,23 @@ use ratatui::{
     Frame,
 };
 
-use crate::heart_rate::{BatteryLevel, HeartRateStatus};
+use crate::{app::App, heart_rate::BatteryLevel};
 
-pub fn render_table(
-    f: &mut Frame,
-    area: Rect,
-    heart_rate_status: &HeartRateStatus,
-    session_high: &(f64, DateTime<Local>),
-    session_low: &(f64, DateTime<Local>),
-    session_stats_use_12hr: bool,
-) {
+use ratatui_macros::{line, span};
+
+pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
     let mut rows: Vec<Row> = Vec::new();
 
-    rows.push(
-        Row::new(vec![
-            "Heart Rate",
-            "RR (sec)",
-            "Battery Level",
-            "Session High",
-            "Session Low",
-        ])
-        .style(Style::default().add_modifier(Modifier::BOLD)),
-    );
+    let mut headers = vec![
+        line!["Heart Rate"],
+        line!["RR (sec)"],
+        line!["Battery Level"],
+        line!["Session High"],
+        line!["Session Low"],
+    ];
+
+    let heart_rate_status = &app.heart_rate_status;
+
     let battery_string: String = match heart_rate_status.battery_level {
         BatteryLevel::Unknown => "???".into(),
         BatteryLevel::NotReported => "N/A".into(),
@@ -45,7 +39,7 @@ pub fn render_table(
         }),
     };
 
-    let time_format = if session_stats_use_12hr {
+    let time_format = if app.settings.tui.session_stats_use_12hr {
         "%-I:%M %p"
     } else {
         "%H:%M"
@@ -62,41 +56,51 @@ pub fn render_table(
 
     let high_string = format!(
         "{:.0} BPM @ {}",
-        session_high.0,
-        session_high.1.format(time_format)
+        app.session_high_bpm.0,
+        app.session_high_bpm.1.format(time_format)
     );
 
     let low_string = format!(
         "{:.0} BPM @ {}",
-        session_low.0,
-        session_low.1.format(time_format)
+        app.session_low_bpm.0,
+        app.session_low_bpm.1.format(time_format)
     );
 
-    rows.push(Row::new(vec![
+    let mut content = vec![
         Cell::from(heart_rate_status.heart_rate_bpm.to_string()),
         Cell::from(rr_string),
         Cell::from(battery_string).style(battery_style),
         Cell::from(high_string),
         Cell::from(low_string),
-    ]));
+    ];
 
-    let table = Table::new(
-        rows.to_vec(),
-        [
-            Constraint::Length(15),
-            Constraint::Length(20),
-            Constraint::Length(15),
-            Constraint::Length(20),
-            Constraint::Length(20),
-        ],
-    )
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Most Recent Data")
-            .border_style(Style::default().fg(Color::Yellow)),
-    )
-    .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+    let mut constraints = vec![
+        Constraint::Length(15),
+        Constraint::Length(20),
+        Constraint::Length(15),
+        Constraint::Length(20),
+        Constraint::Length(20),
+    ];
+
+    if app.settings.activities.enabled {
+        headers.push(line![span!(Modifier::UNDERLINED; "A"), span!("ctivity")]);
+        let activity = app.activities.selected();
+        let activity: &str = activity.map(|s| s.as_str()).unwrap_or("???");
+        content.push(Cell::from(activity));
+        constraints.push(Constraint::Fill(1));
+    }
+
+    rows.push(Row::new(headers).style(Style::default().add_modifier(Modifier::BOLD)));
+    rows.push(Row::new(content));
+
+    let table = Table::new(rows.to_vec(), constraints)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Most Recent Data")
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
     f.render_widget(table, area);
 }

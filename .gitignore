@@ -1,1 +1,6 @@
 /target
+# Data logging files
+# These are put in the root instead of in the target dir in portable+debug builds
+# since Cargo cleans them up when I don't want it to
+session_logs
+bpm.txt

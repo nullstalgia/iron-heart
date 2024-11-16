@@ -4,12 +4,12 @@ use crossterm::{
     terminal::{disable_raw_mode, LeaveAlternateScreen},
 };
 
-use std::error::Error;
-
-use log::*;
+use color_eyre::eyre::Result;
+use tracing::error;
+// use std::error::Error;
 
 // https://ratatui.rs/recipes/apps/better-panic/
-pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
+pub fn initialize_panic_handler() -> Result<()> {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
         .panic_section(format!(
             "This is a bug. Consider reporting it at {}",
@@ -20,8 +20,9 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
         .into_hooks();
     eyre_hook.install()?;
     std::panic::set_hook(Box::new(move |panic_info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        disable_raw_mode().expect("Couldn't reset terminal!");
+        execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture)
+            .expect("Couldn't reset terminal!");
 
         error!("Panic! {:?}", panic_info);
         let msg = format!("{}", panic_hook.panic_report(panic_info));
@@ -29,6 +30,7 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
         {
             eprintln!("{}", msg); // prints color-eyre stack trace to stderr
             use human_panic::{handle_dump, print_msg, Metadata};
+            use tracing::info;
             let meta = Metadata::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
             let file_path = handle_dump(&meta, panic_info);
@@ -48,8 +50,6 @@ pub fn initialize_panic_handler() -> Result<(), Box<dyn Error>> {
                 .verbosity(better_panic::Verbosity::Full)
                 .create_panic_handler()(panic_info);
         }
-
-        log::logger().flush();
 
         std::process::exit(libc::EXIT_FAILURE);
     }));

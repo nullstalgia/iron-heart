@@ -8,6 +8,9 @@ on:
   release:
     types: [created]
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   upload-assets:
     strategy:
@@ -28,10 +31,15 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          bin: null-iron-heart
+          bin: iron-heart
+          features: portable
           target: ${{ matrix.target }}
           include: LICENSE,README.md
           tar: unix
           zip: windows
           archive: $bin-$tag-$target
           token: ${{ secrets.GITHUB_TOKEN }}
+          checksum: sha512
+      - uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "**/*.tar.gz,**/*.zip"

@@ -3,32 +3,34 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Row, Table},
 };
+use ratatui_macros::text;
+use self_update::cargo_crate_version;
 
 pub const SPINNER: [char; 4] = ['|', '/', '-', '\\'];
 
-/// Creates a table with information about the application and the user input.
-pub fn info_table(
+/// Creates a table with information about potential actions
+pub fn action_bar(
     scan_paused: bool,
     is_loading_characteristics: bool,
     frame_count: &usize,
 ) -> Table<'static> {
-    //let spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     let index_slow = (frame_count / 2) % SPINNER.len();
     let index = frame_count % SPINNER.len();
     let info_rows = vec![Row::new(vec![
-        "[q → exit]".to_string(),
-        "[up/down → navigate]".to_string(),
-        "[enter → open/close]".to_string(),
+        text!["[q → exit]"],
+        text!["[up/down → navigate]"],
+        text!["[enter → open/close]"],
         if scan_paused {
-            "[s → start scan]".to_string()
+            text!["[s → start scan]".to_string()]
         } else {
-            format!("[s → stop scan {}]", SPINNER[index_slow])
+            text![format!("[s → stop scan {}]", SPINNER[index_slow])]
         },
         if is_loading_characteristics {
-            format!("[c → connecting... {}]", SPINNER[index])
+            text![format!("[c → connecting... {}]", SPINNER[index])]
         } else {
-            "[c → load characteristics]".to_string()
+            text!["[c → load characteristics]".to_string()]
         },
+        text![cargo_crate_version!()].right_aligned(),
     ])
     .style(Style::default().fg(Color::DarkGray))];
     let table = Table::new(
@@ -39,6 +41,7 @@ pub fn info_table(
             Constraint::Length(20),
             Constraint::Length(17),
             Constraint::Length(30),
+            Constraint::Fill(1),
         ],
     )
     .column_spacing(1);
