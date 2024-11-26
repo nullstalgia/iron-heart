@@ -28,10 +28,10 @@ use directories::BaseDirs;
 pub mod args;
 pub mod errors;
 
+pub mod heart_rate;
 mod activities;
 mod app;
 mod company_codes;
-mod heart_rate;
 mod logging;
 mod macros;
 mod osc;
