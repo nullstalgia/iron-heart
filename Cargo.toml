@@ -1,9 +1,14 @@
 [package]
 name = "iron-heart"
+description = "A BLE Heart Rate Monitor bridge for Social VR, OBS, Data Logging, and more!"
+keywords = ["ble", "osc", "vrchat", "tui"]
+categories = ["command-line-utilities", "visualization"]
 repository = "https://github.com/nullstalgia/null-iron-heart"
 version = "0.2.0"
 edition = "2021"
 default-run = "iron-heart"
+license = "MIT"
+# exclude = ["assets/"]
 
 [features]
 # When active, ignores user dotfiles/AppData, using the current directory instead

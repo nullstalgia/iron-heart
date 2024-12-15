@@ -1,12 +1,14 @@
-[![Build](https://github.com/nullstalgia/iron-heart/actions/workflows/build.yml/badge.svg)](https://github.com/nullstalgia/iron-heart/actions/workflows/build.yml)
-
 # iron-heart
+
+[![Build](https://github.com/nullstalgia/iron-heart/actions/workflows/build.yml/badge.svg)](https://github.com/nullstalgia/iron-heart/actions/workflows/build.yml)
 
 A BLE Heart Rate Monitor bridge built in Rust for use with OSC in Social VR, OBS, general biometric data-logging, and more!
 
-## Demo
+## Demos
 
 ![demo](./assets/nih-demo.gif)
+
+![activities-demo](./assets/nih-activities-demo.gif)
 
 ## Features
 
@@ -19,14 +21,14 @@ A BLE Heart Rate Monitor bridge built in Rust for use with OSC in Social VR, OBS
 - Prometheus Push logging for [metrics](https://github.com/user-attachments/assets/bd2e2aff-72fb-4d70-97ad-6522f80b18ac)! Compatible with [VictoriaMetrics](https://docs.victoriametrics.com/url-examples/#apiv1importprometheus) too!
 - Text file output, perfect for an OBS Text Source!
 - Self-Updating!
-- Can auto-start with VRChat using VRCX's App Launcher
+- Can auto-start with VRChat using [VRCX](https://github.com/vrcx-team/VRCX)'s App Launcher
 - Dummy Mode: Test avatars and prefabs without needing to put on/own a sensor
 - Hide temporary disconnections (optional): In case of spotty connections, this can help mask those moments of signal loss
 
 ## How to use
 1. Place the executable in a convenient spot
     - It will generate a log file and configuration file on first launch
-    - If you have VRCX installed, it will offer to enable auto-launching with VRChat by generating a shortcut in VRCX's App Launcher folder.
+    - If you have [VRCX](https://github.com/vrcx-team/VRCX) installed, it will offer to enable auto-launching with VRChat by generating a shortcut in VRCX's App Launcher folder.
 2. Power on and wear the Heart Rate sensor
 3. Find the device in the list of Discovered Devices
     - Only compatible devices\* will be shown in the list!
