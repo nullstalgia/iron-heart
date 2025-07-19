@@ -36,6 +36,7 @@ pub struct BLESettings {
     pub saved_name: String,
     pub saved_address: String,
     pub rr_ignore_after_empty: u16,
+    pub packet_timeout_secs: u8,
 }
 
 // TODO Async get for osc settings due to oscquery
@@ -89,6 +90,7 @@ pub struct WebSocketSettings {
     // Note: BLE is disabled if websockets are enabled
     pub enabled: bool,
     pub port: u16,
+    pub packet_timeout_secs: u8,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -189,8 +191,10 @@ impl Settings {
             .set_default("ble.saved_address", "")?
             .set_default("ble.saved_name", "")?
             .set_default("ble.rr_ignore_after_empty", 0)?
+            .set_default("ble.packet_timeout_secs", 30)?
             .set_default("websocket.enabled", false)?
             .set_default("websocket.port", 5566)?
+            .set_default("websocket.packet_timeout_secs", 30)?
             .set_default("misc.log_level", default_log_level)?
             .set_default("misc.write_bpm_to_file", false)?
             .set_default("misc.write_rr_to_file", false)?

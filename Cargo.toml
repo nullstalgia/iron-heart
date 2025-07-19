@@ -38,7 +38,7 @@ tokio-util = "0.7.11"
 rand = "0.8.5"
 csv-async = { version = "1.3.0", features = ["tokio", "with_serde"] }
 csv = "1.3.0"
-tokio-websockets = { version = "0.8.3", features = [
+tokio-websockets = { version = "0.12", features = [
     "client",
     "server",
     "rand",

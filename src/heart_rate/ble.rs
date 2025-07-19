@@ -232,9 +232,9 @@ pub async fn start_notification_thread(
     peripheral: DeviceInfo,
     rr_cooldown_amount: usize,
     twitch_threshold: f32,
+    no_packet_timeout: Duration,
     cancel_token: CancellationToken,
 ) {
-    let no_packet_timeout = Duration::from_secs(30);
     let battery_level = BatteryLevel::NotReported;
     let mut ble_monitor = BleMonitorActor {
         peripheral,

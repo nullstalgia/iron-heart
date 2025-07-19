@@ -578,6 +578,12 @@ impl App {
         let hr_tx_clone = self.broadcast_tx.clone();
         let restart_tx_clone = self.ble_restart_tx.clone().expect("BLE Restart TX missing");
         let shutdown_requested_clone = self.cancel_actors.clone();
+        let ble_packet_timeout = self.settings.ble.packet_timeout_secs;
+        let ble_packet_timeout = if ble_packet_timeout == 0 {
+            Duration::from_secs(30)
+        } else {
+            Duration::from_secs(self.settings.ble.packet_timeout_secs as u64)
+        };
         // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
@@ -590,6 +596,7 @@ impl App {
                 device,
                 rr_ignore_after_empty,
                 rr_twitch_threshold,
+                ble_packet_timeout,
                 shutdown_requested_clone,
             )
             .await
@@ -692,6 +699,12 @@ impl App {
         let broadcast_tx = self.broadcast_tx.clone();
         let shutdown_requested_clone = self.cancel_actors.clone();
         let websocket_settings_clone = self.settings.websocket.clone();
+        let ws_packet_timeout = self.settings.websocket.packet_timeout_secs;
+        let ws_packet_timeout = if ws_packet_timeout == 0 {
+            Duration::from_secs(30)
+        } else {
+            Duration::from_secs(self.settings.ble.packet_timeout_secs as u64)
+        };
         // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
@@ -703,6 +716,7 @@ impl App {
                 websocket_settings_clone,
                 port_override,
                 rr_twitch_threshold,
+                ws_packet_timeout,
                 shutdown_requested_clone,
             )
             .await

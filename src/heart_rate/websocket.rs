@@ -34,6 +34,7 @@ struct WebsocketActor {
     listener: TcpListener,
     hr_status: HeartRateStatus,
     twitcher: Twitcher,
+    no_packet_timeout: Duration,
 }
 
 impl WebsocketActor {
@@ -41,6 +42,7 @@ impl WebsocketActor {
         websocket_settings: WebSocketSettings,
         port_override: Option<u16>,
         rr_twitch_threshold: f32,
+        no_packet_timeout: Duration,
     ) -> Result<(Self, SocketAddr), AppError> {
         let port = port_override.unwrap_or(websocket_settings.port);
         let host_addr = SocketAddrV4::from_str(&format!("0.0.0.0:{}", port))?;
@@ -59,6 +61,7 @@ impl WebsocketActor {
                 listener,
                 hr_status,
                 twitcher: Twitcher::new(rr_twitch_threshold),
+                no_packet_timeout,
             },
             local_addr,
         ))
@@ -91,8 +94,8 @@ impl WebsocketActor {
                     return Ok(());
                 }
             }
-            let mut server = match ServerBuilder::new().accept(connection).await {
-                Ok(server) => server,
+            let mut stream = match ServerBuilder::new().accept(connection).await {
+                Ok((_request, stream)) => stream,
                 Err(err) => {
                     error!("Handshake failed: {:?}", err);
                     broadcast!(
@@ -105,16 +108,26 @@ impl WebsocketActor {
             debug!("Websocket handshake complete, starting rx loop.");
             'receiving: loop {
                 tokio::select! {
-                    item = server.next() => {
-                        let (message, keep_conn) = self.handle_ws_message(item)?;
-                        broadcast!(broadcast_tx, message);
-                        if !keep_conn {
-                            break 'receiving;
+                    item = stream.next() => {
+                        if let Some((message, keep_conn)) = self.handle_ws_message(item) {
+                            broadcast!(broadcast_tx, message);
+                            if !keep_conn {
+                                break 'receiving;
+                            }
                         }
+                    }
+                    _ = tokio::time::sleep(self.no_packet_timeout) => {
+                        let secs = self.no_packet_timeout.as_secs();
+                        error!("No HR data received in {secs} seconds!");
+                        broadcast!(
+                            broadcast_tx,
+                            ErrorPopup::Intermittent(format!("No HR data received in {secs} seconds!"))
+                        );
+                        break 'receiving;
                     }
                     _ = cancel_token.cancelled() => {
                         info!("Shutting down Websocket thread!");
-                        server.close().await?
+                        stream.close().await?
                     }
                 }
             }
@@ -131,7 +144,7 @@ impl WebsocketActor {
     fn handle_ws_message(
         &mut self,
         item: Option<Result<Message, tokio_websockets::Error>>,
-    ) -> Result<(AppUpdate, bool), AppError> {
+    ) -> Option<(AppUpdate, bool)> {
         let message = match item {
             // Got a text-type message!
             Some(Ok(msg)) if msg.is_text() => {
@@ -140,15 +153,17 @@ impl WebsocketActor {
             }
             Some(Ok(msg)) if msg.is_close() => {
                 warn!("Websocket client sent close opcode!");
-                return Ok((
+                return Some((
                     ErrorPopup::Intermittent("Device closed connection!".to_string()).into(),
                     false,
                 ));
             }
-            //
+            Some(Ok(msg)) if msg.is_ping() || msg.is_pong() => {
+                return None;
+            }
             Some(Ok(msg)) => {
                 error!("Invalid message type: {:?}", msg);
-                return Ok((
+                return Some((
                     ErrorPopup::UserMustDismiss(format!(
                         "Invalid message type (expected text): {:?}",
                         msg
@@ -159,7 +174,7 @@ impl WebsocketActor {
             }
             Some(Err(e)) => {
                 error!("Error receiving message: {:?}", e);
-                return Ok((
+                return Some((
                     ErrorPopup::Intermittent(format!("Error receiving message: {:?}", e)).into(),
                     false,
                 ));
@@ -167,13 +182,14 @@ impl WebsocketActor {
             }
             None => {
                 info!("Websocket client disconnected");
-                return Ok((
+                return Some((
                     ErrorPopup::Intermittent("Websocket client disconnected".to_string()).into(),
                     false,
                 ));
                 //break 'receiving;
             }
         };
+
         if let Ok(new_status) = serde_json::from_str::<JSONHeartRate>(&message) {
             let now = chrono::Local::now();
             self.hr_status.heart_rate_bpm = new_status.bpm;
@@ -194,11 +210,11 @@ impl WebsocketActor {
             self.hr_status.twitch_down = twitch_down;
             self.hr_status.timestamp = now;
 
-            Ok((self.hr_status.clone().into(), true))
+            Some((self.hr_status.clone().into(), true))
         } else {
             error!("Invalid heart rate message: {}", message);
 
-            Ok((
+            Some((
                 AppUpdate::Error(ErrorPopup::Intermittent(format!(
                     "Invalid heart rate message: {}",
                     message
@@ -214,17 +230,24 @@ pub async fn websocket_thread(
     websocket_settings: WebSocketSettings,
     port_override: Option<u16>,
     rr_twitch_threshold: f32,
+    no_packet_timeout: Duration,
     cancel_token: CancellationToken,
 ) {
-    let (mut websocket, local_addr) =
-        match WebsocketActor::build(websocket_settings, port_override, rr_twitch_threshold).await {
-            Ok((ws, addr)) => (ws, addr),
-            Err(e) => {
-                let message = "Failed to build websocket.";
-                broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
-                return;
-            }
-        };
+    let (mut websocket, local_addr) = match WebsocketActor::build(
+        websocket_settings,
+        port_override,
+        rr_twitch_threshold,
+        no_packet_timeout,
+    )
+    .await
+    {
+        Ok((ws, addr)) => (ws, addr),
+        Err(e) => {
+            let message = "Failed to build websocket.";
+            broadcast!(broadcast_tx, ErrorPopup::detailed(message, e));
+            return;
+        }
+    };
 
     // Sharing the URL with the UI
     broadcast!(broadcast_tx, local_addr);
