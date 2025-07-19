@@ -43,7 +43,7 @@ impl ActivitiesFile {
 fn formatted_activities(activities: &BTreeMap<u8, String>) -> BTreeMap<u8, String> {
     let mut formatted = BTreeMap::new();
     for (index, name) in activities {
-        formatted.insert(*index, format!("{index} - {}", name));
+        formatted.insert(*index, format!("{index} - {name}"));
     }
     formatted
 }

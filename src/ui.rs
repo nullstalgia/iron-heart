@@ -88,7 +88,7 @@ pub fn render(app: &mut App, f: &mut Frame) {
                 } else {
                     url.clone()
                 };
-                text.push_str(&format!("\nConnect to: {}", connection_info));
+                text.push_str(&format!("\nConnect to: {connection_info}"));
             }
             let connecting_block = Paragraph::new(text)
                 .alignment(Alignment::Center)

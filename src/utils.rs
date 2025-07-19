@@ -15,7 +15,7 @@ pub fn extract_manufacturer_data(manufacturer_data: &HashMap<u16, Vec<u8>>) -> M
             c = Some(key);
             let hex_string = value
                 .iter()
-                .map(|byte| format!("{:02X}", byte))
+                .map(|byte| format!("{byte:02X}"))
                 .collect::<Vec<String>>()
                 .join(" ");
             hex_string.to_string()

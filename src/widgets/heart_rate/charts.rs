@@ -66,7 +66,7 @@ fn bpm_rr_legend(chart_type: &ChartType, graph_area: Rect) -> (Paragraph, Rect) 
 fn styled_label(bpm: f64, rr: f64, chart_type: &ChartType, allow_space: bool) -> Line {
     let bpm_label_style = (Color::LightRed, Modifier::BOLD);
     let rr_label_style = (Color::LightBlue, Modifier::BOLD);
-    let rr = format!("({:.1})", rr);
+    let rr = format!("({rr:.1})");
     // Not a fan of this, need to ask Ratatui peeps
     let spaces = if allow_space && bpm <= 99.0 {
         "  "

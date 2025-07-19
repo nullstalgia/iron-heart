@@ -45,7 +45,7 @@ impl WebsocketActor {
         no_packet_timeout: Duration,
     ) -> Result<(Self, SocketAddr), AppError> {
         let port = port_override.unwrap_or(websocket_settings.port);
-        let host_addr = SocketAddrV4::from_str(&format!("0.0.0.0:{}", port))?;
+        let host_addr = SocketAddrV4::from_str(&format!("0.0.0.0:{port}"))?;
 
         let hr_status = HeartRateStatus {
             battery_level: BatteryLevel::NotReported,
@@ -82,8 +82,8 @@ impl WebsocketActor {
                         }
                         Err(err) => {
                             broadcast!(broadcast_tx, ErrorPopup::UserMustDismiss(format!(
-                                "Handshake failed: {:?}",
-                                err
+                                "Handshake failed: {err:?}"
+
                             )));
                             continue 'server;
                         }
@@ -97,10 +97,10 @@ impl WebsocketActor {
             let mut stream = match ServerBuilder::new().accept(connection).await {
                 Ok((_request, stream)) => stream,
                 Err(err) => {
-                    error!("Handshake failed: {:?}", err);
+                    error!("Handshake failed: {err:?}",);
                     broadcast!(
                         broadcast_tx,
-                        ErrorPopup::UserMustDismiss(format!("Handshake failed: {:?}", err))
+                        ErrorPopup::UserMustDismiss(format!("Handshake failed: {err:?}"))
                     );
                     continue 'server;
                 }
@@ -165,8 +165,7 @@ impl WebsocketActor {
                 error!("Invalid message type: {:?}", msg);
                 return Some((
                     ErrorPopup::UserMustDismiss(format!(
-                        "Invalid message type (expected text): {:?}",
-                        msg
+                        "Invalid message type (expected text): {msg:?}"
                     ))
                     .into(),
                     true,
@@ -175,10 +174,9 @@ impl WebsocketActor {
             Some(Err(e)) => {
                 error!("Error receiving message: {:?}", e);
                 return Some((
-                    ErrorPopup::Intermittent(format!("Error receiving message: {:?}", e)).into(),
+                    ErrorPopup::Intermittent(format!("Error receiving message: {e:?}")).into(),
                     false,
                 ));
-                //break 'receiving;
             }
             None => {
                 info!("Websocket client disconnected");
@@ -186,7 +184,6 @@ impl WebsocketActor {
                     ErrorPopup::Intermittent("Websocket client disconnected".to_string()).into(),
                     false,
                 ));
-                //break 'receiving;
             }
         };
 
@@ -212,12 +209,10 @@ impl WebsocketActor {
 
             Some((self.hr_status.clone().into(), true))
         } else {
-            error!("Invalid heart rate message: {}", message);
-
+            error!("Invalid heart rate message: {message}");
             Some((
                 AppUpdate::Error(ErrorPopup::Intermittent(format!(
-                    "Invalid heart rate message: {}",
-                    message
+                    "Invalid heart rate message: {message}"
                 ))),
                 true,
             ))

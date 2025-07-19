@@ -62,7 +62,7 @@ pub fn connecting_popup<'a>(
         }
     }
 
-    Paragraph::new(format!("Connecting to:\n{}\n({})", name, device_mac))
+    Paragraph::new(format!("Connecting to:\n{name}\n({device_mac})"))
         .alignment(Alignment::Center)
         .block(
             Block::default()

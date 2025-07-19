@@ -74,10 +74,9 @@ pub async fn bluetooth_event_thread(
     }
 
     if let Err(e) = central.start_scan(ScanFilter::default()).await {
-        error!("Scanning failure: {}", e);
+        error!("Scanning failure: {e}");
         tx.send(DeviceUpdate::Error(ErrorPopup::Fatal(format!(
-            "Scanning failure: {}",
-            e
+            "Scanning failure: {e}"
         ))))
         .await
         .expect("Failed to send error message");
@@ -88,10 +87,9 @@ pub async fn bluetooth_event_thread(
     let mut events = match central.events().await {
         Ok(e) => e,
         Err(e) => {
-            error!("BLE failure: {}", e);
+            error!("BLE failure: {e}");
             tx.send(DeviceUpdate::Error(ErrorPopup::Fatal(format!(
-                "BLE failure: {}",
-                e
+                "BLE failure: {e}"
             ))))
             .await
             .expect("Failed to send error message");
@@ -112,10 +110,9 @@ pub async fn bluetooth_event_thread(
         } else if !scanning {
             info!("Resuming scan");
             if let Err(e) = central.start_scan(ScanFilter::default()).await {
-                error!("Failed to resume scanning: {}", e);
+                error!("Failed to resume scanning: {e}");
                 tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(format!(
-                    "Failed to resume scanning: {}",
-                    e
+                    "Failed to resume scanning: {e}"
                 ))))
                 .await
                 .expect("Failed to send error message");
@@ -231,10 +228,9 @@ pub async fn get_characteristics(tx: mpsc::Sender<DeviceUpdate>, peripheral: Dev
                 }
             }
             Ok(Err(e)) => {
-                error!("Characteristics: connection error: {}", e);
+                error!("Characteristics: connection error: {e}");
                 tx.send(DeviceUpdate::Error(ErrorPopup::Intermittent(format!(
-                    "Connection error: {}",
-                    e
+                    "Connection error: {e}"
                 ))))
                 .await
                 .expect("Failed to send error message");

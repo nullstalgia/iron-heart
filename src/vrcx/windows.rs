@@ -129,7 +129,7 @@ async fn find_shortcut(startup_path: &Option<PathBuf>) -> Result<Option<PathBuf>
 #[instrument]
 fn check_shortcut(shortcut_path: &Path) -> Result<bool, AppError> {
     if let Some(ext) = shortcut_path.extension() {
-        if ext.to_ascii_lowercase() != "lnk" {
+        if !ext.eq_ignore_ascii_case("lnk") {
             return Ok(false);
         }
     } else {

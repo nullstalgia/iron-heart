@@ -211,7 +211,7 @@ impl UpdateBackend {
         tmp_archive.flush().await?;
 
         let bin_name = env!("CARGO_PKG_NAME");
-        let bin_name = format!("{}{}", bin_name, EXE_SUFFIX);
+        let bin_name = format!("{bin_name}{EXE_SUFFIX}");
         self.current_exe = Some(current_exe()?);
 
         self_update::Extract::from_source(&tmp_archive_path)
@@ -393,8 +393,7 @@ impl App {
                         info!("{url}");
                         if let Err(e) = opener::open_browser(url) {
                             self.handle_error_update(ErrorPopup::UserMustDismiss(format!(
-                                "Failed to open app repository! {}",
-                                e
+                                "Failed to open app repository! {e}"
                             )));
                         }
                     }

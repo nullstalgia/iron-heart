@@ -25,7 +25,7 @@ pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
     let battery_string: String = match heart_rate_status.battery_level {
         BatteryLevel::Unknown => "???".into(),
         BatteryLevel::NotReported => "N/A".into(),
-        BatteryLevel::Level(level) => format!("{}%", level),
+        BatteryLevel::Level(level) => format!("{level}%"),
     };
 
     let battery_style = match heart_rate_status.battery_level {

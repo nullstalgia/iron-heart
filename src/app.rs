@@ -49,6 +49,7 @@ pub enum AppRx {
     UpdateReply(UpdateReply),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum DeviceUpdate {
     ConnectedEvent(String),
@@ -1108,8 +1109,7 @@ impl App {
                     VrcxPromptChoice::Yes => {
                         if let Err(e) = self.vrcx.create_shortcut() {
                             self.handle_error_update(ErrorPopup::Intermittent(format!(
-                                "Failed to create VRCX shortcut: {}",
-                                e
+                                "Failed to create VRCX shortcut: {e}"
                             )));
                         } else {
                             // Commented out since the prompt is skipped if a shortcut exists,
@@ -1134,8 +1134,7 @@ impl App {
                     VrcxPromptChoice::OpenFolder => {
                         if let Err(e) = opener::open(self.vrcx.path().unwrap()) {
                             self.handle_error_update(ErrorPopup::UserMustDismiss(format!(
-                                "Failed to open VRCX's startup folder! {}",
-                                e
+                                "Failed to open VRCX's startup folder! {e}"
                             )));
                         }
                     }
@@ -1185,11 +1184,7 @@ impl App {
                     // (We don't use the ScanFilter from btleplug to allow quicker connection to saved devices,
                     // and since it reports only "Unknown" names for some reason)
                     // TODO: Raise issue about it
-                    if device
-                        .services
-                        .iter()
-                        .any(|service| *service == HEART_RATE_SERVICE_UUID)
-                    {
+                    if device.services.contains(&HEART_RATE_SERVICE_UUID) {
                         self.discovered_devices.push(device.clone());
                     }
                     // This filter used to be in scan.rs, but doing it here

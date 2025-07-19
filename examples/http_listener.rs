@@ -15,7 +15,7 @@ fn main() {
     let addr = format!("0.0.0.0:{}", args.port);
     let server = Server::http(&addr).expect("Failed to open HTTP Server");
 
-    println!("Listening on {}", addr);
+    println!("Listening on {addr}");
 
     for mut request in server.incoming_requests() {
         println!("Method: {:?}", request.method());
@@ -27,14 +27,14 @@ fn main() {
 
         let mut content = String::new();
         if request.as_reader().read_to_string(&mut content).is_ok() {
-            println!("Body:\n{}", content);
+            println!("Body:\n{content}");
         } else {
             println!("Body: [binary data]");
         }
 
         let response = Response::from_string("OK");
         if let Err(e) = request.respond(response) {
-            eprintln!("Failed to send response: {}", e);
+            eprintln!("Failed to send response: {e}");
         }
     }
 }

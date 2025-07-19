@@ -119,8 +119,8 @@ impl BleMonitorActor {
 
                             error!("BLE Connection error: {}", e);
                             broadcast!(broadcast_tx, ErrorPopup::Intermittent(format!(
-                                "BLE Connection error: {}",
-                                e
+                                "BLE Connection error: {e}"
+
                             )));
                             // `NotConnected` is the "Device Unreachable" error
                             // Weirdly enough, the Central manager doesn't get that error, only we do here at the HR level
