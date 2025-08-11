@@ -38,8 +38,8 @@ pub fn extract_manufacturer_data(manufacturer_data: &HashMap<u16, Vec<u8>>) -> M
 /// Returns a `Rect` with the provided percentage of the parent `Rect` and centered.
 pub fn centered_rect(percent_x: u16, percent_y: u16, size: Rect) -> Rect {
     let popup_size = Rect {
-        width: size.width * percent_x / 100,
-        height: size.height * percent_y / 100,
+        width: (size.width / 100) * percent_x,
+        height: (size.height / 100) * percent_y,
         ..Rect::default()
     };
     Rect {

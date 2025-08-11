@@ -69,6 +69,8 @@ pub enum AppError {
     NotPortable,
     #[error("Tried to get non-existant Prometheus metric")]
     MissingMetric,
+    #[error("Error authenticating with MiBand: {0}")]
+    AuthenticationError(String),
     #[error("Header missing separating \":\"")]
     MissingDelimiter,
     #[error("Empty IP Address")]

@@ -17,12 +17,11 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
-
+use uuid::Uuid;
 use crate::activities::Activities;
 use crate::args::{SubCommands, TopLevelCmd};
 use crate::broadcast;
 use crate::errors::AppError;
-use crate::heart_rate::ble::HEART_RATE_SERVICE_UUID;
 use crate::heart_rate::dummy::dummy_thread;
 use crate::heart_rate::websocket::websocket_thread;
 use crate::logging::prometheus_logging_thread;
@@ -42,6 +41,7 @@ use crate::{
         CHART_BPM_MAX_ELEMENTS, CHART_BPM_VERT_MARGIN, CHART_RR_MAX_ELEMENTS, CHART_RR_VERT_MARGIN,
     },
 };
+use crate::heart_rate::constants::ble_uuids;
 
 pub enum AppRx {
     DeviceUpdate(DeviceUpdate),
@@ -590,6 +590,7 @@ impl App {
             Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
         let rr_ignore_after_empty = self.settings.ble.rr_ignore_after_empty as usize;
         debug!("Spawning notification thread, AppView: {:?}", self.view);
+
         self.hr_thread_handle = Some(tokio::spawn(async move {
             start_notification_thread(
                 hr_tx_clone,
@@ -609,10 +610,16 @@ impl App {
             return false;
         }
 
-        let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
+        let selected_device = match given_device {
+            Some(device) => device,
+            None => match self.get_selected_device() {
+                Some(device) => device,
+                None => return false, // No device selected, so it can't be saved
+            },
+        };
 
-        device.name == self.settings.ble.saved_name
-            || device.address == self.settings.ble.saved_address
+        (!self.settings.ble.saved_name.is_empty() && selected_device.name == self.settings.ble.saved_name)
+            || (!self.settings.ble.saved_address.is_empty() && selected_device.address == self.settings.ble.saved_address)
     }
 
     pub fn start_osc_thread(&mut self, initial_activity: Option<u8>) {
@@ -805,7 +812,11 @@ impl App {
         if self.should_save_ble_device && self.allow_modifying_config
         // && !self.cancel_actors.is_cancelled()
         {
-            let device = given_device.unwrap_or_else(|| self.get_selected_device().unwrap());
+            // Get the device, handling the case where no device is selected
+            let device = match given_device.or_else(|| self.get_selected_device()) {
+                Some(device) => device,
+                None => return, // No device to save, so just return
+            };
 
             let new_id = device.get_id();
             let new_name = device.name.clone();
@@ -1184,7 +1195,7 @@ impl App {
                     // (We don't use the ScanFilter from btleplug to allow quicker connection to saved devices,
                     // and since it reports only "Unknown" names for some reason)
                     // TODO: Raise issue about it
-                    if device.services.contains(&HEART_RATE_SERVICE_UUID) {
+                    if device.services.contains(&Uuid::from(ble_uuids::service::HEART_RATE)) {
                         self.discovered_devices.push(device.clone());
                     }
                     // This filter used to be in scan.rs, but doing it here
@@ -1244,15 +1255,17 @@ impl App {
             DeviceUpdate::ConnectedEvent(id) => {
                 if self.sub_state == SubState::ConnectingForCharacteristics {
                     self.sub_state = SubState::CharacteristicView;
-                } else {
+                } else if self.sub_state == SubState::ConnectingForHeartRate {
                     // If it wasn't for characteristics, it's probably for HR
                     self.view = AppView::HeartRateView;
                 }
 
                 if self.view == AppView::HeartRateView {
-                    if id == self.get_selected_device().unwrap().id {
-                        info!("Connected to device {:?}, stopping BLE scan", id);
-                        self.ble_scan_paused.store(true, Ordering::SeqCst);
+                    if let Some(selected_device) = self.get_selected_device() {
+                        if id == selected_device.id {
+                            info!("Connected to device {:?}, stopping BLE scan", id);
+                            self.ble_scan_paused.store(true, Ordering::SeqCst);
+                        }
                     }
                     self.try_save_device(None);
                 }
@@ -1262,7 +1275,7 @@ impl App {
                     "Disconnected from device!".to_string(),
                 ));
                 if (self.view == AppView::HeartRateView || self.is_idle_on_ble_selection())
-                    && disconnected_id == self.get_selected_device().unwrap().id
+                    && self.get_selected_device().map_or(false, |device| disconnected_id == device.id)
                 {
                     info!(
                         "Disconnected from device {:?}, resuming BLE scan",
