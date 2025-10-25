@@ -160,13 +160,21 @@ impl FileLoggingActor {
         if let Some(txt_writer) = &mut self.txt_writer {
             let txt_output = if self.misc_settings.write_rr_to_file {
                 format!(
-                    "{}\n{}\n",
+                    "{}\n{}",
                     heart_rate_status.heart_rate_bpm,
                     reported_rr.as_millis()
                 )
             } else {
-                format!("{}\n", heart_rate_status.heart_rate_bpm)
+                format!("{}", heart_rate_status.heart_rate_bpm)
             };
+            txt_writer
+                .get_ref()
+                .set_len(0)
+                .await
+                .map_err(|e| AppError::WriteFile {
+                    path: self.txt_path.as_ref().unwrap().to_owned(),
+                    source: e,
+                })?;
             txt_writer
                 .seek(tokio::io::SeekFrom::Start(0))
                 .await
