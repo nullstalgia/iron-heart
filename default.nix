@@ -5,9 +5,12 @@
   dbus,
   openssl,
 }:
+let
+  cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+in
 rustPlatform.buildRustPackage {
   pname = "iron_heart";
-  version = "0.1.0";
+  version = cargoToml.package.version;
 
   src = ./.;
 
