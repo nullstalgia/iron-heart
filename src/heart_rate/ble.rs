@@ -115,7 +115,10 @@ impl BleMonitorActor {
                             ));
                         }
                         Err(e) => {
-                            device.disconnect().await?;
+                            // The device may already be gone, which shouldn't take down the whole app
+                            if let Err(disconnect_err) = device.disconnect().await {
+                                debug!("Couldn't disconnect after failed connection: {disconnect_err}");
+                            }
 
                             error!("BLE Connection error: {}", e);
                             broadcast!(broadcast_tx, ErrorPopup::Intermittent(format!(
