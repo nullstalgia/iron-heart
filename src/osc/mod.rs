@@ -122,12 +122,18 @@ impl OscActor {
         if data.heart_rate_bpm > 0 {
             self.hr_status = data;
             self.disconnected_at = None;
-            if let Some(new_rr) = self.hr_status.rr_intervals.last() {
+            if let Some(new_rr) = self
+                .hr_status
+                .rr_intervals
+                .iter()
+                .rev()
+                .find(|rr| **rr > self.beat_pulse)
+            {
                 self.latest_rr = *new_rr;
                 // Mark that we know we'll get real RR intervals
                 // (don't need to calculate from BPM from now on)
                 self.use_real_rr = true;
-            } else if !self.use_real_rr {
+            } else if self.hr_status.rr_intervals.is_empty() && !self.use_real_rr {
                 self.latest_rr = rr_from_bpm(self.hr_status.heart_rate_bpm);
             }
         // Got a 0 BPM packet
