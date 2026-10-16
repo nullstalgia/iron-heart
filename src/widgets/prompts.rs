@@ -1,10 +1,10 @@
 use num_enum::FromPrimitive;
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Text},
     widgets::{Block, Borders, Clear, Paragraph, Row, Table, Wrap},
-    Frame,
 };
 use ratatui_macros::{row, span};
 
@@ -33,8 +33,6 @@ pub fn save_prompt() -> Table<'static> {
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 
     let rows: Vec<Row> = vec![row!["Yes"], row!["No"], row!["Never Ask Again"]];
-
-    
 
     Table::new(rows, [Constraint::Percentage(100)])
         .block(

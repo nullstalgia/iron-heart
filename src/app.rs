@@ -4,8 +4,8 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
@@ -31,8 +31,8 @@ use crate::updates::{UpdateHandle, UpdateReply};
 use crate::vrcx::VrcxStartup;
 use crate::widgets::prompts::SavePromptChoice;
 use crate::{
-    heart_rate::ble::start_notification_thread,
     heart_rate::HeartRateStatus,
+    heart_rate::ble::start_notification_thread,
     logging::file_logging_thread,
     osc::osc_thread,
     scan::{bluetooth_event_thread, get_characteristics},

@@ -4,7 +4,7 @@ use crossterm::event::{Event as CrosstermEvent, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
-use crate::{errors::AppError, AppResult};
+use crate::{AppResult, errors::AppError};
 
 /// Terminal events.
 #[derive(Clone, Copy, Debug)]

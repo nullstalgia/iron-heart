@@ -5,14 +5,14 @@ use std::net::{SocketAddrV4, UdpSocket};
 use std::str::FromStr;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{Receiver as BReceiver, Sender as BSender};
-use tokio::time::{self, interval, Duration, Instant, Interval};
+use tokio::time::{self, Duration, Instant, Interval, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::app::{AppUpdate, ErrorPopup};
 use crate::broadcast;
 use crate::errors::AppError;
-use crate::heart_rate::{rr_from_bpm, HeartRateStatus};
+use crate::heart_rate::{HeartRateStatus, rr_from_bpm};
 use crate::settings::OscSettings;
 
 mod addresses;

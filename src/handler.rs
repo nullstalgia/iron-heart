@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
-use crate::app::{App, ErrorPopup, SubState};
 use crate::AppResult;
+use crate::app::{App, ErrorPopup, SubState};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_input::backend::crossterm::EventHandler;
 

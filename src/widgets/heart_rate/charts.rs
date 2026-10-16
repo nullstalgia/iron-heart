@@ -1,10 +1,10 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style, Stylize},
     symbols,
     text::Line,
     widgets::{Axis, Block, Borders, Chart, Clear, Dataset, GraphType, Paragraph, Wrap},
-    Frame,
 };
 
 use ratatui_macros::{line, span};

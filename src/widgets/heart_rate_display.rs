@@ -1,11 +1,11 @@
 use ratatui::{
-    layout::{Constraint, Layout},
     Frame,
+    layout::{Constraint, Layout},
 };
 
 use crate::{
     app::App,
-    widgets::heart_rate::{charts::render_combined_chart, charts::ChartType, tables::render_table},
+    widgets::heart_rate::{charts::ChartType, charts::render_combined_chart, tables::render_table},
 };
 
 // TODO Ascii Heart Beat Animation

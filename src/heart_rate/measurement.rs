@@ -72,8 +72,8 @@ pub fn parse_hrm(data: &[u8]) -> HeartRateMeasurement {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_hrm;
     use super::HeartRateMeasurement;
+    use super::parse_hrm;
     use std::time::Duration;
 
     #[test]

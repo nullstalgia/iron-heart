@@ -1,4 +1,4 @@
-use super::{rr_from_bpm, BatteryLevel, HeartRateStatus};
+use super::{BatteryLevel, HeartRateStatus, rr_from_bpm};
 use crate::app::{AppUpdate, ErrorPopup};
 use crate::broadcast;
 use crate::settings::DummySettings;

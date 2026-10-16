@@ -54,7 +54,7 @@ pub fn check_options() -> Table<'static> {
         row!["No, ask later"],
         row!["No, and don't ask again"],
     ];
-    
+
     Table::new(rows, [Constraint::Percentage(100)])
         .highlight_style(selected_style)
         .highlight_symbol(">> ")
@@ -83,7 +83,6 @@ pub fn update_now_options() -> Table<'static> {
         row!["Skip this version"],
     ];
 
-    
     Table::new(rows, [Constraint::Percentage(100)])
         .highlight_style(selected_style)
         .highlight_symbol(">> ")

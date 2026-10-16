@@ -28,8 +28,6 @@ pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table<'_
         })
         .collect();
 
-    
-
     Table::new(
         rows,
         [

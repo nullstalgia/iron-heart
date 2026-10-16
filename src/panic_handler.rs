@@ -1,7 +1,7 @@
 use crossterm::{
     event::DisableMouseCapture,
     execute,
-    terminal::{disable_raw_mode, LeaveAlternateScreen},
+    terminal::{LeaveAlternateScreen, disable_raw_mode},
 };
 
 use color_eyre::eyre::Result;
@@ -29,7 +29,7 @@ pub fn initialize_panic_handler() -> Result<()> {
         #[cfg(not(debug_assertions))]
         {
             eprintln!("{}", msg); // prints color-eyre stack trace to stderr
-            use human_panic::{handle_dump, print_msg, Metadata};
+            use human_panic::{Metadata, handle_dump, print_msg};
             use tracing::info;
             let meta = Metadata::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 

@@ -1,4 +1,4 @@
-use iron_heart::{args::TopLevelCmd, run_tui, AppResult};
+use iron_heart::{AppResult, args::TopLevelCmd, run_tui};
 
 #[tokio::main]
 async fn main() -> AppResult<()> {

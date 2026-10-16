@@ -6,8 +6,8 @@ use btleplug::api::{
 };
 use btleplug::platform::{Adapter, Manager};
 use futures::StreamExt;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;

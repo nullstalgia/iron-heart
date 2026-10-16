@@ -4,7 +4,7 @@ extern crate lazy_static;
 
 use args::TopLevelCmd;
 use errors::AppError;
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use self_update::cargo_crate_version;
 use std::{io, path::PathBuf};
 use tokio::fs::create_dir;

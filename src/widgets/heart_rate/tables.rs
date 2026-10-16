@@ -1,8 +1,8 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Cell, Row, Table},
-    Frame,
 };
 
 use crate::{app::App, heart_rate::BatteryLevel};

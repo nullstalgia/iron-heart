@@ -4,8 +4,8 @@ use rosc::encoder;
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};
 use std::f32;
 
-use super::addresses::OscAddresses;
 use super::OSC_NOW;
+use super::addresses::OscAddresses;
 
 use std::net::{SocketAddrV4, UdpSocket};
 

@@ -16,24 +16,25 @@ pub fn action_bar(
 ) -> Table<'static> {
     let index_slow = (frame_count / 2) % SPINNER.len();
     let index = frame_count % SPINNER.len();
-    let info_rows = vec![Row::new(vec![
-        text!["[q → exit]"],
-        text!["[up/down → navigate]"],
-        text!["[enter → open/close]"],
-        if scan_paused {
-            text!["[s → start scan]".to_string()]
-        } else {
-            text![format!("[s → stop scan {}]", SPINNER[index_slow])]
-        },
-        if is_loading_characteristics {
-            text![format!("[c → connecting... {}]", SPINNER[index])]
-        } else {
-            text!["[c → load characteristics]".to_string()]
-        },
-        text![cargo_crate_version!()].right_aligned(),
-    ])
-    .style(Style::default().fg(Color::DarkGray))];
-    
+    let info_rows = vec![
+        Row::new(vec![
+            text!["[q → exit]"],
+            text!["[up/down → navigate]"],
+            text!["[enter → open/close]"],
+            if scan_paused {
+                text!["[s → start scan]".to_string()]
+            } else {
+                text![format!("[s → stop scan {}]", SPINNER[index_slow])]
+            },
+            if is_loading_characteristics {
+                text![format!("[c → connecting... {}]", SPINNER[index])]
+            } else {
+                text!["[c → load characteristics]".to_string()]
+            },
+            text![cargo_crate_version!()].right_aligned(),
+        ])
+        .style(Style::default().fg(Color::DarkGray)),
+    ];
 
     Table::new(
         info_rows,
