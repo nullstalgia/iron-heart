@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 // A Struct that does not care about bit compression
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HeartRateMeasurement {
     // since this is not in SI, its units are defined in its name.
     pub bpm: u16,
@@ -33,14 +33,13 @@ pub fn parse_hrm(data: &[u8]) -> HeartRateMeasurement {
     let is_16_bit = data[0] & 1 == 1;
     let has_sensor_detection = data[0] & 0b100 == 0b100;
     let has_energy_expended = data[0] & 0b1000 == 0b1000;
-    let energy_expended_index = 2 + if is_16_bit { 1 } else { 0 };
-    let rr_interval_index =
-        2 + if has_energy_expended { 2 } else { 0 } + if is_16_bit { 1 } else { 0 };
+    let energy_expended_index = 2 + usize::from(is_16_bit);
+    let rr_interval_index = 2 + if has_energy_expended { 2 } else { 0 } + usize::from(is_16_bit);
     HeartRateMeasurement {
         bpm: if is_16_bit {
             u16::from_le_bytes([data[1], data[2]])
         } else {
-            data[1] as u16
+            u16::from(data[1])
         },
         is_sensor_contact_detected: if has_sensor_detection {
             Some(data[0] & 0b10 == 0b10)
@@ -63,7 +62,7 @@ pub fn parse_hrm(data: &[u8]) -> HeartRateMeasurement {
                     data[rr_interval_index + 2 * i],
                     data[rr_interval_index + 2 * i + 1],
                 ]);
-                vec.push(Duration::from_secs_f32(as_u16 as f32 / 1024.0));
+                vec.push(Duration::from_secs_f32(f32::from(as_u16) / 1024.0));
             }
             vec
         },
@@ -71,6 +70,7 @@ pub fn parse_hrm(data: &[u8]) -> HeartRateMeasurement {
 }
 
 #[cfg(test)]
+#[allow(clippy::with_capacity_zero)]
 mod tests {
     use super::HeartRateMeasurement;
     use super::parse_hrm;
