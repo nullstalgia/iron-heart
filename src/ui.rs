@@ -32,6 +32,7 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use std::{borrow::Cow, sync::atomic::Ordering};
 
 /// Renders the user interface widgets.
+#[allow(clippy::too_many_lines)]
 pub fn render(app: &mut App, f: &mut Frame) {
     //app.frame_count = f.count();
     let chunks = Layout::default()

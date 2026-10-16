@@ -121,6 +121,7 @@ pub enum ErrorPopup {
 }
 
 impl ErrorPopup {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn detailed(message: &str, error: AppError) -> Self {
         Self::FatalDetailed(message.to_owned(), error.to_string())
     }
@@ -967,12 +968,14 @@ impl App {
                 // Just for the UI, "stop" the scan
                 self.ble_scan_paused.store(true, Ordering::SeqCst);
             }
+
+            ErrorPopup::UserMustDismiss(_) => self.error_message = Some(error),
+
             // Don't let an intermittent error override a "UserMustDismiss" error
             ErrorPopup::Intermittent(_) => match self.error_message {
                 Some(ErrorPopup::UserMustDismiss(_)) => {}
                 _ => self.error_message = Some(error),
             },
-            _ => self.error_message = Some(error),
         }
     }
 

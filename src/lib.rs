@@ -51,6 +51,7 @@ mod ui;
 //pub type AppResult<T> = color_eyre::eyre::Result<T>;
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
+#[allow(clippy::too_many_lines)]
 pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     let working_directory = determine_working_directory().ok_or(AppError::WorkDir)?;
     arg_config.config_override = arg_config.config_override.map(|p| {

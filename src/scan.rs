@@ -14,6 +14,7 @@ use tracing::{debug, error, info, warn};
 
 /// Scans for Bluetooth devices and sends the information to the provided `mpsc::Sender`.
 /// The scan can be paused by setting the `pause_signal` to `true`.
+#[allow(clippy::too_many_lines)]
 pub async fn bluetooth_event_thread(
     tx: mpsc::Sender<DeviceUpdate>,
     mut restart_signal: mpsc::Receiver<()>,
