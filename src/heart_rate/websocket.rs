@@ -148,8 +148,8 @@ impl WebsocketActor {
         let message = match item {
             // Got a text-type message!
             Some(Ok(msg)) if msg.is_text() => {
-                let msg = msg.as_text().unwrap().to_owned();
-                msg
+                
+                msg.as_text().unwrap().to_owned()
             }
             Some(Ok(msg)) if msg.is_close() => {
                 warn!("Websocket client sent close opcode!");

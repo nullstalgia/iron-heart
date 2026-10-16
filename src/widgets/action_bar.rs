@@ -33,7 +33,9 @@ pub fn action_bar(
         text![cargo_crate_version!()].right_aligned(),
     ])
     .style(Style::default().fg(Color::DarkGray))];
-    let table = Table::new(
+    
+
+    Table::new(
         info_rows,
         [
             Constraint::Length(10),
@@ -44,7 +46,5 @@ pub fn action_bar(
             Constraint::Fill(1),
         ],
     )
-    .column_spacing(1);
-
-    table
+    .column_spacing(1)
 }

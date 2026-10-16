@@ -28,7 +28,9 @@ pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table<'_
         })
         .collect();
 
-    let table = Table::new(
+    
+
+    Table::new(
         rows,
         [
             Constraint::Length(40),
@@ -46,7 +48,5 @@ pub fn device_table(selected: Option<usize>, devices: &[DeviceInfo]) -> Table<'_
             .title("Detected Devices")
             .borders(Borders::ALL),
     )
-    .highlight_style(selected_style);
-
-    table
+    .highlight_style(selected_style)
 }

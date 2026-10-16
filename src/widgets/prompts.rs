@@ -34,16 +34,16 @@ pub fn save_prompt() -> Table<'static> {
 
     let rows: Vec<Row> = vec![row!["Yes"], row!["No"], row!["Never Ask Again"]];
 
-    let option_table = Table::new(rows, [Constraint::Percentage(100)])
+    
+
+    Table::new(rows, [Constraint::Percentage(100)])
         .block(
             Block::default()
                 .title("Autoconnect to this device?")
                 .borders(Borders::ALL),
         )
         .highlight_style(selected_style)
-        .highlight_symbol(">> ");
-
-    option_table
+        .highlight_symbol(">> ")
 }
 
 pub fn connecting_popup<'a>(

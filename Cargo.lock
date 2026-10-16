@@ -1840,7 +1840,7 @@ checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
 
 [[package]]
 name = "iron-heart"
-version = "0.2.1-pre.1"
+version = "0.2.2-pre.0"
 dependencies = [
  "argh",
  "better-panic",

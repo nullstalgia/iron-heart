@@ -1,6 +1,6 @@
 use ratatui::widgets::TableState;
 use serde_derive::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use tracing::info;
 
 use tui_input::Input;
@@ -186,10 +186,10 @@ pub mod tui {
     use std::collections::BTreeMap;
 
     use ratatui::{
+        Frame,
         layout::{Alignment, Constraint, Layout},
         style::{Modifier, Style, Stylize},
         widgets::{Block, Borders, Clear, Paragraph, Row, Table},
-        Frame,
     };
     use ratatui_macros::{row, text};
 
@@ -268,11 +268,9 @@ pub mod tui {
             .filter_map(|key| map.get(key).map(|value| row![&**value]))
             .collect();
 
-        let activities_table = Table::new(rows, [Constraint::Percentage(100)])
+        Table::new(rows, [Constraint::Percentage(100)])
             .highlight_style(selected_style)
-            .highlight_symbol(">> ");
-
-        activities_table
+            .highlight_symbol(">> ")
     }
 
     pub fn render_activity_name_entry(app: &mut App, f: &mut Frame) {

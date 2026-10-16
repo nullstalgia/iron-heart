@@ -54,10 +54,10 @@ pub fn check_options() -> Table<'static> {
         row!["No, ask later"],
         row!["No, and don't ask again"],
     ];
-    let option_table = Table::new(rows, [Constraint::Percentage(100)])
+    
+    Table::new(rows, [Constraint::Percentage(100)])
         .highlight_style(selected_style)
-        .highlight_symbol(">> ");
-    option_table
+        .highlight_symbol(">> ")
 }
 
 #[derive(Debug, Eq, PartialEq, FromPrimitive)]
@@ -83,10 +83,10 @@ pub fn update_now_options() -> Table<'static> {
         row!["Skip this version"],
     ];
 
-    let option_table = Table::new(rows, [Constraint::Percentage(100)])
+    
+    Table::new(rows, [Constraint::Percentage(100)])
         .highlight_style(selected_style)
-        .highlight_symbol(">> ");
-    option_table
+        .highlight_symbol(">> ")
 }
 
 pub fn update_found_prompt(app: &mut App, frame: &mut Frame) {

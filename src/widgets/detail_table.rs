@@ -9,7 +9,9 @@ use crate::{structs::DeviceInfo, utils::extract_manufacturer_data};
 pub fn detail_table(selected_device: &DeviceInfo) -> Table<'_> {
     let services_binding = selected_device.services.len().to_string();
     let manufacturer_data = extract_manufacturer_data(&selected_device.manufacturer_data);
-    let table = Table::new(
+    
+
+    Table::new(
         vec![
             Row::new(vec![
                 "Last Update At:".to_owned(),
@@ -32,7 +34,5 @@ pub fn detail_table(selected_device: &DeviceInfo) -> Table<'_> {
         Block::default()
             .title("More Details".to_owned())
             .borders(Borders::ALL),
-    );
-
-    table
+    )
 }
