@@ -8,6 +8,7 @@ version = "0.2.2-pre.0"
 edition = "2024"
 default-run = "iron-heart"
 license = "MIT"
+rust-version = "1.98"
 # exclude = ["assets/"]
 
 [features]

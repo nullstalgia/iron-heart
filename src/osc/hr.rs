@@ -114,9 +114,9 @@ pub(super) fn form_bpm_bundle(
     };
 
     let hr_float = if positive_float_bpm {
-        hr_status.heart_rate_bpm as f32 / 255.0
+        f32::from(hr_status.heart_rate_bpm) / 255.0
     } else {
-        (hr_status.heart_rate_bpm as f32 / 255.0) * 2.0 - 1.0
+        (f32::from(hr_status.heart_rate_bpm) / 255.0).mul_add(2.0, -1.0)
     };
     let bpm_float_msg = OscMessage {
         addr: osc_addresses.bpm_float.clone(),

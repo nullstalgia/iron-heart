@@ -861,7 +861,7 @@ impl App {
         }
         self.chart_high_bpm = self.chart_high_bpm.max(new_bpm);
         self.chart_low_bpm = self.chart_low_bpm.min(new_bpm);
-        self.chart_mid_bpm = ((self.chart_low_bpm + self.chart_high_bpm) / 2.0).ceil();
+        self.chart_mid_bpm = f64::midpoint(self.chart_low_bpm, self.chart_high_bpm).ceil();
 
         if let Some(rr) = new_rr {
             let rr_secs = rr.as_secs_f64();
@@ -905,10 +905,12 @@ impl App {
                 .enumerate()
                 .map(|(i, &x)| {
                     if bpm_enabled && combine {
-                        let normalized =
-                            (x - self.chart_low_rr) / (self.chart_high_rr - self.chart_low_rr);
-                        let scaled = normalized * (self.chart_high_bpm - self.chart_low_bpm)
-                            + self.chart_low_bpm;
+                        let normalized = x
+                            .algebraic_sub(self.chart_low_rr)
+                            .algebraic_div(self.chart_high_rr.algebraic_sub(self.chart_low_rr));
+                        let scaled = normalized
+                            .algebraic_mul(self.chart_high_bpm.algebraic_sub(self.chart_low_bpm))
+                            .algebraic_add(self.chart_low_bpm);
                         (i as f64, scaled)
                     } else {
                         (i as f64, x)
