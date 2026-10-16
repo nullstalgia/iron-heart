@@ -65,7 +65,8 @@ impl OscActor {
 
         let socket = UdpSocket::bind(host_addr)?;
 
-        let beat_pulse_duration = Duration::from_millis(osc_settings.pulse_length_ms as u64);
+        let beat_pulse_duration = Duration::from_millis(osc_settings.pulse_length_ms as u64)
+            .max(Duration::from_millis(1));
         let positive_float_bpm = osc_settings.only_positive_float_bpm;
 
         let disconnect_update_interval = time::interval(Duration::from_secs(6));
@@ -122,12 +123,20 @@ impl OscActor {
         if data.heart_rate_bpm > 0 {
             self.hr_status = data;
             self.disconnected_at = None;
-            if let Some(new_rr) = self.hr_status.rr_intervals.last() {
+            if let Some(new_rr) = self
+                .hr_status
+                .rr_intervals
+                .iter()
+                .rev()
+                // Find the freshest non-zero RR interval
+                // (apparently some monitors can report 0ms)
+                .find(|rr| !rr.is_zero())
+            {
                 self.latest_rr = *new_rr;
                 // Mark that we know we'll get real RR intervals
                 // (don't need to calculate from BPM from now on)
                 self.use_real_rr = true;
-            } else if !self.use_real_rr {
+            } else if self.hr_status.rr_intervals.is_empty() && !self.use_real_rr {
                 self.latest_rr = rr_from_bpm(self.hr_status.heart_rate_bpm);
             }
         // Got a 0 BPM packet
@@ -180,7 +189,10 @@ impl OscActor {
             } else {
                 // Falling edge
                 self.pulse_edge = false;
-                let new_interval = self.latest_rr.saturating_sub(self.beat_pulse);
+                let new_interval = self
+                    .latest_rr
+                    .saturating_sub(self.beat_pulse)
+                    .max(Duration::from_millis(1));
                 self.heart_beat_ticker = time::interval(new_interval);
                 self.heart_beat_ticker.reset();
             }
