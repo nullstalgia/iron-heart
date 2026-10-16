@@ -8,7 +8,7 @@ use ntest::timeout;
 #[test_log(default_log_filter = "debug")]
 #[ignore = "can't be concurrent"]
 #[timeout(3000)] // 3s timeout
-#[should_panic(expected = "explicit panic")]
+#[should_panic(expected = "assertion")]
 async fn misspelled_bool() {
     let parent_token = CancellationToken::new();
 
@@ -29,7 +29,7 @@ async fn misspelled_bool() {
 #[test_log(default_log_filter = "debug")]
 #[ignore = "can't be concurrent"]
 #[timeout(3000)] // 3s timeout
-#[should_panic(expected = "explicit panic")]
+#[should_panic(expected = "assertion")]
 async fn missing_end_quote() {
     let parent_token = CancellationToken::new();
 
