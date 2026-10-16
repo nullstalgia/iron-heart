@@ -368,7 +368,7 @@ impl App {
         }
     }
 
-    pub async fn app_handlers(&mut self, data: AppRx) {
+    pub fn app_handlers(&mut self, data: AppRx) {
         match data {
             AppRx::DeviceUpdate(new_device_info) => self.device_info_callback(new_device_info),
             AppRx::AppUpdate(hr_data) => {
@@ -393,7 +393,7 @@ impl App {
                         self.websocket_url = Some(local_addr.to_string());
                     }
                     AppUpdate::ActivitySelected(_) => {
-                        if let Err(err) = self.activities.save().await {
+                        if let Err(err) = self.activities.save() {
                             self.handle_error_update(ErrorPopup::detailed(
                                 "Failed to save activities!",
                                 err,

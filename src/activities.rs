@@ -5,8 +5,8 @@ use tracing::info;
 
 use tui_input::Input;
 
+use std::io::Write;
 use std::{collections::BTreeMap, path::PathBuf};
-use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::app::{App, AppUpdate, AppView, SubState};
@@ -71,21 +71,21 @@ impl Activities {
             table_state: TableState::new(),
         }
     }
-    pub async fn save(&mut self) -> Result<(), AppError> {
+    pub fn save(&mut self) -> Result<(), AppError> {
         self.file.last_activity = self.current_activity;
         let file_path = PathBuf::from(ACTIVITIES_TOML_PATH);
-        let mut file = File::create(&file_path).await?;
+        let mut file = std::fs::File::create(&file_path)?;
         let buffer = toml::to_string(&self.file)?;
-        file.write_all(buffer.as_bytes()).await?;
-        file.flush().await?;
-        file.sync_all().await?;
+        file.write_all(buffer.as_bytes())?;
+        file.flush()?;
+        file.sync_all()?;
         info!("Serialized activities length: {}", buffer.len());
         Ok(())
     }
     pub async fn load(&mut self, remember_last: bool) -> Result<u8, AppError> {
         let file_path = PathBuf::from(ACTIVITIES_TOML_PATH);
         if file_path.exists() {
-            let mut file = File::open(&file_path).await?;
+            let mut file = tokio::fs::File::open(&file_path).await?;
             let mut buffer = String::new();
             file.read_to_string(&mut buffer).await?;
             let new: ActivitiesFile = toml::from_str(&buffer)?;
@@ -97,7 +97,7 @@ impl Activities {
                 self.current_activity = self.initial_activity();
             }
         } else {
-            let mut file = File::create(&file_path).await?;
+            let mut file = tokio::fs::File::create(&file_path).await?;
             let default = ActivitiesFile::default();
             file.write_all(toml::to_string(&default)?.as_bytes())
                 .await?;
