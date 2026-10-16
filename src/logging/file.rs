@@ -8,7 +8,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs::{create_dir, File};
-use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver as BReceiver;
 use tokio_util::sync::CancellationToken;
@@ -32,7 +32,7 @@ pub(super) struct FileLoggingActor {
     misc_settings: MiscSettings,
     csv_writer: Option<AsyncSerializer<File>>,
     csv_path: Option<PathBuf>,
-    txt_writer: Option<BufWriter<File>>,
+    txt_writer: Option<File>,
     txt_path: Option<PathBuf>,
     files_initialized: bool,
     // Loop-specific vars
@@ -123,7 +123,9 @@ impl FileLoggingActor {
                     path: PathBuf::from(txt_path),
                     source: e,
                 })?;
-            self.txt_writer = Some(BufWriter::new(file));
+            // Honestly this probably doesn't benefit from being in a BufWriter due to being polled every whole second or so.
+            // self.txt_writer = Some(BufWriter::new(file));
+            self.txt_writer = Some(file);
         }
         self.files_initialized = true;
         Ok(())
@@ -168,7 +170,7 @@ impl FileLoggingActor {
                 format!("{}", heart_rate_status.heart_rate_bpm)
             };
             txt_writer
-                .get_ref()
+                // .get_ref()
                 .set_len(0)
                 .await
                 .map_err(|e| AppError::WriteFile {
@@ -193,6 +195,13 @@ impl FileLoggingActor {
                 path: self.txt_path.as_ref().unwrap().to_owned(),
                 source: e,
             })?;
+            // txt_writer
+            //     .sync_data()
+            //     .await
+            //     .map_err(|e| AppError::WriteFile {
+            //         path: self.txt_path.as_ref().unwrap().to_owned(),
+            //         source: e,
+            //     })?;
         }
         self.last_rr = *reported_rr;
 
