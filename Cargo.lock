@@ -1858,7 +1858,6 @@ dependencies = [
  "futures-util",
  "http",
  "human-panic",
- "lazy_static",
  "libc",
  "lnk",
  "local-ip-address",

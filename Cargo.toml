@@ -22,7 +22,6 @@ crossterm = { version = "0.28", features = ["event-stream"] }
 futures = "0.3"
 chrono = "0.4"
 uuid = "1"
-lazy_static = "1.4.0"
 config = "0.14.0"
 serde = "1.0.204"
 serde_derive = "1.0.204"
@@ -116,3 +115,9 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+struct_excessive_bools = "allow"
+struct_field_names = "allow"
+semicolon_if_nothing_returned = "allow"

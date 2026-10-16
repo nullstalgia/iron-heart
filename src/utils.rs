@@ -13,12 +13,12 @@ pub fn extract_manufacturer_data(manufacturer_data: &HashMap<u16, Vec<u8>>) -> M
         .iter()
         .map(|(&key, value)| {
             c = Some(key);
-            let hex_string = value
+
+            value
                 .iter()
                 .map(|byte| format!("{byte:02X}"))
                 .collect::<Vec<String>>()
-                .join(" ");
-            hex_string
+                .join(" ")
         })
         .collect::<Vec<String>>()
         .join(" ");

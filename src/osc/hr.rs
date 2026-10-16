@@ -75,7 +75,7 @@ pub(super) fn send_raw_activity_param(
 
     let activity_msg = OscMessage {
         addr: osc_addresses.activity.clone(),
-        args: vec![OscType::Int(new_index as i32)],
+        args: vec![OscType::Int(new_index.into())],
     };
 
     bundle.content.push(OscPacket::Message(activity_msg));
@@ -110,7 +110,7 @@ pub(super) fn form_bpm_bundle(
 
     let bpm_int_msg = OscMessage {
         addr: osc_addresses.bpm_int.clone(),
-        args: vec![OscType::Int(hr_status.heart_rate_bpm as i32)],
+        args: vec![OscType::Int(hr_status.heart_rate_bpm.into())],
     };
 
     let hr_float = if positive_float_bpm {
@@ -143,12 +143,12 @@ pub(super) fn form_bpm_bundle(
 
     let battery_int_msg = OscMessage {
         addr: osc_addresses.battery_int.clone(),
-        args: vec![OscType::Int(battery_level as i32)],
+        args: vec![OscType::Int(battery_level.into())],
     };
 
     let battery_float_msg = OscMessage {
         addr: osc_addresses.battery_float.clone(),
-        args: vec![OscType::Float(battery_level as f32 / 100.0)],
+        args: vec![OscType::Float(f32::from(battery_level) / 100.0)],
     };
 
     if hr_status.heart_rate_bpm == 0 {
@@ -160,6 +160,7 @@ pub(super) fn form_bpm_bundle(
     } else if let Some(&latest_rr) = hr_status.rr_intervals.last() {
         let rr_msg = OscMessage {
             addr: osc_addresses.latest_rr.clone(),
+            #[allow(clippy::cast_possible_truncation)]
             args: vec![OscType::Int((latest_rr.as_secs_f32() * 1000.0) as i32)],
         };
         bundle.content.push(OscPacket::Message(rr_msg));

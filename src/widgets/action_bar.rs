@@ -12,7 +12,7 @@ pub const SPINNER: [char; 4] = ['|', '/', '-', '\\'];
 pub fn action_bar(
     scan_paused: bool,
     is_loading_characteristics: bool,
-    frame_count: &usize,
+    frame_count: usize,
 ) -> Table<'static> {
     let index_slow = (frame_count / 2) % SPINNER.len();
     let index = frame_count % SPINNER.len();

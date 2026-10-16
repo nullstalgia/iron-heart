@@ -33,7 +33,7 @@ impl From<u16> for JSONHeartRate {
     fn from(hr: u16) -> Self {
         Self {
             heartRate: hr,
-            latest_rr_ms: Some(60000 / hr as u64),
+            latest_rr_ms: Some(60000 / u64::from(hr)),
             battery: 100,
         }
     }
@@ -67,7 +67,7 @@ async fn main() {
         if args.no_rr {
             hr.latest_rr_ms = None;
         } else {
-            hr.latest_rr_ms = Some(60000 / hr.heartRate as u64);
+            hr.latest_rr_ms = Some(60000 / u64::from(hr.heartRate));
         }
         let json = serde_json::to_string(&hr).unwrap();
         client.send(Message::text(json)).await.unwrap();

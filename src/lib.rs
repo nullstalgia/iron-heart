@@ -1,6 +1,4 @@
 #![deny(unused_must_use)]
-#[macro_use]
-extern crate lazy_static;
 
 use args::TopLevelCmd;
 use errors::AppError;
@@ -118,7 +116,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
     app.init(&arg_config).await;
 
     // Only when running TUI
-    app.first_time_setup(&arg_config).await;
+    app.first_time_setup(&arg_config);
 
     // Start the main loop.
     while !app.cancel_app.is_cancelled() {
@@ -131,7 +129,7 @@ pub async fn run_tui(mut arg_config: TopLevelCmd) -> AppResult<()> {
                     Ok(event) => {
                         match event {
                             Event::Tick => app.term_tick(),
-                            Event::Key(key_event) => handle_key_events(&mut app, key_event)?,
+                            Event::Key(key_event) => handle_key_events(&mut app, key_event),
                             Event::Resize => tui.autoresize()?,
                         }
                     }

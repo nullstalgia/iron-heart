@@ -3,6 +3,7 @@ use ratatui::{
     layout::Alignment,
     widgets::{Block, Borders, Clear, Paragraph, TableState},
 };
+use tracing_log::log::error;
 
 use crate::{
     activities::tui::{render_activity_name_entry, render_activity_selection},
@@ -28,7 +29,7 @@ use crate::widgets::prompts::save_prompt;
 
 use ratatui::layout::{Constraint, Direction, Layout};
 
-use std::sync::atomic::Ordering;
+use std::{borrow::Cow, sync::atomic::Ordering};
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, f: &mut Frame) {
@@ -69,7 +70,7 @@ pub fn render(app: &mut App, f: &mut Frame) {
             let info_table: ratatui::widgets::Table<'_> = action_bar(
                 app.ble_scan_paused.load(Ordering::SeqCst),
                 app.sub_state == SubState::ConnectingForCharacteristics,
-                &app.frame_count,
+                app.frame_count.0,
             );
             f.render_widget(info_table, chunks[2]);
         }
@@ -78,18 +79,25 @@ pub fn render(app: &mut App, f: &mut Frame) {
         }
         AppView::WaitingForWebsocket => {
             // TODO Move out to a function
+            const WAITING: &str = "Waiting for websocket connection...";
             let area = centered_rect(60, 60, f.area());
-            let mut text = "Waiting for websocket connection...".to_string();
-            if let Some(ref url) = app.websocket_url {
-                let connection_info = if url.starts_with("0.0.0.0") {
-                    local_ip_address::local_ip()
-                        .map(|local_ip| format!("{}{}", local_ip, &url[7..]))
-                        .unwrap_or_else(|_| url.clone())
-                } else {
-                    url.clone()
-                };
-                text.push_str(&format!("\nConnect to: {connection_info}"));
-            }
+            let text: Cow<'static, str> =
+                app.websocket_url
+                    .clone()
+                    .map_or(Cow::Borrowed(WAITING), |url| {
+                        let connection_info = if let Some(stripped) = url.strip_prefix("0.0.0.0") {
+                            match local_ip_address::local_ip() {
+                                Ok(local_ip) => format!("{local_ip}{stripped}"),
+                                Err(e) => {
+                                    error!("unable to get local ip: {e}");
+                                    url
+                                }
+                            }
+                        } else {
+                            url
+                        };
+                        format!("{WAITING}\nConnect to: {connection_info}").into()
+                    });
             let connecting_block = Paragraph::new(text)
                 .alignment(Alignment::Center)
                 .block(Block::default().borders(Borders::ALL));
@@ -160,15 +168,12 @@ pub fn table_state_scroll(up: bool, state: &mut TableState, table_len: usize) {
     if table_len == 0 {
         return;
     }
-    let next = match state.selected() {
-        Some(selected) => {
-            if up {
-                (selected + table_len - 1) % table_len
-            } else {
-                (selected + 1) % table_len
-            }
+    let next = state.selected().map_or(0, |selected| {
+        if up {
+            (selected + table_len - 1) % table_len
+        } else {
+            (selected + 1) % table_len
         }
-        None => 0,
-    };
+    });
     state.select(Some(next));
 }

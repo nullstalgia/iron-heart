@@ -1,6 +1,5 @@
 use std::sync::atomic::Ordering;
 
-use crate::AppResult;
 use crate::app::{App, ErrorPopup, SubState};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_input::backend::crossterm::EventHandler;
@@ -8,12 +7,12 @@ use tui_input::backend::crossterm::EventHandler;
 use tracing::{debug, error};
 
 /// Handles the key events and updates the state of [`App`].
-pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
+pub fn handle_key_events(app: &mut App, key_event: KeyEvent) {
     // Special keys
     match key_event.code {
         KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
             app.cancel_app.cancel();
-            return Ok(());
+            return;
         }
         _ => {}
     }
@@ -37,9 +36,7 @@ pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
 
     match app.sub_state {
         SubState::ActivitySelection => match key_event.code {
-            KeyCode::Char('n' | 'N')
-                if key_event.modifiers == KeyModifiers::CONTROL =>
-            {
+            KeyCode::Char('n' | 'N') if key_event.modifiers == KeyModifiers::CONTROL => {
                 app.activities_new_prompt();
             }
             _ => {
@@ -85,5 +82,4 @@ pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
             _ => {}
         },
     }
-    Ok(())
 }

@@ -1,6 +1,7 @@
 #[derive(Debug)]
 pub struct VrcxStartup;
 
+#[allow(clippy::unused_self, reason = "matching windows impl")]
 impl VrcxStartup {
     pub const fn new() -> Self {
         Self

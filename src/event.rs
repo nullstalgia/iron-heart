@@ -36,7 +36,7 @@ impl EventHandler {
     pub fn new(tick_rate: u64) -> Self {
         let tick_rate = Duration::from_millis(tick_rate);
         let (sender, receiver) = mpsc::unbounded_channel();
-        let _sender = sender.clone();
+        let sender_clone = sender.clone();
         let handler = tokio::spawn(async move {
             let mut reader = crossterm::event::EventStream::new();
             let mut tick = tokio::time::interval(tick_rate);
@@ -44,31 +44,27 @@ impl EventHandler {
                 let tick_delay = tick.tick();
                 let crossterm_event = reader.next().fuse();
                 tokio::select! {
-                  _ = _sender.closed() => {
+                  () = sender_clone.closed() => {
                     break;
                   }
-                  _ = tick_delay => {
-                    _sender.send(Event::Tick).unwrap();
+                  _instant = tick_delay => {
+                    sender_clone.send(Event::Tick).unwrap();
                   }
                   Some(Ok(evt)) = crossterm_event => {
                     match evt {
                       CrosstermEvent::Key(key) => {
                           match key.kind {
-                              KeyEventKind::Press | KeyEventKind::Repeat => _sender.send(Event::Key(key)).unwrap(),
-                              _ => {},
+                              KeyEventKind::Press | KeyEventKind::Repeat => sender_clone.send(Event::Key(key)).unwrap(),
+                              KeyEventKind::Release => (),
                           }
                       },
                       CrosstermEvent::Mouse(_mouse) => {
                         // _sender.send(Event::Mouse(mouse)).unwrap();
                       },
                       CrosstermEvent::Resize(_x, _y) => {
-                        _sender.send(Event::Resize).unwrap();
+                        sender_clone.send(Event::Resize).unwrap();
                       },
-                      CrosstermEvent::FocusLost => {
-                      },
-                      CrosstermEvent::FocusGained => {
-                      },
-                      CrosstermEvent::Paste(_) => {
+                      CrosstermEvent::FocusLost|CrosstermEvent::FocusGained | CrosstermEvent::Paste(_) => {
                       },
                     }
                   }
@@ -93,8 +89,6 @@ impl EventHandler {
     /// During shutdown, close and drain the receiver so no stray events make it on the way out
     pub fn close(&mut self) {
         self.receiver.close();
-        while self.receiver.try_recv().is_ok() {
-            continue;
-        }
+        while self.receiver.try_recv().is_ok() {}
     }
 }

@@ -126,7 +126,7 @@ pub fn update_found_prompt(app: &mut App, frame: &mut Frame) {
     frame.render_stateful_widget(update_now_options(), options, &mut app.prompt_state);
 }
 
-pub fn update_downloading_ui(app: &mut App, frame: &mut Frame) {
+pub fn update_downloading_ui(app: &App, frame: &mut Frame) {
     let mut area = centered_rect(65, 60, frame.area());
     area.height = area.height.min(5);
 

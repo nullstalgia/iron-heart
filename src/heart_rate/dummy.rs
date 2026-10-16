@@ -58,7 +58,7 @@ pub async fn dummy_thread(
                 broadcast_tx,
                 ErrorPopup::Intermittent(format!(
                     "Simulating lost connection ({:.0} seconds left)",
-                    bound.abs_diff(hr_status.heart_rate_bpm) as f32 / dummy_settings.bpm_speed
+                    f32::from(bound.abs_diff(hr_status.heart_rate_bpm)) / dummy_settings.bpm_speed
                 ),)
             );
         } else {
@@ -83,7 +83,7 @@ pub async fn dummy_thread(
             _ = bpm_update_interval.tick() => {
                 dummy_tick();
             }
-            _ = cancel_token.cancelled() => {
+            () = cancel_token.cancelled() => {
                 info!("Shutting down Dummy thread!");
                 break;
             }

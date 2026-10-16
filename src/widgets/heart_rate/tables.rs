@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Rect},
@@ -50,7 +52,7 @@ pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
         heart_rate_status
             .rr_intervals
             .iter()
-            .map(|rr| rr.as_secs_f32())
+            .map(Duration::as_secs_f32)
             .collect::<Vec<f32>>()
     );
 
@@ -85,7 +87,7 @@ pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
     if app.settings.activities.enabled {
         headers.push(line![span!(Modifier::UNDERLINED; "A"), span!("ctivity")]);
         let activity = app.activities.selected();
-        let activity: &str = activity.map(|s| s.as_str()).unwrap_or("???");
+        let activity: &str = activity.map_or("???", String::as_str);
         content.push(Cell::from(activity));
         constraints.push(Constraint::Fill(1));
     }

@@ -65,14 +65,14 @@ impl OscActor {
 
         let socket = UdpSocket::bind(host_addr)?;
 
-        let beat_pulse_duration = Duration::from_millis(osc_settings.pulse_length_ms as u64)
+        let beat_pulse_duration = Duration::from_millis(osc_settings.pulse_length_ms.into())
             .max(Duration::from_millis(1));
         let positive_float_bpm = osc_settings.only_positive_float_bpm;
 
         let disconnect_update_interval = time::interval(Duration::from_secs(6));
 
         let max_hide_disconnection =
-            Duration::from_secs(osc_settings.max_hide_disconnection_sec as u64);
+            Duration::from_secs(osc_settings.max_hide_disconnection_sec.into());
 
         Ok(Self {
             target_addr,
@@ -148,7 +148,7 @@ impl OscActor {
         // Since showing 0 BPM on the avatar isn't ideal,
         // those cases are treated equally.
         } else if self.osc_settings.hide_disconnections {
-            self.disconnected_at.get_or_insert(Instant::now());
+            self.disconnected_at.get_or_insert_with(Instant::now);
         } else {
             self.hr_status = data;
             self.init_params()?;
@@ -183,12 +183,12 @@ impl OscActor {
     // to send short pulses without blocking
     fn heart_beat(&mut self) -> Result<(), AppError> {
         if self.hr_status.heart_rate_bpm > 0 && !self.delay_sending_connected {
+            #[allow(clippy::if_not_else, reason = "up then down")]
             if !self.pulse_edge {
                 // Rising edge
                 self.pulse_edge = true;
                 self.toggle_edge = !self.toggle_edge;
                 self.heart_beat_ticker = time::interval(self.beat_pulse);
-                self.heart_beat_ticker.reset();
             } else {
                 // Falling edge
                 self.pulse_edge = false;
@@ -197,8 +197,8 @@ impl OscActor {
                     .saturating_sub(self.beat_pulse)
                     .max(Duration::from_millis(1));
                 self.heart_beat_ticker = time::interval(new_interval);
-                self.heart_beat_ticker.reset();
             }
+            self.heart_beat_ticker.reset();
             send_raw_beat_params(
                 self.pulse_edge,
                 self.toggle_edge,

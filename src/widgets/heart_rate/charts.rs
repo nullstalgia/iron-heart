@@ -48,11 +48,7 @@ fn bpm_rr_legend(chart_type: &ChartType, graph_area: Rect) -> (Paragraph<'_>, Re
             vec![line![span!(Color::Blue; "(RR)")]]
         }
     };
-    let max_line_length = text
-        .iter()
-        .map(|line| line.width())
-        .max()
-        .unwrap_or_default();
+    let max_line_length = text.iter().map(Line::width).max().unwrap_or_default();
 
     let legend_area = legend_rect(max_line_length as u16, text.len() as u16, graph_area);
 

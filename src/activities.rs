@@ -223,7 +223,7 @@ pub mod tui {
         let [current_area, table_area, input_area] = vertical.areas(inner_area);
 
         let activity = app.activities.selected();
-        let activity: &str = activity.map(|s| s.as_str()).unwrap_or("???");
+        let activity: &str = activity.map_or("???", std::string::String::as_str);
         let header = Paragraph::new(text!["Current:", activity]).centered();
 
         f.render_widget(header, current_area);
@@ -273,7 +273,7 @@ pub mod tui {
             .highlight_symbol(">> ")
     }
 
-    pub fn render_activity_name_entry(app: &mut App, f: &mut Frame) {
+    pub fn render_activity_name_entry(app: &App, f: &mut Frame) {
         let mut area = centered_rect(30, 25, f.area());
         area.height = area.height.min(4);
         // let is_renaming = app.sub_state == SubState::ActivityRename;
@@ -352,7 +352,7 @@ impl App {
             _ => {}
         }
     }
-    pub fn broadcast_activity(&mut self, activity: u8) {
+    pub fn broadcast_activity(&self, activity: u8) {
         broadcast!(
             self.broadcast_tx,
             AppUpdate::ActivitySelected(activity),

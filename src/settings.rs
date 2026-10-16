@@ -142,22 +142,15 @@ pub struct Settings {
 impl Settings {
     #[allow(clippy::needless_late_init)]
     pub fn load(config_path: PathBuf, required: bool) -> Result<Self, AppError> {
-        let default_log_level;
-        let default_session_log_path;
-        let default_bpm_txt_path;
-
-        if cfg!(debug_assertions) {
+        let default_log_level = "debug";
+        let (default_session_log_path, default_bpm_txt_path) = if cfg!(debug_assertions) {
             // Debug build default params
-            default_log_level = "debug";
             // (assuming it's in target/debug/)
-            default_session_log_path = "../../session_logs";
-            default_bpm_txt_path = "../../bpm.txt";
+            ("../../session_logs", "../../bpm.txt")
         } else {
             // Release build default params
-            default_log_level = "debug";
-            default_session_log_path = "session_logs";
-            default_bpm_txt_path = "bpm.txt";
-        }
+            ("session_logs", "bpm.txt")
+        };
 
         // TODO: New way of doing defaults
         // Either use serde's defaults and skip the extra config crate entirely (doesn't look like it supports serde defaults?)

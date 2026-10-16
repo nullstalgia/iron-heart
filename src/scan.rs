@@ -1,9 +1,7 @@
 use crate::app::{DeviceUpdate, ErrorPopup};
 use crate::structs::{Characteristic, DeviceInfo};
 // TODO See if this weird manager shadowing is normal
-use btleplug::api::{
-    Central, CentralEvent, Manager as _, Peripheral, PeripheralProperties, ScanFilter,
-};
+use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Adapter, Manager};
 use futures::StreamExt;
 use std::sync::Arc;
@@ -60,8 +58,8 @@ pub async fn bluetooth_event_thread(
                 central = adapter;
                 break 'adapter;
             }
-            Err(_) => {
-                error!("No Bluetooth adapters found!");
+            Err(e) => {
+                error!("No Bluetooth adapters found! ({e})");
                 tx.send(DeviceUpdate::Error(ErrorPopup::UserMustDismiss(
                     "No Bluetooth adapters found! Make sure it's plugged in and enabled."
                         .to_string(),
@@ -70,7 +68,7 @@ pub async fn bluetooth_event_thread(
                 .expect("Failed to send error message");
                 tokio::time::sleep(Duration::from_secs(10)).await;
             }
-        };
+        }
     }
 
     if let Err(e) = central.start_scan(ScanFilter::default()).await {
@@ -131,7 +129,7 @@ pub async fn bluetooth_event_thread(
                                 .properties()
                                 .await
                                 .unwrap()
-                                .unwrap_or(PeripheralProperties::default());
+                                .unwrap_or_default();
 
                             if properties.services.is_empty() {
                                 continue 'events;
@@ -203,9 +201,9 @@ pub async fn bluetooth_event_thread(
 /// The device is identified by its address or UUID.
 pub async fn get_characteristics(tx: mpsc::Sender<DeviceUpdate>, peripheral: DeviceInfo) {
     let duration = Duration::from_secs(10);
-    match &peripheral.device {
-        Some(device) => match timeout(duration, device.connect()).await {
-            Ok(Ok(_)) => {
+    if let Some(device) = &peripheral.device {
+        match timeout(duration, device.connect()).await {
+            Ok(Ok(())) => {
                 if let Some(device) = &peripheral.device {
                     device.discover_services().await.unwrap();
                     let characteristics = device.characteristics();
@@ -235,7 +233,7 @@ pub async fn get_characteristics(tx: mpsc::Sender<DeviceUpdate>, peripheral: Dev
                 .await
                 .expect("Failed to send error message");
             }
-            Err(_) => {
+            Err(_timeout) => {
                 error!("Characteristics: connection timed out");
                 tx.send(DeviceUpdate::Error(ErrorPopup::Intermittent(
                     "Connection timed out".to_string(),
@@ -243,14 +241,13 @@ pub async fn get_characteristics(tx: mpsc::Sender<DeviceUpdate>, peripheral: Dev
                 .await
                 .expect("Failed to send error message");
             }
-        },
-        None => {
-            error!("Characteristics: device not found");
-            tx.send(DeviceUpdate::Error(ErrorPopup::Fatal(
-                "Device not found".to_string(),
-            )))
-            .await
-            .expect("Failed to send error message");
         }
+    } else {
+        error!("Characteristics: device not found");
+        tx.send(DeviceUpdate::Error(ErrorPopup::Fatal(
+            "Device not found".to_string(),
+        )))
+        .await
+        .expect("Failed to send error message");
     }
 }

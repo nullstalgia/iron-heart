@@ -28,7 +28,7 @@ impl From<u16> for JSONHeartRate {
     fn from(hr: u16) -> Self {
         Self {
             heartRate: hr,
-            latest_rr_ms: 60000 / hr as u64,
+            latest_rr_ms: 60000 / u64::from(hr),
             battery: 100,
         }
     }

@@ -170,25 +170,25 @@ impl PrometheusLoggingActor {
         let metrics = [
             (
                 &self.settings.metrics.bpm,
-                heart_rate_status.heart_rate_bpm as i64,
+                heart_rate_status.heart_rate_bpm.into(),
             ),
             (&self.settings.metrics.rr, reported_rr.as_millis() as i64),
             (
                 &self.settings.metrics.battery,
-                u8::from(heart_rate_status.battery_level) as i64,
+                u8::from(heart_rate_status.battery_level).into(),
             ),
             (
                 &self.settings.metrics.twitch_up,
-                heart_rate_status.twitch_up as i64,
+                heart_rate_status.twitch_up.into(),
             ),
             (
                 &self.settings.metrics.twitch_down,
-                heart_rate_status.twitch_down as i64,
+                heart_rate_status.twitch_down.into(),
             ),
-            (&self.settings.metrics.activity, self.activity as i64),
+            (&self.settings.metrics.activity, self.activity.into()),
         ];
 
-        for (metric_name, value) in metrics.iter() {
+        for (metric_name, value) in &metrics {
             if !metric_name.is_empty() {
                 self.gauges
                     .get(*metric_name)

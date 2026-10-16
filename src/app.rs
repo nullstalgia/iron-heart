@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use ratatui::widgets::TableState;
 use std::collections::VecDeque;
+use std::num::Wrapping;
 use std::path::PathBuf;
 use std::{
     sync::{
@@ -152,7 +153,7 @@ pub struct App {
     pub quick_connect_ui: bool,
     pub characteristic_scroll: usize,
     pub selected_characteristics: Vec<Characteristic>,
-    pub frame_count: usize,
+    pub frame_count: Wrapping<usize>,
     pub settings: Settings,
     pub heart_rate_status: HeartRateStatus,
     pub cancel_app: CancellationToken,
@@ -198,16 +199,13 @@ impl App {
 
         let exe_path = std::env::current_exe().expect("Failed to get executable path");
 
-        let config_path: PathBuf = match arg_config.config_override.as_ref() {
-            Some(path) => path.to_owned(),
-            None => {
-                let config_name = exe_path.with_extension("toml");
-                let config_name = config_name
-                    .file_name()
-                    .expect("Failed to build config name");
-                PathBuf::from(config_name)
-            }
-        };
+        let config_path = arg_config.config_override.clone().unwrap_or_else(|| {
+            let config_name = exe_path.with_extension("toml");
+            let config_name = config_name
+                .file_name()
+                .expect("Failed to build config name");
+            PathBuf::from(config_name)
+        });
 
         let mut table_state = TableState::default();
         let mut prompt_state = TableState::default();
@@ -246,7 +244,7 @@ impl App {
             quick_connect_ui: false,
             characteristic_scroll: 0,
             selected_characteristics: Vec::new(),
-            frame_count: 0,
+            frame_count: Wrapping::default(),
             error_message,
             settings,
             heart_rate_status: HeartRateStatus::default(),
@@ -440,7 +438,7 @@ impl App {
         }
     }
 
-    pub async fn first_time_setup(&mut self, arg_config: &TopLevelCmd) {
+    pub fn first_time_setup(&mut self, arg_config: &TopLevelCmd) {
         // Return early if init() had an issue/is a Dummy right now
         // (Not using is_idle_on_ble since I want this to work for WS and BLE users)
         if self.error_message.is_some()
@@ -500,7 +498,7 @@ impl App {
         }
     }
 
-    fn spawn_update_check(&mut self) {
+    fn spawn_update_check(&self) {
         self.updates.query_latest();
     }
 
@@ -583,11 +581,11 @@ impl App {
         let ble_packet_timeout = if ble_packet_timeout == 0 {
             Duration::from_secs(30)
         } else {
-            Duration::from_secs(self.settings.ble.packet_timeout_secs as u64)
+            Duration::from_secs(self.settings.ble.packet_timeout_secs.into())
         };
         // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
-            Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
+            Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms.into()).as_secs_f32();
         let rr_ignore_after_empty = self.settings.ble.rr_ignore_after_empty as usize;
         debug!("Spawning notification thread, AppView: {:?}", self.view);
         self.hr_thread_handle = Some(tokio::spawn(async move {
@@ -704,11 +702,11 @@ impl App {
         let ws_packet_timeout = if ws_packet_timeout == 0 {
             Duration::from_secs(30)
         } else {
-            Duration::from_secs(self.settings.ble.packet_timeout_secs as u64)
+            Duration::from_secs(self.settings.ble.packet_timeout_secs.into())
         };
         // Not leaving as Duration as it's being used to check an abs difference
         let rr_twitch_threshold =
-            Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms as u64).as_secs_f32();
+            Duration::from_millis(self.settings.osc.twitch_rr_threshold_ms.into()).as_secs_f32();
         debug!("Spawning Websocket thread");
         self.view = AppView::WaitingForWebsocket;
         self.websocket_thread_handle = Some(tokio::spawn(async move {
@@ -791,7 +789,7 @@ impl App {
         }
     }
 
-    fn save_settings(&mut self) -> Result<(), AppError> {
+    fn save_settings(&self) -> Result<(), AppError> {
         if self.allow_modifying_config
         // && !self.cancel_actors.is_cancelled()
         {
@@ -814,11 +812,9 @@ impl App {
                 return;
             }
 
-            let mut damaged = false;
-            if self.settings.ble.saved_address != new_id || self.settings.ble.saved_name != new_name
-            {
-                damaged = true;
-            }
+            let damaged = self.settings.ble.saved_address != new_id
+                || self.settings.ble.saved_name != new_name;
+
             // TODO See if I can find a way to get "Unknown" programatically,
             // not a fan of hardcoding it (and it's "" in the ::default())
             // Maybe do a .new() and supply a None?
@@ -832,11 +828,9 @@ impl App {
     }
 
     pub fn get_selected_device(&self) -> Option<&DeviceInfo> {
-        if let Some(selected_index) = self.table_state.selected() {
-            self.discovered_devices.get(selected_index)
-        } else {
-            None
-        }
+        self.table_state
+            .selected()
+            .and_then(|selected_index| self.discovered_devices.get(selected_index))
     }
 
     pub fn is_idle_on_ble_selection(&self) -> bool {
@@ -960,9 +954,8 @@ impl App {
 
     pub fn handle_error_update(&mut self, error: ErrorPopup) {
         // Never override a fatal error popup
-        match self.error_message {
-            Some(ErrorPopup::Fatal(_)) | Some(ErrorPopup::FatalDetailed(_, _)) => return,
-            _ => {}
+        if let Some(ErrorPopup::Fatal(_) | ErrorPopup::FatalDetailed(_, _)) = self.error_message {
+            return;
         }
         match error {
             ErrorPopup::Fatal(_) | ErrorPopup::FatalDetailed(_, _) => {
@@ -983,7 +976,7 @@ impl App {
 
     /// Terminal interval tick
     pub fn term_tick(&mut self) {
-        (self.frame_count, _) = self.frame_count.overflowing_add(1);
+        self.frame_count += Wrapping(1);
     }
 
     pub fn scroll_up(&mut self) {
@@ -1006,7 +999,7 @@ impl App {
                 );
             }
             SubState::UpdateFoundPrompt | SubState::UpdateAllowCheckPrompt => {
-                self.updates_scroll(true)
+                self.updates_scroll(true);
             }
             #[cfg(windows)]
             SubState::LaunchUpdatePrompt => self.updates_scroll(true),
@@ -1039,7 +1032,7 @@ impl App {
                 );
             }
             SubState::UpdateFoundPrompt | SubState::UpdateAllowCheckPrompt => {
-                self.updates_scroll(false)
+                self.updates_scroll(false);
             }
             #[cfg(windows)]
             SubState::LaunchUpdatePrompt => self.updates_scroll(false),
