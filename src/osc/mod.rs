@@ -74,7 +74,7 @@ impl OscActor {
         let max_hide_disconnection =
             Duration::from_secs(osc_settings.max_hide_disconnection_sec as u64);
 
-        Ok(OscActor {
+        Ok(Self {
             target_addr,
             delay_sending_connected: true,
             positive_float_bpm,
@@ -272,7 +272,7 @@ impl OscActor {
                 _ = mimic => {
                     self.mimic_tick()?;
                 }
-                _ = cancel_token.cancelled() => {
+                () = cancel_token.cancelled() => {
                     info!("Shutting down OSC thread!");
                     self.init_params()?;
                     break;

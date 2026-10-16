@@ -66,7 +66,7 @@ fn format_address(prefix: &str, param: &str, param_name: &str) -> Result<String,
 impl OscAddresses {
     pub fn build(osc_params: &OscAddrConf) -> Result<Self, AppError> {
         let prefix = format_prefix(&osc_params.prefix)?;
-        Ok(OscAddresses {
+        Ok(Self {
             beat_toggle: format_address(&prefix, &osc_params.beat_toggle, "beat_toggle")?,
             beat_pulse: format_address(&prefix, &osc_params.beat_pulse, "beat_pulse")?,
             bpm_int: format_address(&prefix, &osc_params.bpm_int, "bpm_int")?,

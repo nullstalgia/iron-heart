@@ -111,6 +111,8 @@ test-log = { version = "0.2.16", default-features = false, features = [
     "unstable",
 ] }
 
-# [lints.clippy]
-# pedantic = "deny"
-# nursery = "deny"
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }

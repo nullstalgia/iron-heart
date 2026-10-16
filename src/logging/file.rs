@@ -41,7 +41,7 @@ pub(super) struct FileLoggingActor {
 }
 
 impl FileLoggingActor {
-    pub(super) fn new(initial_activity: u8, misc_settings: MiscSettings) -> Self {
+    pub(super) const fn new(initial_activity: u8, misc_settings: MiscSettings) -> Self {
         Self {
             misc_settings,
             csv_writer: None,
@@ -79,7 +79,7 @@ impl FileLoggingActor {
                         }
                     }
                 }
-                _ = cancel_token.cancelled() => {
+                () = cancel_token.cancelled() => {
                     info!("Logging thread shutting down");
                     return Ok(());
                 }
@@ -149,8 +149,8 @@ impl FileLoggingActor {
                 BPM: heart_rate_status.heart_rate_bpm,
                 RR: reported_rr.as_millis() as u16,
                 Battery: heart_rate_status.battery_level.into(),
-                TwitchUp: heart_rate_status.twitch_up as u8,
-                TwitchDown: heart_rate_status.twitch_down as u8,
+                TwitchUp: u8::from(heart_rate_status.twitch_up),
+                TwitchDown: u8::from(heart_rate_status.twitch_down),
                 Activity: self.activity,
             };
             csv_writer.serialize(csv_data).await?;

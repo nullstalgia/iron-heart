@@ -69,19 +69,19 @@ pub enum AppUpdate {
 
 impl From<HeartRateStatus> for AppUpdate {
     fn from(hr: HeartRateStatus) -> Self {
-        AppUpdate::HeartRateStatus(hr)
+        Self::HeartRateStatus(hr)
     }
 }
 
 impl From<ErrorPopup> for AppUpdate {
     fn from(error: ErrorPopup) -> Self {
-        AppUpdate::Error(error)
+        Self::Error(error)
     }
 }
 
 impl From<std::net::SocketAddr> for AppUpdate {
     fn from(addr: std::net::SocketAddr) -> Self {
-        AppUpdate::WebsocketReady(addr)
+        Self::WebsocketReady(addr)
     }
 }
 
@@ -779,7 +779,7 @@ impl App {
         }
     }
 
-    /// Wrapper for save_settings that handles errors and returns just a success bool
+    /// Wrapper for `save_settings` that handles errors and returns just a success bool
     pub fn try_save_settings(&mut self) -> bool {
         if let Err(e) = self.save_settings() {
             error!("Couldn't save settings! {}", e);
@@ -895,7 +895,7 @@ impl App {
                 self.chart_low_rr = self.chart_low_rr.min(rr_secs);
             }
 
-            self.chart_mid_rr = (self.chart_low_rr + self.chart_high_rr) / 2.0;
+            self.chart_mid_rr = f64::midpoint(self.chart_low_rr, self.chart_high_rr);
         }
     }
 
@@ -935,7 +935,7 @@ impl App {
     }
 
     pub fn append_to_history(&mut self, hr_data: &HeartRateStatus) {
-        let bpm = hr_data.heart_rate_bpm as f64;
+        let bpm = f64::from(hr_data.heart_rate_bpm);
         let rr_max = self.settings.tui.chart_rr_max;
         if bpm > 0.0 {
             self.update_session_stats(bpm, hr_data.rr_intervals.last());
@@ -1221,7 +1221,7 @@ impl App {
                 self.sub_state = SubState::CharacteristicView
             }
             DeviceUpdate::Error(error) => {
-                error!("BLE Thread Error: {:?}", error.clone());
+                error!("BLE Thread Error: {:?}", error);
                 if self.view == AppView::HeartRateView && self.datasets_empty() {
                     // Ignoring the intermittent ones when we're in the inbetween state
                 } else {

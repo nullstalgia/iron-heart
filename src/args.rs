@@ -7,7 +7,7 @@ pub struct TopLevelCmd {
     /// specify config file path, creates file if it doesn't exist
     #[argh(option, short = 'c')]
     pub config_override: Option<PathBuf>,
-    /// config file must exist, including "config_override" files
+    /// config file must exist, including "`config_override`" files
     #[argh(switch, short = 'r')]
     pub config_required: bool,
     /// use config file as-is (don't save over it)

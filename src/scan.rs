@@ -174,11 +174,11 @@ pub async fn bluetooth_event_thread(
                     _ => {}
                 }
             }
-            _ = cancel_token.cancelled() => {
+            () = cancel_token.cancelled() => {
                 info!("Shutting down Bluetooth CentralEvent thread!");
                 break 'events;
             }
-            _ = tokio::time::sleep(duration) => {
+            () = tokio::time::sleep(duration) => {
                 debug!("CentralEvent timeout");
                 if !pause_signal.load(Ordering::SeqCst) {
                     warn!("Restarting scan!");

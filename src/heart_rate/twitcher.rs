@@ -14,7 +14,7 @@ pub struct Twitcher {
 }
 
 impl Twitcher {
-    pub fn new(twitch_threshold: f32) -> Self {
+    pub const fn new(twitch_threshold: f32) -> Self {
         Self {
             twitch_threshold,
             latest_rr: Duration::from_secs(1),
@@ -22,11 +22,11 @@ impl Twitcher {
         }
     }
 
-    /// Returns: (twitch_up, twitch_down)
+    /// Returns: (`twitch_up`, `twitch_down`)
     ///
-    /// twitch_up - RR has increased (BPM has *lowered*)
+    /// `twitch_up` - RR has increased (BPM has *lowered*)
     ///
-    /// twitch_down - RR has decreased (BPM has *raised*)
+    /// `twitch_down` - RR has decreased (BPM has *raised*)
     pub fn handle(&mut self, bpm: u16, rr_intervals: &[Duration]) -> (bool, bool) {
         if !rr_intervals.is_empty() {
             self.use_real_rr = true;

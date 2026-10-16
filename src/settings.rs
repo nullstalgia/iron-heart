@@ -146,18 +146,18 @@ impl Settings {
         let default_session_log_path;
         let default_bpm_txt_path;
 
-        if !cfg!(debug_assertions) {
-            // Release build default params
-            default_log_level = "debug";
-            default_session_log_path = "session_logs";
-            default_bpm_txt_path = "bpm.txt"
-        } else {
+        if cfg!(debug_assertions) {
             // Debug build default params
             default_log_level = "debug";
             // (assuming it's in target/debug/)
             default_session_log_path = "../../session_logs";
-            default_bpm_txt_path = "../../bpm.txt"
-        };
+            default_bpm_txt_path = "../../bpm.txt";
+        } else {
+            // Release build default params
+            default_log_level = "debug";
+            default_session_log_path = "session_logs";
+            default_bpm_txt_path = "bpm.txt";
+        }
 
         // TODO: New way of doing defaults
         // Either use serde's defaults and skip the extra config crate entirely (doesn't look like it supports serde defaults?)

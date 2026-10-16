@@ -26,7 +26,7 @@ pub struct Activities {
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 struct ActivitiesFile {
-    /// Used to set current_activity to the last one used before app close if `remember_last` is true.
+    /// Used to set `current_activity` to the last one used before app close if `remember_last` is true.
     #[serde(default)]
     last_activity: u8,
     #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
@@ -84,15 +84,7 @@ impl Activities {
     }
     pub async fn load(&mut self, remember_last: bool) -> Result<u8, AppError> {
         let file_path = PathBuf::from(ACTIVITIES_TOML_PATH);
-        if !file_path.exists() {
-            let mut file = File::create(&file_path).await?;
-            let default = ActivitiesFile::default();
-            file.write_all(toml::to_string(&default)?.as_bytes())
-                .await?;
-            file.flush().await?;
-            file.sync_all().await?;
-            self.file = default;
-        } else {
+        if file_path.exists() {
             let mut file = File::open(&file_path).await?;
             let mut buffer = String::new();
             file.read_to_string(&mut buffer).await?;
@@ -104,6 +96,14 @@ impl Activities {
             } else {
                 self.current_activity = self.initial_activity();
             }
+        } else {
+            let mut file = File::create(&file_path).await?;
+            let default = ActivitiesFile::default();
+            file.write_all(toml::to_string(&default)?.as_bytes())
+                .await?;
+            file.flush().await?;
+            file.sync_all().await?;
+            self.file = default;
         }
         self.query_from_input();
 
@@ -245,7 +245,7 @@ pub mod tui {
         // To hide new activity name from also appearing in the search bar
         if app.sub_state != SubState::ActivitySelection {
             return;
-        };
+        }
 
         let width = input_area.width.max(1) - 1; // So the cursor doesn't bleed off the edge
         let scroll = app.activities.input.visual_scroll(width as usize);

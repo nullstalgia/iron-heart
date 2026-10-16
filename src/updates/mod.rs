@@ -56,7 +56,7 @@ impl UpdateBackend {
         receiver: mpsc::Receiver<UpdateCommand>,
         async_sender: mpsc::Sender<UpdateReply>,
     ) -> Self {
-        UpdateBackend {
+        Self {
             command_rx: receiver,
             reply_tx: async_sender,
             archive_asset: None,
@@ -105,7 +105,7 @@ impl UpdateBackend {
 
         let resp = client
             .get(&checksum_url)
-            .headers(self.headers.to_owned())
+            .headers(self.headers.clone())
             .send()
             .await?;
         let size = resp.content_length().unwrap_or(0);
@@ -124,7 +124,7 @@ impl UpdateBackend {
 
         let resp = client
             .get(&archive_url)
-            .headers(self.headers.to_owned())
+            .headers(self.headers.clone())
             .send()
             .await?;
         let size = resp.content_length().unwrap_or(0);
@@ -248,7 +248,7 @@ impl UpdateBackend {
                     error!("Latest was a pre-release? Ignoring...");
                     self.command_rx.close();
                     return;
-                };
+                }
 
                 let Some((archive, checksum)) = asset_pair_for(target, &release.assets) else {
                     error!("Couldn't find SHA+Archive for given target: {target}");
@@ -282,7 +282,7 @@ impl UpdateBackend {
     }
 }
 
-/// Returns a pair of ReleaseAssets for the given target from the list of assets
+/// Returns a pair of `ReleaseAssets` for the given target from the list of assets
 ///
 /// Returns None if there aren't exactly two files for the given target (either there's too many or too little, we expect one checksum per archive)
 ///

@@ -89,7 +89,7 @@ impl WebsocketActor {
                         }
                     }
                 }
-                _ = cancel_token.cancelled() => {
+                () = cancel_token.cancelled() => {
                     info!("Shutting down Websocket thread!");
                     return Ok(());
                 }
@@ -116,7 +116,7 @@ impl WebsocketActor {
                             }
                         }
                     }
-                    _ = tokio::time::sleep(self.no_packet_timeout) => {
+                    () = tokio::time::sleep(self.no_packet_timeout) => {
                         let secs = self.no_packet_timeout.as_secs();
                         error!("No HR data received in {secs} seconds!");
                         broadcast!(
@@ -125,9 +125,9 @@ impl WebsocketActor {
                         );
                         break 'receiving;
                     }
-                    _ = cancel_token.cancelled() => {
+                    () = cancel_token.cancelled() => {
                         info!("Shutting down Websocket thread!");
-                        stream.close().await?
+                        stream.close().await?;
                     }
                 }
             }

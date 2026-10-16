@@ -29,7 +29,7 @@ pub fn inspect_overlay(
             .highlight_style(Style::default().add_modifier(Modifier::BOLD));
     }
 
-    for characteristic in characteristics.iter() {
+    for characteristic in characteristics {
         let service_uuid = characteristic.service.to_string();
         services
             .entry(service_uuid)
@@ -63,7 +63,7 @@ pub fn inspect_overlay(
             )]));
             rows.push(Row::new(vec![format!("    ↳ Properties: {}", properties)]));
 
-            for descriptor in characteristic.descriptors.iter() {
+            for descriptor in &characteristic.descriptors {
                 rows.push(Row::new(vec![format!(
                     "    ↳ Descriptor: {}",
                     descriptor.to_string()

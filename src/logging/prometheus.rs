@@ -34,7 +34,7 @@ impl PrometheusLoggingActor {
     ) -> Result<Option<Self>, AppError> {
         let built_url = {
             let mut url = if settings.url.contains("://") {
-                settings.url.to_owned()
+                settings.url.clone()
             } else {
                 format!("http://{}", settings.url)
             };
@@ -67,7 +67,7 @@ impl PrometheusLoggingActor {
             (&settings.metrics.activity, "Current index of Activity"),
         ];
 
-        for (name, desc) in metrics.iter() {
+        for (name, desc) in &metrics {
             if !name.is_empty() {
                 try_add_gauge(name, desc, &registry, &mut gauges)?;
             }
@@ -130,7 +130,7 @@ impl PrometheusLoggingActor {
                         }
                     }
                 }
-                _ = cancel_token.cancelled() => {
+                () = cancel_token.cancelled() => {
                     info!("Logging thread shutting down");
                     return Ok(());
                 }
@@ -149,7 +149,7 @@ impl PrometheusLoggingActor {
             .into_iter()
             .map(|mut fam| {
                 for metric in fam.mut_metric() {
-                    metric.set_timestamp_ms(timestamp.timestamp_millis())
+                    metric.set_timestamp_ms(timestamp.timestamp_millis());
                 }
                 fam
             })

@@ -62,9 +62,9 @@ impl BleMonitorActor {
             tokio::select! {
                 conn_result = device.connect() => {
                     match conn_result {
-                        Ok(_) => {
+                        Ok(()) => {
                             if let Err(e) = device.discover_services().await {
-                                error!("Couldn't read services from connected device: {}", e);
+                                error!("Couldn't read services from connected device: {e}");
                                 continue 'connection;
                             }
                             let characteristics = device.characteristics();
@@ -139,13 +139,13 @@ impl BleMonitorActor {
                         }
                     }
                 }
-                _ = self.cancel_token.cancelled() => {
+                () = self.cancel_token.cancelled() => {
                     if device.is_connected().await.unwrap_or(false) {
                         device.disconnect().await?;
                     }
                     break 'connection;
                 }
-                _ = tokio::time::sleep(self.no_packet_timeout) => {
+                () = tokio::time::sleep(self.no_packet_timeout) => {
                     error!("Connection timed out");
                     broadcast!(broadcast_tx, ErrorPopup::Intermittent(
                         "Connection timed out".into(),
@@ -162,7 +162,7 @@ impl BleMonitorActor {
         mut notification_stream: Pin<Box<dyn Stream<Item = ValueNotification> + Send>>,
         device: &btleplug::platform::Peripheral,
     ) -> Result<(), AppError> {
-        let mut battery_checking_interval = tokio::time::interval(Duration::from_secs(60 * 5));
+        let mut battery_checking_interval = tokio::time::interval(Duration::from_mins(5));
         loop {
             tokio::select! {
                 // Assume we have a good connection if we keep getting updates
@@ -176,11 +176,11 @@ impl BleMonitorActor {
                 _ = battery_checking_interval.tick() => {
                     self.get_monitor_battery(device).await;
                 }
-                _ = tokio::time::sleep(self.no_packet_timeout) => {
+                () = tokio::time::sleep(self.no_packet_timeout) => {
                     error!("No HR data received in {} seconds!", self.no_packet_timeout.as_secs());
                     return Ok(());
                 }
-                _ = self.cancel_token.cancelled() => {
+                () = self.cancel_token.cancelled() => {
                     info!("Shutting down HR Notification thread!");
                     return Ok(());
                 }

@@ -44,7 +44,7 @@ pub struct HeartRateStatus {
 pub fn rr_from_bpm(bpm: u16) -> Duration {
     // Make sure it's at least 1 to prevent a potential divide by zero
     let bpm = bpm.max(1);
-    Duration::from_secs_f32(60.0 / bpm as f32)
+    Duration::from_secs_f32(60.0 / f32::from(bpm))
 }
 
 // #[derive(Error, Debug)]

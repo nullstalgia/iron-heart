@@ -2,15 +2,15 @@
 pub struct VrcxStartup;
 
 impl VrcxStartup {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
-    pub fn vrcx_installed(&self) -> bool {
+    pub const fn vrcx_installed(&self) -> bool {
         false
     }
 
-    pub fn shortcut_exists(&self) -> bool {
+    pub const fn shortcut_exists(&self) -> bool {
         false
     }
 }

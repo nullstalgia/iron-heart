@@ -210,7 +210,7 @@ fn determine_working_directory() -> Option<PathBuf> {
 }
 
 #[cfg(any(debug_assertions, feature = "portable"))]
-fn is_portable() -> bool {
+const fn is_portable() -> bool {
     true
 }
 
@@ -220,7 +220,7 @@ fn is_portable() -> bool {
 }
 
 #[cfg(any(debug_assertions, feature = "portable"))]
-fn get_user_dir() -> Option<PathBuf> {
+const fn get_user_dir() -> Option<PathBuf> {
     None
 }
 

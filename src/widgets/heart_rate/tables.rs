@@ -93,7 +93,7 @@ pub fn render_table(f: &mut Frame, area: Rect, app: &App) {
     rows.push(Row::new(headers).style(Style::default().add_modifier(Modifier::BOLD)));
     rows.push(Row::new(content));
 
-    let table = Table::new(rows.to_vec(), constraints)
+    let table = Table::new(rows.clone(), constraints)
         .block(
             Block::default()
                 .borders(Borders::ALL)

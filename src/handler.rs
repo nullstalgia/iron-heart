@@ -11,7 +11,7 @@ use tracing::{debug, error};
 pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
     // Special keys
     match key_event.code {
-        KeyCode::Char('c') | KeyCode::Char('C') if key_event.modifiers == KeyModifiers::CONTROL => {
+        KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
             app.cancel_app.cancel();
             return Ok(());
         }
@@ -37,7 +37,7 @@ pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
 
     match app.sub_state {
         SubState::ActivitySelection => match key_event.code {
-            KeyCode::Char('n') | KeyCode::Char('N')
+            KeyCode::Char('n' | 'N')
                 if key_event.modifiers == KeyModifiers::CONTROL =>
             {
                 app.activities_new_prompt();
@@ -64,7 +64,7 @@ pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
             KeyCode::Char('q') if app.is_idle_on_ble_selection() => {
                 app.cancel_app.cancel();
             }
-            KeyCode::Char('c') | KeyCode::Char('C') if app.is_idle_on_ble_selection() => {
+            KeyCode::Char('c' | 'C') if app.is_idle_on_ble_selection() => {
                 app.connect_for_characteristics();
             }
             KeyCode::Char('s') if app.is_idle_on_ble_selection() => {
