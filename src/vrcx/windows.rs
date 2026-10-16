@@ -4,7 +4,6 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-use tokio::fs::read_dir;
 use tracing::{debug, error, instrument, warn};
 
 use crate::errors::AppError;
@@ -16,28 +15,28 @@ pub struct VrcxStartup {
 }
 
 impl VrcxStartup {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             startup_path: None,
             shortcut_path: None,
         }
     }
 
-    pub async fn init(&mut self) -> Result<(), AppError> {
+    pub fn init(&mut self) -> Result<(), AppError> {
         self.startup_path = get_vrcx_startup_path();
-        self.shortcut_path = find_shortcut(&self.startup_path).await?;
+        self.shortcut_path = find_shortcut(self.startup_path.as_deref())?;
         Ok(())
     }
 
-    pub fn vrcx_installed(&self) -> bool {
+    pub const fn vrcx_installed(&self) -> bool {
         self.startup_path.is_some()
     }
 
-    pub fn shortcut_exists(&self) -> bool {
+    pub const fn shortcut_exists(&self) -> bool {
         self.shortcut_path.is_some()
     }
 
-    pub fn path(&self) -> Option<&PathBuf> {
+    pub const fn path(&self) -> Option<&PathBuf> {
         self.startup_path.as_ref()
     }
 
@@ -79,8 +78,8 @@ impl VrcxStartup {
     }
 }
 
-/// Returns a PathBuf to the shortcut associated with the running executable, if it exists
-async fn find_shortcut(startup_path: &Option<PathBuf>) -> Result<Option<PathBuf>, AppError> {
+/// Returns a [`PathBuf`] to the shortcut associated with the running executable, if it exists
+fn find_shortcut(startup_path: Option<&Path>) -> Result<Option<PathBuf>, AppError> {
     if startup_path.is_none() {
         return Ok(None);
     }
@@ -93,30 +92,31 @@ async fn find_shortcut(startup_path: &Option<PathBuf>) -> Result<Option<PathBuf>
         return Ok(None);
     }
 
-    let mut dir = read_dir(startup_path).await?;
+    let dir = walkdir::WalkDir::new(startup_path);
+    for potential_shortcut in dir {
+        let ps = potential_shortcut
+            .map_err(Into::into)
+            .map_err(AppError::Io)?;
+        if !ps.file_type().is_file() {
+            continue;
+        }
 
-    while let Some(potential_shortcut) = dir.next_entry().await? {
-        if potential_shortcut.file_type().await?.is_file() {
-            let path = potential_shortcut.path();
-            let result = check_shortcut(&path);
-            match result {
-                Ok(is_our_shortcut) => {
-                    if is_our_shortcut {
-                        return Ok(Some(path));
-                    }
+        let result = check_shortcut(ps.path());
+        match result {
+            Ok(is_our_shortcut) => {
+                if is_our_shortcut {
+                    return Ok(Some(ps.path().to_owned()));
                 }
-                Err(e) => {
-                    let shortcut_name = path
-                        .file_name()
-                        .map(|name| name.to_lower_string())
-                        .expect("Couldn't get shortcut name")
-                        .expect("Couldn't get lowercase shortcut name");
-                    if shortcut_name.contains(&exe_name) {
-                        return Err(e);
-                    } else {
-                        // Hm, bad shortcut but likely not for us?
-                        continue;
-                    }
+            }
+            Err(e) => {
+                let shortcut_name = ps
+                    .path()
+                    .file_name()
+                    .map(LowerString::to_lower_string)
+                    .expect("Couldn't get shortcut name")
+                    .expect("Couldn't get lowercase shortcut name");
+                if shortcut_name.contains(&exe_name) {
+                    return Err(e);
                 }
             }
         }
@@ -208,12 +208,12 @@ fn executable_name_lowercase() -> Option<String> {
     current_exe().ok()?.file_stem()?.to_lower_string()
 }
 
-/// For converting OsStrings into Strings for substr searches
+/// For converting [`OsStrings`] into Strings for substr searches
 trait LowerString {
     fn to_lower_string(&self) -> Option<String>;
 }
 impl LowerString for OsStr {
-    /// If the underlying OsStr is valid Unicode, returns an owned lowercase String version of it.
+    /// If the underlying [`OsStr`] is valid Unicode, returns an owned lowercase String version of it.
     fn to_lower_string(&self) -> Option<String> {
         self.to_str().map(str::to_lowercase)
     }

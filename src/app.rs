@@ -456,7 +456,7 @@ impl App {
         }
 
         #[cfg(windows)]
-        if let Err(e) = self.vrcx.init().await {
+        if let Err(e) = self.vrcx.init() {
             self.handle_error_update(ErrorPopup::Intermittent(format!(
                 "VRCX Shortcut Error: {e}"
             )));

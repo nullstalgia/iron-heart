@@ -1,3 +1,6 @@
 # # For console-subscriber
 # [build]
 # rustflags = ["--cfg", "tokio_unstable"]
+
+# [build]
+# target = "x86_64-pc-windows-gnu"

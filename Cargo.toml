@@ -83,6 +83,7 @@ self_update = { version = "0.41.0", features = [
     "compression-zip-bzip2",
     "compression-zip-deflate",
 ] }
+walkdir = "2.5.0"
 
 [target.'cfg(unix)'.dependencies]
 self_update = { version = "0.41.0", features = ["compression-flate2"] }

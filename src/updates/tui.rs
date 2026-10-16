@@ -161,10 +161,10 @@ pub fn restart_options() -> Table<'static> {
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
     // If we're not portable, we just want to open a link to the repo, let the user handle the update via however they installed it.
     let rows: Vec<Row> = vec![row!["Launch in new window"], row!["No, close"]];
-    let option_table = Table::new(rows, [Constraint::Percentage(100)])
+
+    Table::new(rows, [Constraint::Percentage(100)])
         .highlight_style(selected_style)
-        .highlight_symbol(">> ");
-    option_table
+        .highlight_symbol(">> ")
 }
 #[cfg(windows)]
 pub fn restart_app_prompt(app: &mut App, frame: &mut Frame) {

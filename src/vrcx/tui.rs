@@ -57,11 +57,9 @@ pub fn vrcx_options() -> Table<'static> {
         row!["Open Startup Folder".blue()],
     ];
 
-    let option_table = Table::new(rows, [Constraint::Percentage(100)])
+    Table::new(rows, [Constraint::Percentage(100)])
         .highlight_style(selected_style)
-        .highlight_symbol(">> ");
-
-    option_table
+        .highlight_symbol(">> ")
 }
 
 #[derive(Debug, Eq, PartialEq, FromPrimitive)]
