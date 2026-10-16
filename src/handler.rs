@@ -11,11 +11,9 @@ use tracing::{debug, error};
 pub fn handle_key_events(app: &mut App, key_event: KeyEvent) -> AppResult<()> {
     // Special keys
     match key_event.code {
-        KeyCode::Char('c') | KeyCode::Char('C') => {
-            if key_event.modifiers == KeyModifiers::CONTROL {
-                app.cancel_app.cancel();
-                return Ok(());
-            }
+        KeyCode::Char('c') | KeyCode::Char('C') if key_event.modifiers == KeyModifiers::CONTROL => {
+            app.cancel_app.cancel();
+            return Ok(());
         }
         _ => {}
     }

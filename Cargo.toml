@@ -15,7 +15,7 @@ license = "MIT"
 portable = []
 
 [dependencies]
-btleplug = "0.11"
+btleplug = "0.13"
 ratatui = "0.28"
 tokio = { version = "1", features = ["full"] }
 crossterm = { version = "0.28", features = ["event-stream"] }
