@@ -99,6 +99,9 @@ impl OscActor {
     fn init_params(&mut self) -> Result<(), AppError> {
         self.delay_sending_connected = true;
         self.toggle_edge = false;
+        // Don't assume we'll have proper RR
+        // when we may have just gotten 0bpm
+        self.use_real_rr = false;
         send_raw_hr_status(
             &HeartRateStatus::default(),
             false,
