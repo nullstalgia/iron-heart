@@ -161,6 +161,8 @@ activity = "heart_rate_activity"
 
 - [HeartSoos](https://play.google.com/store/apps/details?id=lucheart.heartsoos.wearapp) by [LucHeart](https://github.com/LucHeart) for WearOS - Supports sending BPM only
 
+- [PebbleBeat](https://apps.repebble.com/cdae49b4b5834598b586d30d) by [quinn50](https://github.com/stearnsbq) for Pebble Watch Time 2 - Supports Both BPM and HRV
+
 ## Alternatives
 
 If you want to see a C# implementation or need OSCQuery/Quest Standalone support, check out [Natsumi-sama](https://github.com/Natsumi-sama)'s [HRPresence](https://github.com/Natsumi-sama/HRPresence).
