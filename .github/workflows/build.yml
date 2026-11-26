@@ -16,20 +16,33 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.platform }}
 
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux Dependencies
+        if: ${{ startsWith(matrix.platform, 'ubuntu') }}
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
       - name: Setup Rust toolchain and cache
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
       # - name: cargo fmt
       #   run: cargo fmt --all -- --check
+      - name: Build
+        run: cargo build --verbose --features portable
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            target/debug/iron-heart
+            target/debug/iron-heart.exe
+          if-no-files-found: error
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
-      - name: Build
-        run: cargo build --verbose
       - name: Run Unit Tests
         run: cargo test --all-targets --all-features
       - name: Run Integration Tests
