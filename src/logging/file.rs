@@ -108,7 +108,12 @@ impl FileLoggingActor {
                     })?;
             }
             self.csv_writer = Some(AsyncSerializer::from_writer(
-                File::create(&csv_file_path)
+                File::options()
+                    .create(true)
+                    .truncate(true)
+                    .read(true)
+                    .write(true)
+                    .open(&csv_file_path)
                     .await
                     .map_err(|e| AppError::CreateFile {
                         path: csv_file_path,
@@ -169,6 +174,7 @@ impl FileLoggingActor {
             } else {
                 format!("{}", heart_rate_status.heart_rate_bpm)
             };
+            // TODO async closure this, ough
             txt_writer
                 // .get_ref()
                 .set_len(0)
