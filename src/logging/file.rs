@@ -265,10 +265,8 @@ impl FileLoggingActor {
                     writeln!(buf, "{rr_as_millis}")?;
                 }
 
-                if rename_args.is_none() {
-                    file.set_len(0).await?;
-                    file.seek(SeekFrom::Start(0)).await?;
-                }
+                file.set_len(0).await?;
+                file.seek(SeekFrom::Start(0)).await?;
                 file.write_all(&buf).await?;
                 file.flush().await?;
                 if let Some((from, to)) = &rename_args {
