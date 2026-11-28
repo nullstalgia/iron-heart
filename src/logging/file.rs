@@ -5,10 +5,12 @@ use crate::settings::MiscSettings;
 
 use csv_async::AsyncSerializer;
 use serde::Serialize;
+use std::error::Error;
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs::{File, create_dir};
-use tokio::io::{AsyncSeekExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast::Receiver as BReceiver;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
@@ -32,7 +34,6 @@ pub(super) struct FileLoggingActor {
     misc_settings: MiscSettings,
     csv_writer: Option<AsyncSerializer<File>>,
     csv_path: Option<PathBuf>,
-    txt_writer: Option<File>,
     txt_path: Option<PathBuf>,
     files_initialized: bool,
     // Loop-specific vars
@@ -46,7 +47,6 @@ impl FileLoggingActor {
             misc_settings,
             csv_writer: None,
             csv_path: None,
-            txt_writer: None,
             txt_path: None,
             last_rr: Duration::from_secs(0),
             files_initialized: false,
@@ -121,16 +121,26 @@ impl FileLoggingActor {
                     })?,
             ));
         }
-        if self.misc_settings.write_bpm_to_file {
-            let file = File::create(&txt_path)
+        if self.misc_settings.write_bpm_to_file || self.misc_settings.write_rr_to_file {
+            self.txt_path = Some(txt_path.as_str().into());
+            let path_clone = txt_path.clone();
+            let attempt_create_file = async move || {
+                File::options()
+                    .create(true)
+                    .truncate(true)
+                    .write(true)
+                    .open(&path_clone)
+                    .await
+            };
+            try_until_err_count_is(5, attempt_create_file)
                 .await
                 .map_err(|e| AppError::CreateFile {
-                    path: PathBuf::from(txt_path),
+                    path: txt_path.into(),
                     source: e,
                 })?;
             // Honestly this probably doesn't benefit from being in a BufWriter due to being polled every whole second or so.
             // self.txt_writer = Some(BufWriter::new(file));
-            self.txt_writer = Some(file);
+            // self.txt_writer = Some(file);
         }
         self.files_initialized = true;
         Ok(())
@@ -146,13 +156,14 @@ impl FileLoggingActor {
             .rr_intervals
             .last()
             .unwrap_or(&self.last_rr);
+        let rr_as_millis = reported_rr.as_millis();
 
         if let Some(csv_writer) = &mut self.csv_writer {
             let timestamp = heart_rate_status.timestamp.format("%Y-%m-%d %H:%M:%S%.6f");
             let csv_data = CsvData {
                 Timestamp: timestamp.to_string(),
                 BPM: heart_rate_status.heart_rate_bpm,
-                RR: reported_rr.as_millis() as u16,
+                RR: rr_as_millis as u16,
                 Battery: heart_rate_status.battery_level.into(),
                 TwitchUp: u8::from(heart_rate_status.twitch_up),
                 TwitchDown: u8::from(heart_rate_status.twitch_down),
@@ -164,53 +175,69 @@ impl FileLoggingActor {
                 source: e,
             })?;
         }
-        if let Some(txt_writer) = &mut self.txt_writer {
-            let txt_output = if self.misc_settings.write_rr_to_file {
-                format!(
-                    "{}\n{}",
-                    heart_rate_status.heart_rate_bpm,
-                    reported_rr.as_millis()
-                )
-            } else {
-                format!("{}", heart_rate_status.heart_rate_bpm)
+
+        let write_bpm = self.misc_settings.write_bpm_to_file;
+        let write_rr = self.misc_settings.write_rr_to_file;
+        if let Some(txt_path) = &self.txt_path {
+            assert!(write_bpm || write_rr);
+            let path_clone = txt_path.clone();
+            let write_to_file = async move || -> Result<(), std::io::Error> {
+                let mut txt_file = File::options()
+                    .create(true)
+                    .truncate(true)
+                    .write(true)
+                    .open(&path_clone)
+                    .await?;
+                let mut buf = Vec::new();
+                if write_bpm {
+                    writeln!(buf, "{}", heart_rate_status.heart_rate_bpm)?;
+                }
+                if write_rr {
+                    writeln!(buf, "{rr_as_millis}")?;
+                }
+
+                // txt_file.set_len(0).await?;
+                // txt_file.seek(tokio::io::SeekFrom::Start(0)).await?;
+                txt_file.write_all(&buf).await?;
+                txt_file.flush().await?;
+                // txt_writer.sync_data().await?;
+                Ok(())
             };
-            // TODO async closure this, ough
-            txt_writer
-                // .get_ref()
-                .set_len(0)
+
+            try_until_err_count_is(5, write_to_file)
                 .await
                 .map_err(|e| AppError::WriteFile {
-                    path: self.txt_path.as_ref().unwrap().to_owned(),
+                    path: txt_path.to_owned(),
                     source: e,
                 })?;
-            txt_writer
-                .seek(tokio::io::SeekFrom::Start(0))
-                .await
-                .map_err(|e| AppError::WriteFile {
-                    path: self.txt_path.as_ref().unwrap().to_owned(),
-                    source: e,
-                })?;
-            txt_writer
-                .write_all(txt_output.as_bytes())
-                .await
-                .map_err(|e| AppError::WriteFile {
-                    path: self.txt_path.as_ref().unwrap().to_owned(),
-                    source: e,
-                })?;
-            txt_writer.flush().await.map_err(|e| AppError::WriteFile {
-                path: self.txt_path.as_ref().unwrap().to_owned(),
-                source: e,
-            })?;
-            // txt_writer
-            //     .sync_data()
-            //     .await
-            //     .map_err(|e| AppError::WriteFile {
-            //         path: self.txt_path.as_ref().unwrap().to_owned(),
-            //         source: e,
-            //     })?;
         }
         self.last_rr = *reported_rr;
 
         Ok(())
+    }
+}
+
+async fn try_until_err_count_is<
+    T,
+    E: Error + Send + Sync,
+    A: AsyncFnMut() -> Result<T, E> + Send + Sync,
+>(
+    max_err: u8,
+    mut fallible: A,
+) -> Result<T, E> {
+    assert!(max_err > 0);
+    let mut err_cnt = 0;
+    loop {
+        match fallible().await {
+            Ok(o) => return Ok(o),
+            Err(e) => {
+                err_cnt += 1;
+                error!("err_cnt: {err_cnt}/{max_err}, {e}");
+                if err_cnt >= max_err {
+                    return Err(e);
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
