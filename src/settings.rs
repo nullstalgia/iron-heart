@@ -14,6 +14,7 @@ pub struct MiscSettings {
     pub write_bpm_to_file: bool,
     pub write_rr_to_file: bool,
     pub bpm_file_path: String,
+    pub bpm_file_keep_open: bool,
     pub log_sessions_to_csv: bool,
     pub log_sessions_csv_path: String,
     pub vrcx_shortcut_prompt: bool,
@@ -191,6 +192,7 @@ impl Settings {
             .set_default("misc.log_level", default_log_level)?
             .set_default("misc.write_bpm_to_file", false)?
             .set_default("misc.write_rr_to_file", false)?
+            .set_default("misc.bpm_file_keep_open", true)?
             .set_default("misc.bpm_file_path", default_bpm_txt_path)?
             .set_default("misc.log_sessions_to_csv", false)?
             .set_default("misc.log_sessions_csv_path", default_session_log_path)?
