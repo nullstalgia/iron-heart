@@ -5,7 +5,6 @@ use crate::settings::MiscSettings;
 
 use csv_async::AsyncSerializer;
 use serde::Serialize;
-use std::error::Error;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::path::PathBuf;
@@ -18,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 const CSV_FILE_PREFIX: &str = "nih-";
+const BPM_FILE_TEMP_EXT: &str = "tmp";
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize)]
@@ -43,8 +43,38 @@ pub(super) struct FileLoggingActor {
 }
 
 enum TxtMethod {
+    /// Keep a handle open to the file, replacing the contents with each update
     Handle(File),
-    Create(PathBuf),
+
+    /// Move a new file on top of the old one
+    Move(PathBuf),
+}
+
+macro_rules! try_until_err_count_is {
+    ($max_err:literal, async $run:block) => {{
+        let max_err: u8 = const {
+            assert!($max_err > 0);
+            $max_err
+        };
+        let mut err_cnt = 0;
+        loop {
+            let meow = async { $run }.await;
+            match meow {
+                Ok(o) => break Ok(o),
+                Err(e) => {
+                    err_cnt += 1;
+                    error!("err_cnt: {err_cnt}/{max_err}, {e}");
+                    if err_cnt >= max_err {
+                        break Err(e);
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }};
+    ($err_max:literal, $run:expr) => {
+        compile_error!("unimplemented")
+    };
 }
 
 impl FileLoggingActor {
@@ -128,31 +158,40 @@ impl FileLoggingActor {
             ));
         }
         if self.misc_settings.write_bpm_to_file || self.misc_settings.write_rr_to_file {
-            let path_clone = txt_path.clone();
-            let attempt_create_file = async move || {
-                tokio::fs::File::options()
+            let keep_open = self.misc_settings.bpm_file_keep_open;
+            let dest_path: PathBuf = txt_path.clone().into();
+
+            let initial_path = if keep_open {
+                dest_path.clone()
+            } else {
+                dest_path.with_added_extension(BPM_FILE_TEMP_EXT)
+            };
+
+            let file = try_until_err_count_is!(5, async {
+                File::options()
                     .create(true)
                     .truncate(true)
                     .write(true)
-                    .open(&path_clone)
+                    .open(&initial_path)
                     .await
-            };
-            let file = async_try_until_err_count_is(5, attempt_create_file)
-                .await
-                .map_err(|e| AppError::CreateFile {
-                    path: txt_path.clone().into(),
-                    source: e,
-                })?;
-            self.txt = Some(if self.misc_settings.bpm_file_keep_open {
+            })
+            .map_err(|e| AppError::CreateFile {
+                path: initial_path.clone(),
+                source: e,
+            })?;
+
+            self.txt = Some(if keep_open {
                 TxtMethod::Handle(file)
             } else {
-                TxtMethod::Create(txt_path.into())
+                try_until_err_count_is!(5, async {
+                    tokio::fs::rename(&initial_path, &dest_path).await
+                })
+                .map_err(|e| AppError::CreateFile {
+                    path: dest_path.clone(),
+                    source: e,
+                })?;
+                TxtMethod::Move(dest_path)
             });
-            // self.txt_path = Some(txt_path.as_str().into());
-
-            // Honestly this probably doesn't benefit from being in a BufWriter due to being polled every whole second or so.
-            // self.txt_writer = Some(BufWriter::new(file));
-            // self.txt_writer = Some(file);
         }
         self.files_initialized = true;
         Ok(())
@@ -191,24 +230,25 @@ impl FileLoggingActor {
         let write_bpm = self.misc_settings.write_bpm_to_file;
         let write_rr = self.misc_settings.write_rr_to_file;
         let mut file_opt = None;
+        let mut rename_args = None;
         let file_opt: Option<&mut File> = match &mut self.txt {
-            Some(TxtMethod::Handle(meow)) => Some(meow),
-            Some(TxtMethod::Create(path)) => {
-                let path_clone = path.to_owned();
-                let attempt_create_file = async move || {
+            Some(TxtMethod::Handle(handle)) => Some(handle),
+            Some(TxtMethod::Move(dest)) => {
+                let temp_path = dest.with_added_extension(BPM_FILE_TEMP_EXT);
+
+                let file = try_until_err_count_is!(5, async {
                     File::options()
                         .create(true)
                         .truncate(true)
                         .write(true)
-                        .open(&path_clone)
+                        .open(&temp_path)
                         .await
-                };
-                let file = async_try_until_err_count_is(5, attempt_create_file)
-                    .await
-                    .map_err(|e| AppError::CreateFile {
-                        path: path.to_owned(),
-                        source: e,
-                    })?;
+                })
+                .map_err(|e| AppError::CreateFile {
+                    path: temp_path.clone(),
+                    source: e,
+                })?;
+                rename_args = Some((temp_path, dest.to_owned()));
                 Some(file_opt.insert(file))
             }
             None => None,
@@ -216,7 +256,7 @@ impl FileLoggingActor {
         if let Some(file) = file_opt {
             assert!(write_bpm || write_rr);
 
-            let write_to_file = async move || -> Result<(), std::io::Error> {
+            try_until_err_count_is!(5, async {
                 let mut buf = Vec::new();
                 if write_bpm {
                     writeln!(buf, "{}", heart_rate_status.heart_rate_bpm)?;
@@ -225,38 +265,18 @@ impl FileLoggingActor {
                     writeln!(buf, "{rr_as_millis}")?;
                 }
 
-                file.set_len(0).await?;
-                file.seek(SeekFrom::Start(0)).await?;
+                if rename_args.is_none() {
+                    file.set_len(0).await?;
+                    file.seek(SeekFrom::Start(0)).await?;
+                }
                 file.write_all(&buf).await?;
                 file.flush().await?;
-                // txt_writer.sync_data().await?;
-                Ok(())
-            };
-
-            // silly higher-ranked lifetime errors
-            // https://github.com/rust-lang/rust/issues/102211#issuecomment-1513931928
-            {
-                let mut fallible = write_to_file;
-                async move {
-                    let max_err = 5;
-                    assert!(max_err > 0);
-                    let mut err_cnt = 0;
-                    loop {
-                        match fallible().await {
-                            Ok(o) => return Ok(o),
-                            Err(e) => {
-                                err_cnt += 1;
-                                error!("err_cnt: {err_cnt}/{max_err}, {e}");
-                                if err_cnt >= 5 {
-                                    return Err(e);
-                                }
-                            }
-                        }
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
+                if let Some((from, to)) = &rename_args {
+                    tokio::fs::rename(from, to).await?;
                 }
-            }
-            .await
+                // txt_writer.sync_data().await?;
+                Result::<(), std::io::Error>::Ok(())
+            })
             .map_err(|e| AppError::WriteFile {
                 path: self.misc_settings.bpm_file_path.clone().into(),
                 source: e,
@@ -267,49 +287,3 @@ impl FileLoggingActor {
         Ok(())
     }
 }
-
-async fn async_try_until_err_count_is<
-    T,
-    E: Error + Send + Sync,
-    A: AsyncFnMut() -> Result<T, E> + Send + Sync,
->(
-    max_err: u8,
-    mut fallible: A,
-) -> Result<T, E> {
-    assert!(max_err > 0);
-    let mut err_cnt = 0;
-    loop {
-        match fallible().await {
-            Ok(o) => return Ok(o),
-            Err(e) => {
-                err_cnt += 1;
-                error!("err_cnt: {err_cnt}/{max_err}, {e}");
-                if err_cnt >= max_err {
-                    return Err(e);
-                }
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-// fn try_until_err_count_is<T, E: Error + Send + Sync, A: FnMut() -> Result<T, E> + Send + Sync>(
-//     max_err: u8,
-//     mut fallible: A,
-// ) -> Result<T, E> {
-//     assert!(max_err > 0);
-//     let mut err_cnt = 0;
-//     loop {
-//         match fallible() {
-//             Ok(o) => return Ok(o),
-//             Err(e) => {
-//                 err_cnt += 1;
-//                 error!("err_cnt: {err_cnt}/{max_err}, {e}");
-//                 if err_cnt >= max_err {
-//                     return Err(e);
-//                 }
-//             }
-//         }
-//         std::thread::sleep(Duration::from_millis(100));
-//     }
-// }
